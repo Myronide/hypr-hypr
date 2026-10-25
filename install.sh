@@ -231,6 +231,9 @@ if command -v gsettings >/dev/null && [ "$(gsettings get org.gnome.desktop.inter
   gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
 fi
 
+# Eigene Apps (dx-apps): bereits installierte auf den Stand dieses Repos bringen (nur Dateien, keine Paketinstallation)
+[ -x "$HOME/.local/bin/dx-apps" ] && "$HOME/.local/bin/dx-apps" update 2>&1 | sed 's/^/    /' || true
+
 say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css"
 A="$CONF/hypr/aurora"; mkdir -p "$A"
 # Echte Kopien statt Verknüpfungen ins Repo: Wer das Repo neu klont oder verschiebt, behielt sonst eine Verknüpfung auf den alten Stand

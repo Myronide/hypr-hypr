@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Draconyx Apps: eigene Anwendungen, die zum System gehören. Der Katalog liegt im Repo (Ordner apps/<id>/app.json), installiert wird
+nach ~/.local/share/draconyx-apps/<id>/ mit einem Starter im Startmenü. Nur Apps aus dem eigenen Repo – kein fremder Code.
+
+  dx-apps list [--json]      Katalog mit Stand (installiert / Update / nicht installiert)
+  dx-apps install ID...      installieren (fehlende Pakete über pacman; Passwort per Dialog)
+  dx-apps remove ID...       entfernen (Daten der App, z. B. Notizen, bleiben)
+  dx-apps update             alle installierten Apps auf den Stand des Repos bringen
+  dx-apps run ID             starten
+"""
+import json, os, shutil, subprocess, sys, time
+from pathlib import Path
+
+HOME = Path.home()
+INSTALL = HOME / ".config/draconyx/install.json"
+BASE = HOME / ".local/share/draconyx-apps"
+STATE = BASE / "installed.json"
+DESKTOP = HOME / ".local/share/applications"
+MARK = "# Draconyx App"
+
+
+def repo_dir():
+    try:
+        r = Path(json.loads(INSTALL.read_text()).get("repo", ""))
+    except (OSError, ValueError):
+        r = Path()
+    if not (r / "apps").is_dir():                         # aus dem Repo selbst gestartet
+        r = Path(__file__).resolve().parent.parent
+    return r
+
+
+def catalog():
+    out = {}
+    for m in sorted((repo_dir() / "apps").glob("*/app.json")):
+        try:
+            a = json.loads(m.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        a["_dir"] = str(m.parent)
+        if a.get("id") and a.get("name") and a.get("exec"):
+            out[a["id"]] = a
+    return out
+
+
+def installed():
+    try:
+        return json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_installed(d):
+    BASE.mkdir(parents=True, exist_ok=True)
+    tmp = STATE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    tmp.replace(STATE)
+
+
+def vkey(v):
+    return tuple(int(x) for x in "".join(c if c.isdigit() else " " for c in v).split()[:3])
+
+
+def status(a, inst):
+    i = inst.get(a["id"])
+    if not i:
+        return "frei"
+    return "update" if vkey(a.get("version", "0")) > vkey(i.get("version", "0")) else "installiert"
+
+
+def missing_deps(a):
+    out = []
+    for p in a.get("deps", []):
+        if subprocess.run(["pacman", "-Qq", p], capture_output=True).returncode != 0:
+            out.append(p)
+    return out
+
+
+def install_deps(pkgs):
+    if not pkgs:
+        return True
+    env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"))
+    cmd = (["sudo", "-A"] if env["SUDO_ASKPASS"] and Path(env["SUDO_ASKPASS"]).exists() and not sys.stdin.isatty() else ["sudo"])
+    return subprocess.run(cmd + ["pacman", "-S", "--needed", "--noconfirm", *pkgs], env=env).returncode == 0
+
+
+def put(a, deps=True):
+    if deps and not install_deps(missing_deps(a)):
+        raise RuntimeError("Pakete konnten nicht installiert werden: " + ", ".join(missing_deps(a)))
+    dst = BASE / a["id"]
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(a["_dir"], dst)
+    for f in dst.rglob("*.py"):
+        f.chmod(0o755)
+    DESKTOP.mkdir(parents=True, exist_ok=True)
+    exec_line = a["exec"].replace("{dir}", str(dst))
+    (DESKTOP / ("dx-%s.desktop" % a["id"])).write_text(
+        "%s\n[Desktop Entry]\nType=Application\nName=%s\nComment=%s\nExec=%s\nIcon=%s\nCategories=%s\nTerminal=false\n"
+        % (MARK, a["name"], a.get("description", "").split(".")[0], exec_line, a.get("icon", "application-x-executable"), a.get("categories", "Utility;")),
+        encoding="utf-8")
+    inst = installed()
+    inst[a["id"]] = {"version": a.get("version", "0"), "installed": int(time.time())}
+    save_installed(inst)
+
+
+def remove(i):
+    shutil.rmtree(BASE / i, ignore_errors=True)
+    (DESKTOP / ("dx-%s.desktop" % i)).unlink(missing_ok=True)
+    inst = installed()
+    inst.pop(i, None)
+    save_installed(inst)
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
+    ids = [a for a in sys.argv[2:] if not a.startswith("--")]
+    cat, inst = catalog(), installed()
+    if cmd == "list":
+        rows = [{"id": i, "name": a["name"], "version": a.get("version", "0"), "description": a.get("description", ""), "icon": a.get("icon", ""),
+                 "status": status(a, inst), "installed_version": inst.get(i, {}).get("version", "")} for i, a in cat.items()]
+        if "--json" in sys.argv:
+            print(json.dumps(rows, ensure_ascii=False))
+        else:
+            for r in rows:
+                print("%-12s %-14s %-8s %s" % (r["id"], r["name"], r["version"], {"frei": "nicht installiert", "installiert": "installiert", "update": "Update von %s" % r["installed_version"]}[r["status"]]))
+    elif cmd == "install":
+        for i in ids:
+            if i not in cat:
+                print("Unbekannte App:", i, file=sys.stderr); sys.exit(1)
+            put(cat[i]); print("installiert:", cat[i]["name"], cat[i].get("version", ""))
+    elif cmd == "remove":
+        for i in ids:
+            remove(i); print("entfernt:", i)
+    elif cmd == "update":
+        n = 0
+        for i, v in list(inst.items()):
+            a = cat.get(i)
+            if a and status(a, inst) == "update":
+                put(a, deps=False); n += 1; print("aktualisiert:", a["name"], a.get("version", ""))
+        print("%d App(s) aktualisiert" % n)
+    elif cmd == "run":
+        a = cat.get(ids[0]) if ids else None
+        if not a or ids[0] not in inst:
+            print("App nicht installiert", file=sys.stderr); sys.exit(1)
+        os.execvp("sh", ["sh", "-c", a["exec"].replace("{dir}", str(BASE / ids[0]))])
+    else:
+        print(__doc__); sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

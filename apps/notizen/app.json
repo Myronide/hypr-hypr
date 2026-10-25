@@ -1,0 +1,10 @@
+{
+  "id": "notizen",
+  "name": "Notizen",
+  "version": "1.0.0",
+  "description": "Schnelle Notizen mit Suche und automatischem Speichern. Liegt als normale Textdateien in ~/Documents/Draconyx-Notizen.",
+  "icon": "accessories-text-editor",
+  "exec": "python3 {dir}/notizen.py",
+  "categories": "Utility;TextEditor;",
+  "deps": ["gtk3", "python-gobject"]
+}
