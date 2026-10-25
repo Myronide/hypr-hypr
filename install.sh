@@ -160,12 +160,21 @@ if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55
 fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
-for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
+for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
+# csd-apps ist deine Liste (Einstellungen → Fenster → eigene Titelleisten): nur anlegen, wenn es sie noch nicht gibt
+[ -e "$CONF/hypr/csd-apps" ] || { cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1)); }
 # Monitore: die Vorlage ist nur ein neutrales Beispiel. Die echte monitors_local.lua entsteht aus den erkannten Bildschirmen (siehe unten); eine vorhandene bleibt unangetastet.
 put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
-if [ -e "$CONF/hypr/hyprland.lua" ] && cmp -s "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; then
+# hyprland.lua: nie eine Datei überschreiben, die du selbst geändert hast. Wir merken uns die Prüfsumme der zuletzt von uns installierten
+# Fassung: stimmt deine Datei damit überein, ist sie unverändert und darf aktualisiert werden; sonst bleibt sie, die neue liegt daneben.
+LUA="$CONF/hypr/hyprland.lua"; LUA_SUM="$CONF/draconyx/installed-hyprland.sha"; mkdir -p "$CONF/draconyx"
+cur_sum="$([ -e "$LUA" ] && sha256sum "$LUA" | cut -d' ' -f1 || true)"; last_sum="$(cat "$LUA_SUM" 2>/dev/null || true)"
+if [ -e "$LUA" ] && cmp -s "$HERE/hypr/hyprland.lua" "$LUA"; then
   :   # schon unsere hyprland.lua
-elif [ -e "$CONF/hypr/hyprland.lua" ] && [ "$KEEP_CONFIG" != 1 ]; then
+elif [ -e "$LUA" ] && [ -n "$last_sum" ] && [ "$cur_sum" = "$last_sum" ]; then
+  say "hyprland.lua war unverändert – wird auf die neue Fassung aktualisiert (Sicherung: $BACKUP)"
+  backup_file "$LUA"; cp "$HERE/hypr/hyprland.lua" "$LUA"; CHANGED=$((CHANGED+1))
+elif [ -e "$LUA" ] && [ "$KEEP_CONFIG" != 1 ] && [ -z "$last_sum" ]; then
   # Die Draconyx-hyprland.lua wird IMMER eingesetzt (sonst bliebe die Installation halb wirkungslos). Die alte Datei wird vorher
   # gesichert, ihre Monitor-Einstellungen und die Tastaturbelegung übernehmen wir. Wer das nicht will: --keep-config
   say "Bestehende hyprland.lua wird durch die Draconyx-Konfiguration ersetzt (Sicherung der alten: $BACKUP)"
@@ -205,6 +214,7 @@ mkdir -p "$CONF/hypr/aurora"; put "$REPO/monitors.py" "$CONF/hypr/aurora/monitor
 if [ ! -e "$CONF/hypr/monitors_local.lua" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
   r="$(python3 -I "$HERE/bin/dx-monitors" init 2>&1 || true)"; echo "    $r"
 fi
+[ -e "$LUA" ] && cmp -s "$HERE/hypr/hyprland.lua" "$LUA" && sha256sum "$LUA" | cut -d' ' -f1 > "$LUA_SUM"
 FRESH_LOCK=0
 for f in hypridle.conf hyprlock.conf; do
   if [ ! -e "$CONF/hypr/$f" ]; then cp "$HERE/hypr/$f" "$CONF/hypr/$f"; [ "$f" = hyprlock.conf ] && FRESH_LOCK=1; fi

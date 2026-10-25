@@ -667,6 +667,6 @@ class Settings(Gtk.Application):
     GLib.idle_add(show,upd_info())
    threading.Thread(target=work,daemon=True).start()
   self.button(b,'Nach Updates suchen','Jetzt prüfen',check)
-  self.button(b,'System aktualisieren','Aktualisieren',lambda:subprocess.Popen([str(Path.home()/'.local/bin/dx-update'),'apply'],start_new_session=True),'Öffnet ein Terminal: neuesten Stand holen und installieren (fragt nach dem sudo-Passwort).')
+  self.button(b,'System aktualisieren','Aktualisieren',lambda:subprocess.Popen([str(Path.home()/'.local/bin/dx-update'),'apply'],start_new_session=True),'Läuft im Hintergrund (ohne Terminal): neuesten Stand holen und installieren. Nur ein kleines Fenster fragt nach dem sudo-Passwort. Deine Einstellungen bleiben unangetastet (Sicherung vor jeder Änderung).')
   for title,args in [('Netzwerkverbindungen',['nm-connection-editor']),('Audio-Geräte',['kcmshell6','kcm_pulseaudio']),('Bluetooth',['kcmshell6','kcm_bluetooth']),('Tastatur',['kcmshell6','kcm_keyboard']),('Maus',['kcmshell6','kcm_mouse']),('Schriften und Darstellung',['systemsettings']),('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
 Settings().run(None)

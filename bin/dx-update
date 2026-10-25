@@ -2,7 +2,8 @@
 # Draconyx: Update-Prüfung und -Installation für das System selbst (das Git-Repo, aus dem installiert wurde).
 #   dx-update check [--quiet]   beim Remote nachsehen, ob es eine neuere Version gibt (schreibt ~/.local/state/draconyx/update.json)
 #   dx-update status            gespeicherten Stand zeigen
-#   dx-update apply             in einem Terminal: git pull + sudo ./install.sh (fragt nach dem Passwort)
+#   dx-update apply             im Hintergrund aktualisieren (nur der sudo-Dialog erscheint); Meldungen als Benachrichtigung,
+#                               Protokoll: ~/.cache/draconyx/update.log     --fg: im Vordergrund    --terminal: sichtbar im Terminal
 # Die installierte Version und der Repo-Pfad stehen in ~/.config/draconyx/install.json (schreibt der Installer).
 import json, os, re, subprocess, sys, time
 from pathlib import Path
@@ -45,6 +46,74 @@ def check():
     STATE.write_text(json.dumps(out, ensure_ascii=False, indent=2))
     return out
 
+
+LOG = HOME / ".cache/draconyx/update.log"
+
+def notify(title, body="", urgent=False):
+    subprocess.run(["notify-send", "-a", "Draconyx", "-i", "system-software-update"] + (["-u", "critical"] if urgent else []) + [title, body],
+                   capture_output=True)
+
+def sync_repo(repo, log):
+    """Repo auf den Stand des Remotes bringen, ohne etwas zu verlieren: eigene Änderungen werden vorher gesichert."""
+    def g(*a, check=True):
+        r = git(repo, *a, timeout=120)
+        log.write("$ git %s\n%s%s\n" % (" ".join(a), r.stdout, r.stderr)); log.flush()
+        if check and r.returncode != 0:
+            raise RuntimeError("git %s fehlgeschlagen: %s" % (a[0], (r.stderr.strip().splitlines() or ["?"])[-1]))
+        return r
+    g("fetch", "origin")
+    up = g("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", check=False).stdout.strip() or "origin/master"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    if g("status", "--porcelain", check=False).stdout.strip():                    # lokale Änderungen im Repo: sichern, nicht löschen
+        g("stash", "push", "--include-untracked", "-m", "dx-update " + stamp, check=False)
+        log.write("(lokale Änderungen im Repo gesichert: git stash list)\n")
+    if g("merge", "--ff-only", up, check=False).returncode != 0:               # Verlauf weicht ab (z. B. neu geschrieben): alten Stand merken
+        g("branch", "dx-vor-update-" + stamp, "HEAD", check=False)
+        g("reset", "--hard", up)
+        log.write("(Verlauf wich ab – alter Stand liegt als Branch dx-vor-update-%s)\n" % stamp)
+
+def apply(foreground=False, terminal=False):
+    info = read_json(INSTALL, {})
+    repo = info.get("repo", "")
+    if not repo or not Path(repo).is_dir():
+        notify("Draconyx-Update nicht möglich", "Repo nicht gefunden – im Repo einmal sudo ./install.sh ausführen.", True); sys.exit(1)
+    if terminal:                                                                    # sichtbar in einem Terminal (z. B. Ghostty)
+        os.execvp(str(HOME / ".local/bin/dx-terminal"), ["dx-terminal", "--", sys.executable, __file__, "apply", "--fg"])
+    if not foreground and not os.environ.get("DX_UPDATE_CHILD"):                   # in den Hintergrund: eigener Prozess, ohne Terminal
+        env = dict(os.environ, DX_UPDATE_CHILD="1")
+        subprocess.Popen([sys.executable, __file__, "apply"], env=env, start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return
+    import fcntl
+    lockf = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "draconyx-update.lock"), "w")
+    try:
+        fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        notify("Draconyx-Update läuft schon"); return
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOG, "w") as log:
+        log.write("Draconyx-Update %s\n" % time.strftime("%F %T"))
+        old = info.get("version", "?")
+        notify("Draconyx wird aktualisiert …", "Alles läuft im Hintergrund. Gleich fragt ein kleines Fenster nach deinem sudo-Passwort.")
+        try:
+            sync_repo(repo, log)
+            env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"), DX_UPDATE_RUN="1")
+            if not (HOME / ".local/bin/dx-askpass").exists():
+                env["SUDO_ASKPASS"] = str(Path(repo) / "bin/dx-askpass")
+            # Der Installer sichert und überschreibt keine Einstellungen (siehe install.sh) und startet die Shell am Ende neu.
+            r = subprocess.run(["sudo", "-A", str(Path(repo) / "install.sh"), "--yes"], cwd=repo, env=env,
+                               stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+            rc = r.returncode
+        except Exception as e:
+            log.write("FEHLER: %s\n" % e); rc = 1
+    new = read_json(INSTALL, {}).get("version", old)
+    if rc == 0:
+        notify("Draconyx aktualisiert", "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old))
+        check()
+    else:
+        notify("Draconyx-Update fehlgeschlagen", "Nichts wurde überschrieben. Protokoll: %s" % LOG, True)
+        sys.exit(rc)
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "check":
@@ -56,11 +125,7 @@ def main():
     elif cmd == "status":
         print(json.dumps(read_json(STATE, {}), ensure_ascii=False, indent=2))
     elif cmd == "apply":
-        repo = read_json(INSTALL, {}).get("repo", "")
-        if not repo or not Path(repo).is_dir():
-            print("Repo nicht gefunden", file=sys.stderr); sys.exit(1)
-        script = 'cd "$1" && git pull --ff-only && sudo ./install.sh; echo; read -r -p "Fertig – Enter zum Schließen " _'
-        os.execvp(str(HOME / ".local/bin/dx-terminal"), ["dx-terminal", "--", "sh", "-c", script, "dx-update", repo])
+        apply(foreground="--fg" in sys.argv, terminal="--terminal" in sys.argv)
     else:
         print(__doc__); sys.exit(2)
 

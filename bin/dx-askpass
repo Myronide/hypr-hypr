@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Draconyx: Passwortabfrage für sudo als kleines Fenster (SUDO_ASKPASS). Gibt das Passwort auf stdout aus.
+# Reihenfolge: zenity, kdialog, sonst ein Terminal-Fenster (dx-terminal) mit Eingabe ohne Anzeige.
+title="Draconyx-Update"; text="${1:-Passwort für sudo (Draconyx aktualisieren):}"
+if command -v zenity >/dev/null 2>&1; then
+  exec zenity --password --title="$title"
+elif command -v kdialog >/dev/null 2>&1; then
+  exec kdialog --title "$title" --password "$text"
+fi
+f="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/dx-askpass.XXXXXX")"; chmod 600 "$f"
+"$HOME/.local/bin/dx-terminal" -- sh -c 'printf "%s\n> " "$1"; stty -echo; read -r pw; stty echo; printf "%s" "$pw" > "$2"' dx-askpass "$text" "$f" >/dev/null 2>&1
+cat "$f"; rm -f "$f"
