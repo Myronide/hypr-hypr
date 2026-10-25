@@ -26,7 +26,7 @@ def check():
     repo = Path(info.get("repo", ""))
     out = {"installed": info.get("version", "?"), "latest": info.get("version", "?"), "available": False, "notes": [], "checked": int(time.time()), "error": ""}
     if not (repo / ".git").exists():
-        out["error"] = "Repo nicht gefunden – ./install.sh erneut aus dem Repo starten"
+        out["error"] = "noch nicht mit install.sh eingerichtet – im Repo einmal  sudo ./install.sh  ausführen" if not info else "Repo-Ordner nicht mehr vorhanden – install.sh aus dem neuen Repo starten"
     else:
         try:
             f = git(repo, "fetch", "--quiet", "origin")
