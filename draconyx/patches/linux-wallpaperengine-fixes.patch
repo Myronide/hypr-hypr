@@ -1,0 +1,270 @@
+diff --git a/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.cpp b/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.cpp
+index b27b7cf..dd2c09d 100644
+--- a/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.cpp
++++ b/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.cpp
+@@ -1,6 +1,7 @@
+ #include "WaylandMouseInput.h"
+ #include "WallpaperEngine/Render/Drivers/WaylandOpenGLDriver.h"
+ #include <chrono>
++#include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
+ #include <glm/common.hpp>
+@@ -22,39 +23,36 @@ void WaylandMouseInput::update () {
+ 	return;
+     }
+ 
+-    if (m_waylandDriver.viewportInFocus && m_waylandDriver.viewportInFocus->rendering) {
+-	this->m_pos = m_waylandDriver.viewportInFocus->mousePos;
+-	return;
+-    }
+-
++    // Liegen andere Ebenen (z. B. ein Desktop mit Symbolen) über dem Wallpaper, bekommt es keine Zeigerereignisse
++    // von Wayland. Position deshalb direkt von Hyprland holen und in die Koordinaten des Monitors darunter umrechnen.
+     const auto now = std::chrono::steady_clock::now ();
+     if (now - this->m_lastHyprlandQuery < std::chrono::milliseconds (16)) {
+ 	return;
+     }
+     this->m_lastHyprlandQuery = now;
+ 
++    if (this->m_hyprMonitors.empty () || now - this->m_lastMonitorQuery > std::chrono::seconds (2)) {
++	this->refreshHyprlandMonitors ();
++	this->m_lastMonitorQuery = now;
++    }
++
+     const auto globalCursor = this->queryHyprlandCursorPosition ();
+     if (!globalCursor.has_value ()) {
+-	this->m_pos = { 0, 0 };
+ 	return;
+     }
+ 
+-    for (const auto* viewport : this->m_waylandDriver.m_screens) {
+-	if (!viewport || viewport->size.x <= 0 || viewport->size.y <= 0) {
+-	    continue;
+-	}
+-
+-	const double localX = globalCursor->x - viewport->position.x;
+-	const double localY = globalCursor->y - viewport->position.y;
+-	if (localX < 0.0 || localY < 0.0 || localX > viewport->size.x || localY > viewport->size.y) {
++    for (const auto& m : this->m_hyprMonitors) {
++	const double lw = m.w / m.scale;
++	const double lh = m.h / m.scale;
++	const double localX = globalCursor->x - m.x;
++	const double localY = globalCursor->y - m.y;
++	if (localX < 0.0 || localY < 0.0 || localX > lw || localY > lh) {
+ 	    continue;
+ 	}
+-
+-	this->m_pos = { localX * viewport->scale, (viewport->size.y - localY) * viewport->scale };
++	// OpenGL: Y=0 unten; Pixel des Monitors
++	this->m_pos = { localX * m.scale, (lh - localY) * m.scale };
+ 	return;
+     }
+-
+-    this->m_pos = { 0, 0 };
+ }
+ 
+ glm::dvec2 WaylandMouseInput::position () const {
+@@ -62,24 +60,7 @@ glm::dvec2 WaylandMouseInput::position () const {
+ 	return { 0, 0 };
+     }
+ 
+-    const auto* viewport = this->getActiveOutputViewport ();
+-
+-    if (!viewport) {
+-	return { 0, 0 };
+-    }
+-
+-    if (viewport == m_waylandDriver.viewportInFocus) {
+-	return viewport->mousePos;
+-    }
+-
+-    if (viewport->mousePos.x != 0 || viewport->mousePos.y != 0) {
+-	return viewport->mousePos;
+-    }
+-
+-    return {
+-	static_cast<double> (viewport->size.x * viewport->scale) / 2.0,
+-	static_cast<double> (viewport->size.y * viewport->scale) / 2.0,
+-    };
++    return this->m_pos;
+ }
+ 
+ WallpaperEngine::Input::MouseClickStatus WaylandMouseInput::leftClick () const {
+@@ -93,31 +74,22 @@ WallpaperEngine::Input::MouseClickStatus WaylandMouseInput::leftClick () const {
+ 
+ const WallpaperEngine::Render::Drivers::Output::WaylandOutputViewport*
+ WaylandMouseInput::getActiveOutputViewport () const {
+-    if (this->m_waylandDriver.viewportInFocus && this->m_waylandDriver.viewportInFocus->rendering) {
+-	return this->m_waylandDriver.viewportInFocus;
+-    }
+-
+-    for (const auto* viewport : this->m_waylandDriver.m_screens) {
+-	if (viewport && viewport->rendering) {
+-	    return viewport;
+-	}
+-    }
+-
+-    return nullptr;
++    // nur die Fläche, die echte Zeigerereignisse bekommt (Klicks); die Position kommt von Hyprland
++    return this->m_waylandDriver.viewportInFocus;
+ }
+ 
+-std::optional<glm::dvec2> WaylandMouseInput::queryHyprlandCursorPosition () const {
++std::string WaylandMouseInput::hyprlandRequest (const char* request) const {
+     const char* signature = std::getenv ("HYPRLAND_INSTANCE_SIGNATURE");
+     const char* runtime = std::getenv ("XDG_RUNTIME_DIR");
+     if (!signature || !runtime) {
+-	return std::nullopt;
++	return {};
+     }
+ 
+     const std::string socketPath = std::string (runtime) + "/hypr/" + signature + "/.socket.sock";
+ 
+     int fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+     if (fd < 0) {
+-	return std::nullopt;
++	return {};
+     }
+ 
+     timeval timeout {};
+@@ -125,36 +97,92 @@ std::optional<glm::dvec2> WaylandMouseInput::queryHyprlandCursorPosition () cons
+     if (setsockopt (fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof (timeout)) != 0
+ 	|| setsockopt (fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof (timeout)) != 0) {
+ 	close (fd);
+-	return std::nullopt;
++	return {};
+     }
+ 
+     sockaddr_un addr {};
+     addr.sun_family = AF_UNIX;
+     if (socketPath.size () >= sizeof (addr.sun_path)) {
+ 	close (fd);
+-	return std::nullopt;
++	return {};
+     }
+     std::strncpy (addr.sun_path, socketPath.c_str (), sizeof (addr.sun_path) - 1);
+ 
+     if (connect (fd, reinterpret_cast<sockaddr*> (&addr), sizeof (addr)) != 0) {
+ 	close (fd);
+-	return std::nullopt;
++	return {};
+     }
+ 
+-    constexpr const char* request = "j/cursorpos";
+     if (send (fd, request, std::strlen (request), MSG_NOSIGNAL) < 0) {
+ 	close (fd);
+-	return std::nullopt;
++	return {};
+     }
+     shutdown (fd, SHUT_WR);
+ 
+     std::string response;
+-    char buffer[256];
++    char buffer[4096];
+     ssize_t readBytes = 0;
+     while ((readBytes = recv (fd, buffer, sizeof (buffer), 0)) > 0) {
+ 	response.append (buffer, static_cast<std::size_t> (readBytes));
+     }
+     close (fd);
++    return response;
++}
++
++void WaylandMouseInput::refreshHyprlandMonitors () {
++    const std::string response = this->hyprlandRequest ("j/monitors");
++    if (response.empty ()) {
++	return;
++    }
++
++    std::vector<HyprMonitor> result;
++    static const std::regex nameRe (R"x("name"\s*:\s*"([^"]+)")x");
++    static const std::regex numRe (R"x("(width|height|x|y|scale)"\s*:\s*(-?\d+(?:\.\d+)?))x");
++
++    // Ein Objekt je Monitor: an '"id":' trennen
++    std::size_t pos = 0;
++    while (true) {
++	const std::size_t start = response.find ("\"id\"", pos);
++	if (start == std::string::npos) {
++	    break;
++	}
++	std::size_t end = response.find ("\"id\"", start + 4);
++	if (end == std::string::npos) {
++	    end = response.size ();
++	}
++	const std::string chunk = response.substr (start, end - start);
++	pos = end;
++
++	HyprMonitor m;
++	std::smatch nm;
++	if (!std::regex_search (chunk, nm, nameRe)) {
++	    continue;
++	}
++	m.name = nm[1].str ();
++	for (std::sregex_iterator it (chunk.begin (), chunk.end (), numRe), last; it != last; ++it) {
++	    const std::string key = (*it)[1].str ();
++	    const double value = std::stod ((*it)[2].str ());
++	    if (key == "width") m.w = value;
++	    else if (key == "height") m.h = value;
++	    else if (key == "x") m.x = value;
++	    else if (key == "y") m.y = value;
++	    else if (key == "scale") m.scale = value > 0 ? value : 1;
++	}
++	if (m.w > 0 && m.h > 0) {
++	    result.push_back (m);
++	}
++    }
++
++    if (!result.empty ()) {
++	this->m_hyprMonitors = result;
++    }
++}
++
++std::optional<glm::dvec2> WaylandMouseInput::queryHyprlandCursorPosition () const {
++    const std::string response = this->hyprlandRequest ("j/cursorpos");
++    if (response.empty ()) {
++	return std::nullopt;
++    }
+ 
+     static const std::regex xRegex (R"("x"\s*:\s*(-?\d+(?:\.\d+)?))");
+     static const std::regex yRegex (R"("y"\s*:\s*(-?\d+(?:\.\d+)?))");
+diff --git a/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.h b/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.h
+index 5574437..64cf5a0 100644
+--- a/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.h
++++ b/src/WallpaperEngine/Input/Drivers/WaylandMouseInput.h
+@@ -7,6 +7,8 @@
+ #include <chrono>
+ #include <glm/vec2.hpp>
+ #include <optional>
++#include <string>
++#include <vector>
+ 
+ namespace WallpaperEngine::Render::Drivers {
+ namespace Output {
+@@ -46,6 +48,15 @@ public:
+ private:
+     [[nodiscard]] const Render::Drivers::Output::WaylandOutputViewport* getActiveOutputViewport () const;
+     [[nodiscard]] std::optional<glm::dvec2> queryHyprlandCursorPosition () const;
++    [[nodiscard]] std::string hyprlandRequest (const char* request) const;
++    void refreshHyprlandMonitors ();
++
++    struct HyprMonitor {
++	std::string name;
++	double x = 0, y = 0, w = 0, h = 0, scale = 1;
++    };
++    std::vector<HyprMonitor> m_hyprMonitors;
++    std::chrono::steady_clock::time_point m_lastMonitorQuery = {};
+ 
+     /**
+      * Wayland: Driver
+diff --git a/src/WallpaperEngine/WebBrowser/CEF/RenderHandler.cpp b/src/WallpaperEngine/WebBrowser/CEF/RenderHandler.cpp
+index fc31baa..72e9784 100644
+--- a/src/WallpaperEngine/WebBrowser/CEF/RenderHandler.cpp
++++ b/src/WallpaperEngine/WebBrowser/CEF/RenderHandler.cpp
+@@ -24,4 +24,4 @@ int RenderHandler::getWidth () const { return this->m_webdata->getWidth (); }
+ 
+ int RenderHandler::getHeight () const { return this->m_webdata->getHeight (); }
+ 
+-GLuint RenderHandler::texture () const { return this->m_webdata->getWallpaperFramebuffer (); }
+\ No newline at end of file
++GLuint RenderHandler::texture () const { return this->m_webdata->getWallpaperTexture (); }
+\ No newline at end of file

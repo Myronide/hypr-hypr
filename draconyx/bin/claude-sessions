@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# claude-sessions save     -> merkt sich alle gerade laufenden interaktiven Claude-Sessions
+# claude-sessions restore  -> öffnet jede gemerkte Session in einer eigenen Konsole (claude --resume)
+# claude-sessions list     -> zeigt den gespeicherten Snapshot
+set -u
+
+SESS_DIR="$HOME/.claude/sessions"
+SNAP_DIR="$HOME/.local/share/claude-sessions"
+SNAP="$SNAP_DIR/snapshot.tsv"
+
+# Terminal: konsole läuft auch unter COSMIC; mit CLAUDE_TERM=cosmic-term überschreibbar
+if [ -n "${CLAUDE_TERM:-}" ]; then TERM_BIN="$CLAUDE_TERM"
+elif command -v ghostty >/dev/null; then TERM_BIN=ghostty
+else TERM_BIN=konsole; fi
+
+open_term() { # $1=cwd $2=sessionId
+    local dir="$1" id="$2"
+    [ -d "$dir" ] || { echo "  Ordner fehlt, nehme \$HOME: $dir"; dir="$HOME"; }
+    case "$TERM_BIN" in
+        ghostty)     setsid -f ghostty --working-directory="$dir" -e claude --resume "$id" >/dev/null 2>&1 ;;
+        konsole)     setsid -f konsole --workdir "$dir" -e claude --resume "$id" >/dev/null 2>&1 ;;
+        cosmic-term) (cd "$dir" && setsid -f cosmic-term -e claude --resume "$id" >/dev/null 2>&1) ;;
+        *)           (cd "$dir" && setsid -f "$TERM_BIN" -e claude --resume "$id" >/dev/null 2>&1) ;;
+    esac
+}
+
+save() {
+    mkdir -p "$SNAP_DIR"
+    [ -f "$SNAP" ] && cp "$SNAP" "$SNAP.bak"
+    : > "$SNAP.new"
+    local f pid
+    for f in "$SESS_DIR"/*.json; do
+        [ -e "$f" ] || continue
+        pid=$(jq -r '.pid' "$f" 2>/dev/null) || continue
+        # nur lebende Claude-Prozesse, keine Reste
+        [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "claude" ] || continue
+        jq -r 'select(.kind=="interactive") | [.sessionId, .cwd, .name] | @tsv' "$f" >> "$SNAP.new"
+    done
+    mv "$SNAP.new" "$SNAP"
+    echo "$(wc -l < "$SNAP") Sessions gespeichert in $SNAP"
+}
+
+restore() {
+    [ -s "$SNAP" ] || { echo "Kein Snapshot vorhanden. Erst: claude-sessions save"; exit 1; }
+    local id dir name
+    while IFS=$'\t' read -r id dir name; do
+        echo "öffne $name  ($dir)"
+        open_term "$dir" "$id"
+        sleep 0.4
+    done < "$SNAP"
+}
+
+list() {
+    [ -s "$SNAP" ] || { echo "Kein Snapshot vorhanden."; exit 1; }
+    column -t -s $'\t' "$SNAP"
+}
+
+case "${1:-}" in
+    save)    save ;;
+    restore) restore ;;
+    list)    list ;;
+    *) echo "Benutzung: claude-sessions {save|restore|list}"; exit 1 ;;
+esac

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Draconyx Coding Space: listet Unterordner als Projekt oder Workspace.
+#   dx-code-list <ordner> [<ordner-mit-weiteren-*Workspace*-Ordnern>]
+# Ausgabe (TSV): geändert<TAB>art<TAB>git<TAB>name<TAB>pfad     (art = project | workspace)
+dir="$1"; extra="${2:-}"
+
+# Workspace = Ordner mit "Workspace" im Namen. Alles andere ist ein Projekt (keine weiteren Vermutungen).
+classify() {
+  local n; n=$(basename "$1")
+  case "${n,,}" in *workspace*) echo workspace;; *) echo project;; esac
+}
+emit() {
+  local p="$1" k="$2" g=0
+  [ -d "$p/.git" ] && g=1
+  printf '%s\t%s\t%s\t%s\t%s\n' "$(stat -c %Y "$p" 2>/dev/null || echo 0)" "$k" "$g" "$(basename "$p")" "$p"
+}
+{
+  if [ -n "$extra" ]; then
+    for p in "$extra"/*[Ww]orkspace*/; do [ -d "$p" ] && emit "${p%/}" workspace; done
+  fi
+  for p in "$dir"/*/; do
+    [ -d "$p" ] || continue
+    p="${p%/}"
+    emit "$p" "$(classify "$p")"
+  done
+} | sort -t$'\t' -k2,2r -k1,1nr

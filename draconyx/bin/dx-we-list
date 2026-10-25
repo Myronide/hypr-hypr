@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+# Draconyx: listet alle Steam-Workshop-Wallpaper der Wallpaper Engine als TSV: id, titel, typ, vorschau-pfad, geändert
+import json, os, glob
+roots = [os.path.expanduser("~/.local/share/Steam/steamapps/workshop/content/431960")]
+for p in glob.glob("/run/media/*/*/SteamLibrary/steamapps/workshop/content/431960"):
+    roots.append(p)
+seen = set()
+for root in roots:
+    if not os.path.isdir(root):
+        continue
+    for d in sorted(os.listdir(root)):
+        if d in seen:
+            continue
+        base = os.path.join(root, d)
+        try:
+            j = json.load(open(os.path.join(base, "project.json"), encoding="utf-8", errors="replace"))
+        except Exception:
+            continue
+        seen.add(d)
+        title = (j.get("title") or d).replace("\t", " ").replace("\n", " ")
+        typ = (j.get("type") or "?").lower()
+        prev = j.get("preview") or ""
+        prev_path = os.path.join(base, prev) if prev else ""
+        if prev_path and not os.path.exists(prev_path):
+            prev_path = ""
+        try:
+            mt = int(os.path.getmtime(base))
+        except OSError:
+            mt = 0
+        print("\t".join([d, title, typ, prev_path, str(mt)]))

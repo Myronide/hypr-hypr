@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Draconyx: startet linux-wallpaperengine aus ~/.local/opt (mit passenden Bibliotheken); Argumente werden durchgereicht.
+P="$HOME/.local/opt/linux-wallpaperengine"
+[ -x "$P/linux-wallpaperengine" ] || { echo "linux-wallpaperengine ist noch nicht gebaut: $P" >&2; exit 127; }
+export LD_LIBRARY_PATH="$P/lib:$P:${LD_LIBRARY_PATH:-}"
+cd "$P" && exec ./linux-wallpaperengine "$@"

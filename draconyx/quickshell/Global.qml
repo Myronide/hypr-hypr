@@ -1,0 +1,897 @@
+pragma Singleton
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import Quickshell.Hyprland
+import Quickshell.Services.Pipewire
+
+// Zentraler Zustand und einzige Quelle der Wahrheit für alle Komponenten.
+// Dauerhafte Einstellungen liegen in settings.json (wird live überwacht und gespeichert).
+Singleton {
+    id: root
+
+    // =====================================================================
+    // Popups
+    // =====================================================================
+    property bool startOpen: false
+    property bool controlOpen: false
+    property bool calendarOpen: false
+    property bool taskViewOpen: false
+    property bool codeOpen: false
+    property bool weOpen: false
+    property bool gitOpen: false
+    property string gitRepo: ""
+    property bool taskMenuOpen: false          // Rechtsklick-Menü / angeheftete Vorschau einer Taskleisten-App
+    signal taskMenuClose()
+    property var winMenu: null            // { addr, x, y }: Fenstermenü (Alt+Leertaste)
+    property bool settingsOpen: false
+    property bool taskPopupOpen: false
+    property string taskPopupScreen: ""       // Monitor, auf dem das Fenster-Popup der Taskleiste offen ist
+    property string popupScreen: ""
+    readonly property bool anyPopup: startOpen || controlOpen || calendarOpen || taskViewOpen || codeOpen || weOpen || taskPopupOpen
+
+    // Ist auf GENAU diesem Monitor ein Popup offen? (Auto-Hide darf nur die Leiste dieses Monitors offen halten)
+    function popupOpenOn(mon) {
+        const big = startOpen || controlOpen || calendarOpen || taskViewOpen || codeOpen || weOpen;
+        return (big && popupScreen === mon) || (taskPopupOpen && taskPopupScreen === mon);
+    }
+    function closeAll() { gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
+    function focusedScreenName() { return Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; }
+    function _toggle(prop, screenName) {
+        const open = !root[prop];
+        closeAll();
+        popupScreen = screenName || focusedScreenName();
+        root[prop] = open;
+    }
+    function toggleStart(s)    { _toggle("startOpen", s); }
+    function toggleControl(s)  { _toggle("controlOpen", s); }
+    function toggleCalendar(s) { _toggle("calendarOpen", s); }
+    function toggleTaskView(s) { _toggle("taskViewOpen", s); }
+    function toggleCode(s)     { _toggle("codeOpen", s); }
+    function toggleWe(s)       { _toggle("weOpen", s); }
+    // Hängt am Coding Space (bleibt offen); ohne ihn öffnet das Git-Feld allein am Fokus-Monitor
+    function openGit(path) { if (!codeOpen) { closeAll(); popupScreen = focusedScreenName(); } gitRepo = path; gitOpen = true; }
+    function screenAt(x, y) {
+        for (const s of Quickshell.screens) if (x >= s.x && x < s.x + s.width && y >= s.y && y < s.y + s.height) return s;
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
+    }
+    function screenByName(name) {
+        const list = Quickshell.screens;
+        for (let i = 0; i < list.length; i++) if (list[i].name === name) return list[i];
+        return list.length > 0 ? list[0] : null;
+    }
+
+    // =====================================================================
+    // Einstellungen (dauerhaft)
+    // =====================================================================
+    property alias pinned:        settings.pinned
+    property alias startPins:     settings.startPins
+    property alias appFolders:    settings.appFolders
+    property alias recentApps:    settings.recentApps
+    property alias autohide:      settings.autohide
+    property alias barHeight:     settings.barHeight
+    property alias barOpacity:    settings.barOpacity
+    property alias barTop:        settings.barTop
+    property alias barCenter:     settings.barCenter
+    property alias iconSize:      settings.iconSize
+    property alias groupApps:     settings.groupApps
+    property alias showSeconds:   settings.showSeconds
+    property alias monitorCfg:    settings.monitors
+    property alias desktopMonitors: settings.desktopMonitors
+    property alias wallpaper:     settings.wallpaper
+    property alias wallpapers:    settings.wallpapers
+    property alias weWallpapers:  settings.weWallpapers
+    property alias weMouse:       settings.weMouse
+    property alias iconPos:       settings.iconPos
+    property alias gitSessions:   settings.gitSessions
+    property alias iconGrid:      settings.iconGrid
+    property alias startLeft:     settings.startLeft
+    property alias zoneLayouts:   settings.zoneLayouts
+    property alias codeRoot:      settings.codeRoot
+    readonly property int barMargin: 8
+
+    FileView {
+        id: settingsFile
+        path: Theme.home + "/.local/state/draconyx/settings.json"
+        watchChanges: true
+        onFileChanged: reload()
+        onAdapterUpdated: writeAdapter()
+        onLoadFailed: writeAdapter()
+
+        JsonAdapter {
+            id: settings
+            property var pinned: ["org.kde.dolphin", "brave-browser", "com.mitchellh.ghostty", "discord-ptb", "steam", "com.microsoft.VSCode"]
+            property var startPins: ["brave-browser", "firefox", "com.mitchellh.ghostty", "org.kde.dolphin", "discord-ptb", "steam",
+                                     "com.microsoft.VSCode", "com.obsproject.Studio", "pavucontrol", "blueman-manager",
+                                     "nwg-displays", "nwg-look"]
+            property var appFolders: []          // [{ name: "Spiele", apps: ["steam", ...] }]
+            property var recentApps: []
+            property bool autohide: true
+            property int barHeight: 48
+            property real barOpacity: 0.90
+            property bool barTop: false
+            property bool barCenter: true        // false = Apps linksbündig (Windows-10-Stil)
+            property int iconSize: 26
+            property bool groupApps: true
+            property bool showSeconds: false
+            property var monitors: ({})          // { "DP-1": { enabled: true, autohide: null } }
+            property var desktopMonitors: ["DP-2"]   // Desktop-Icons nur auf diesen Monitoren
+            property string wallpaper: "/home/syntaxjason/Bilder/Wallpapers/draconyx-dark.png"
+            property var gitSessions: ({})        // { "Repo-Pfad": "Claude-Session-UUID" } je Repository eine fortlaufende Claude-Session
+            property var iconPos: ({})            // { "Dateiname": { m: "DP-2", c: Spalte, r: Zeile } } Platz der Desktop-Symbole
+            property var weMouse: []              // Monitore, auf denen die Maus ans Wallpaper (statt an die Desktop-Symbole) geht
+            property var weWallpapers: ({})      // { "DP-1": "workshop-id" } Wallpaper Engine je Monitor
+            property var wallpapers: ({})        // { "DP-1": "/pfad/bild.png" } überschreibt das Standard-Wallpaper
+            property int iconGrid: 96            // Rasterbreite der Desktop-Icons
+            property bool startLeft: true        // Startmenü links (Windows-10-Stil); false = mittig
+            property string codeRoot: ""            // leer = automatisch: <Laufwerk>/Code Space unter /run/media/<user>/
+            property var zoneLayouts: ({})       // { "DP-2": Teilungsbaum } eigene Zonen pro Monitor
+        }
+    }
+
+    // Einstellung pro Monitor mit Rückfall auf global
+    function monitorSetting(name, key, fallback) {
+        const m = (settings.monitors || {})[name];
+        return m && m[key] !== undefined && m[key] !== null ? m[key] : fallback;
+    }
+    function setMonitorSetting(name, key, value) {
+        const all = Object.assign({}, settings.monitors || {});
+        all[name] = Object.assign({}, all[name] || {}, { [key]: value });
+        settings.monitors = all;
+    }
+
+    // =====================================================================
+    // Coding Space: Projekte von der Code-Festplatte
+    // =====================================================================
+    property string codeRootAuto: ""
+    property var projects: []           // [{ mtime, kind: "project"|"workspace", git, name, path }]
+    property var codeStack: []          // betretene Workspace-Ordner (Pfade); leer = Wurzel
+    readonly property string codeRootEffective: codeRoot !== "" ? codeRoot : codeRootAuto
+    readonly property string codeCurrent: codeStack.length > 0 ? codeStack[codeStack.length - 1] : ""
+
+    // Das Laufwerk heißt je nach Sitzung "Code" oder "Code1": "Code Space" auf allen Datenträgern suchen
+    Process {
+        id: codeRootProbe
+        command: ["sh", "-c", "for d in /run/media/\"$USER\"/*/'Code Space'; do [ -d \"$d\" ] && echo \"$d\" && break; done"]
+        stdout: SplitParser { onRead: line => { if (line) root.codeRootAuto = line; } }
+    }
+    // Ordner auflisten (Projekt oder Workspace). Auf der Wurzel kommen die *Workspace*-Ordner des Laufwerks dazu.
+    Process {
+        id: codeList
+        property string dir: ""
+        property string extra: ""
+        command: [Theme.home + "/.local/bin/dx-code-list", dir, extra]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.projects = text.split("\n").filter(l => l !== "").map(l => {
+                    const p = l.split("\t");
+                    return { mtime: Number(p[0]), kind: p[1], git: p[2] === "1", name: p[3], path: p[4] };
+                });
+            }
+        }
+    }
+    function refreshProjects() {
+        codeRootProbe.running = false; codeRootProbe.running = true;
+        codeListTimer.restart();
+    }
+    Timer {
+        id: codeListTimer
+        interval: 250
+        onTriggered: {
+            const rootDir = root.codeRootEffective;
+            if (rootDir === "") { root.projects = []; return; }
+            const cur = root.codeCurrent;
+            codeList.running = false;
+            codeList.dir = cur !== "" ? cur : rootDir;
+            codeList.extra = cur !== "" ? "" : rootDir.replace(/\/[^\/]+$/, "");   // Elternordner des Code Space = Laufwerk
+            codeList.running = true;
+        }
+    }
+    function codeEnter(path) { codeStack = codeStack.concat([path]); projects = []; codeListTimer.restart(); }
+    function codeBack() { codeStack = codeStack.slice(0, -1); projects = []; codeListTimer.restart(); }
+    function codeReset() { codeStack = []; }
+
+    // Git-Repository in den geöffneten Workspace klonen ("owner/repo" = GitHub, sonst volle URL)
+    property string cloneStatus: ""        // "" | "läuft: <url>" | "fertig: <name>" | "Fehler: …"
+    property string cloneOut: ""
+    Process {
+        id: cloneProc
+        property string url: ""
+        property string dir: ""
+        workingDirectory: dir
+        environment: ({ "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "true" })
+        command: ["git", "clone", "--progress", url]
+        stderr: SplitParser { onRead: line => { if (line.trim() !== "") root.cloneOut = line.trim(); } }
+        onExited: code => {
+            if (code === 0) root.cloneStatus = "fertig: " + cloneProc.url.replace(/\.git$/, "").replace(/.*[\/:]/, "");
+            else root.cloneStatus = "Fehler: " + (root.cloneOut !== "" ? root.cloneOut : "Klonen fehlgeschlagen (Code " + code + ")");
+            root.refreshProjects();
+        }
+    }
+    function codeClone(input) {
+        let u = input.trim();
+        if (u === "" || codeCurrent === "" || cloneProc.running) return;
+        if (/^[\w.-]+\/[\w.-]+$/.test(u)) u = "https://github.com/" + u;
+        cloneOut = "";
+        cloneProc.url = u;
+        cloneProc.dir = codeCurrent;
+        cloneStatus = "läuft: " + u.replace(/\.git$/, "").replace(/.*[\/:]/, "");
+        cloneProc.running = true;
+    }
+    // Neuer Workspace-Ordner auf dem Code-Laufwerk (neben den anderen "… Workspace"-Ordnern); "Workspace" wird ergänzt
+    function codeNewWorkspace(name) {
+        let n = name.trim().replace(/[\/\\]/g, "");
+        if (n === "" || codeRootEffective === "") return;
+        if (!/workspace/i.test(n)) n += " Workspace";
+        const drive = codeRootEffective.replace(/\/[^\/]+$/, "");
+        Quickshell.execDetached(["mkdir", "-p", drive + "/" + n]);
+        codeListTimer.interval = 600; codeListTimer.restart();
+    }
+
+    // IntelliJ-Eintrag der JetBrains Toolbox (Name der Desktop-Datei enthält eine Kennung)
+    readonly property var intellijEntry: {
+        for (const e of DesktopEntries.applications.values) if (e.id.startsWith("jetbrains-idea")) return e;
+        return DesktopEntries.byId("idea");
+    }
+
+    // Projekt öffnen: erst auf den Desktop "Code" (8), dann das Programm dort starten
+    property var codePending: []
+    Timer {
+        id: codeLaunchTimer
+        interval: 260
+        onTriggered: { for (const c of root.codePending) Quickshell.execDetached(c); root.codePending = []; }
+    }
+    function openProject(path, how) {
+        closeAll();
+        const list = [];
+        if (how === "folder" || how === "all") list.push(["dolphin", path]);
+        if (how === "term")   list.push(["ghostty", "--working-directory=" + path]);
+        if (how === "idea") list.push(["idea", path]);
+        if (how === "code" || how === "all") list.push(["code", path]);
+        if (how === "claude" || how === "all") list.push(["ghostty", "--working-directory=" + path, "-e", Theme.home + "/.local/bin/claude"]);
+        hypr("hl.dsp.focus({ workspace = 8 })");
+        codePending = list;
+        codeLaunchTimer.restart();
+    }
+
+    // =====================================================================
+    // Eigene Zonen (Raster-Editor): pro Monitor ein Teilungsbaum
+    //   { k: "leaf" }  oder  { k: "split", dir: "v"|"h", r: 0..1, a: <Baum>, b: <Baum> }
+    //   "v" = senkrechte Trennlinie (a links, b rechts), "h" = waagerecht (a oben, b unten)
+    // =====================================================================
+    property string gridMode: ""        // "" | "edit" | "pick" | "flash"
+    property string gridScreen: ""
+    property string zoneSel: ""         // Pfad der gewählten Zone ("a", "ba", ...), "*" = keine
+    property var zoneHint: null         // { mon, idx } solange mit Shift gezogen wird
+
+    readonly property var zonePresets: ({
+        "Eins":      { k: "leaf" },
+        "2 Spalten": { k: "split", dir: "v", r: 0.5, a: { k: "leaf" }, b: { k: "leaf" } },
+        "3 Spalten": { k: "split", dir: "v", r: 0.3333, a: { k: "leaf" }, b: { k: "split", dir: "v", r: 0.5, a: { k: "leaf" }, b: { k: "leaf" } } },
+        "2×2":       { k: "split", dir: "h", r: 0.5,
+                       a: { k: "split", dir: "v", r: 0.5, a: { k: "leaf" }, b: { k: "leaf" } },
+                       b: { k: "split", dir: "v", r: 0.5, a: { k: "leaf" }, b: { k: "leaf" } } },
+        "Haupt + 2": { k: "split", dir: "v", r: 0.6, a: { k: "leaf" }, b: { k: "split", dir: "h", r: 0.5, a: { k: "leaf" }, b: { k: "leaf" } } },
+        "1 : 2 : 1": { k: "split", dir: "v", r: 0.25, a: { k: "leaf" }, b: { k: "split", dir: "v", r: 0.6667, a: { k: "leaf" }, b: { k: "leaf" } } }
+    })
+    readonly property var zonePresetNames: ["Eins", "2 Spalten", "3 Spalten", "2×2", "Haupt + 2", "1 : 2 : 1"]
+
+    function layoutFor(mon) {
+        const t = (settings.zoneLayouts || {})[mon];
+        return t && t.k ? t : zonePresets["2 Spalten"];
+    }
+    function cloneTree(t) { return JSON.parse(JSON.stringify(t)); }
+    function nodeAt(t, path) {
+        let n = t;
+        for (const c of path) { if (!n || n.k !== "split") return null; n = (c === "a") ? n.a : n.b; }
+        return n;
+    }
+    function setLayout(mon, tree) {
+        const all = Object.assign({}, settings.zoneLayouts || {});
+        all[mon] = tree;
+        settings.zoneLayouts = all;
+        zonesTimer.restart();
+    }
+    function applyPreset(mon, name) { setLayout(mon, cloneTree(zonePresets[name])); zoneSel = "*"; }
+    function cyclePreset(mon) {
+        const cur = JSON.stringify(layoutFor(mon));
+        const i = zonePresetNames.findIndex(n => JSON.stringify(zonePresets[n]) === cur);
+        applyPreset(mon, zonePresetNames[(i + 1) % zonePresetNames.length]);
+        return zonePresetNames[(i + 1) % zonePresetNames.length];
+    }
+    function splitZone(mon, path, dir) {
+        const t = cloneTree(layoutFor(mon));
+        const n = nodeAt(t, path);
+        if (!n || n.k !== "leaf") return;
+        n.k = "split"; n.dir = dir; n.r = 0.5; n.a = { k: "leaf" }; n.b = { k: "leaf" };
+        setLayout(mon, t); zoneSel = "*";
+    }
+    function removeZone(mon, path) {
+        if (path === "" || path === "*") return;
+        const t = cloneTree(layoutFor(mon));
+        const parentPath = path.slice(0, -1);
+        const parent = nodeAt(t, parentPath);
+        if (!parent || parent.k !== "split") return;
+        const keep = path.slice(-1) === "a" ? parent.b : parent.a;      // Geschwister bleibt
+        if (parentPath === "") setLayout(mon, keep);
+        else {
+            const gp = nodeAt(t, parentPath.slice(0, -1));
+            if (parentPath.slice(-1) === "a") gp.a = keep; else gp.b = keep;
+            setLayout(mon, t);
+        }
+        zoneSel = "*";
+    }
+    function setRatio(mon, path, r) {
+        const t = cloneTree(layoutFor(mon));
+        const n = nodeAt(t, path);
+        if (!n || n.k !== "split") return;
+        n.r = Math.max(0.1, Math.min(0.9, r));
+        setLayout(mon, t);
+    }
+    // nutzbare Fläche eines Monitors (lokal): Rand + Platz der Taskleiste, wenn sie fest sichtbar ist
+    function zoneArea(screen) {
+        const g = barMargin;
+        let top = g, bottom = g;
+        if (!autohide) { const bh = barHeight + barMargin * 2; if (barTop) top = bh; else bottom = bh; }
+        return { x: g, y: top, w: screen.width - 2 * g, h: screen.height - top - bottom };
+    }
+    function computeLayout(tree, area) {
+        const zones = [], dividers = [];
+        const rec = (n, x, y, w, h, path) => {
+            if (n.k === "leaf") { zones.push({ x: x, y: y, w: w, h: h, path: path }); return; }
+            if (n.dir === "v") {
+                const w1 = w * n.r;
+                dividers.push({ path: path, dir: "v", x: x + w1, y: y, len: h, px: x, py: y, pw: w, ph: h });
+                rec(n.a, x, y, w1, h, path + "a"); rec(n.b, x + w1, y, w - w1, h, path + "b");
+            } else {
+                const h1 = h * n.r;
+                dividers.push({ path: path, dir: "h", x: x, y: y + h1, len: w, px: x, py: y, pw: w, ph: h });
+                rec(n.a, x, y, w, h1, path + "a"); rec(n.b, x, y + h1, w, h - h1, path + "b");
+            }
+        };
+        rec(tree, area.x, area.y, area.w, area.h, "");
+        return { zones: zones, dividers: dividers };
+    }
+
+    // Zonen für Hyprland (dx_zones.lua) als Datei bereitstellen und Raster neu anwenden
+    property string lastZonesText: ""
+    Timer { id: zonesTimer; interval: 220; onTriggered: root.writeZones() }
+    function writeZones() {
+        let out = "";
+        for (const s of Quickshell.screens) {
+            const lay = computeLayout(layoutFor(s.name), zoneArea(s));
+            lay.zones.forEach((z, i) => {
+                out += s.name + " " + (i + 1) + " " + Math.round(s.x + z.x + 4) + " " + Math.round(s.y + z.y + 4)
+                     + " " + Math.max(60, Math.round(z.w - 8)) + " " + Math.max(60, Math.round(z.h - 8)) + "\n";
+            });
+        }
+        if (out === lastZonesText) return;
+        lastZonesText = out;
+        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" > \"$XDG_RUNTIME_DIR/draconyx-zones.txt\"", "sh", out]);
+        hyprEval("if DXTiling then DXTiling.retileAll() end");
+    }
+    Connections { target: settingsFile; function onAdapterUpdated() { zonesTimer.restart(); } }
+
+    function showZones(mon, mode) { gridScreen = mon || focusedScreenName(); gridMode = mode; zoneSel = "*"; }
+    function closeGrid() { gridMode = ""; zoneSel = "*"; }
+    function pickZone(idx) {
+        closeGrid();
+        hyprEval("DXZones.placePicked(" + idx + ")");
+    }
+    onGridModeChanged: if (gridMode === "flash") flashTimer.restart()
+    Timer { id: flashTimer; interval: 1700; onTriggered: { if (root.gridMode === "flash") root.closeGrid(); } }
+
+    // =====================================================================
+    // Andock-Vorschau: dx_snap.lua schreibt "MONITOR x y w h" (oder "none") in diese Datei
+    // =====================================================================
+    property var snapRect: null
+    FileView {
+        id: snapFile
+        path: Quickshell.env("XDG_RUNTIME_DIR") + "/draconyx-snap.txt"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            const p = text().trim().split(/\s+/);
+            if (p[0] === "zones" && p.length >= 7) {
+                const idx = Number(p[2]);
+                root.zoneHint = { mon: p[1], idx: idx };
+                root.snapRect = idx > 0 ? { mon: p[1], x: Number(p[3]), y: Number(p[4]), w: Number(p[5]), h: Number(p[6]) } : null;
+            } else {
+                root.zoneHint = null;
+                root.snapRect = p.length === 5
+                    ? { mon: p[0], x: Number(p[1]), y: Number(p[2]), w: Number(p[3]), h: Number(p[4]) }
+                    : null;
+            }
+        }
+    }
+
+    // =====================================================================
+    // Angeheftete / zuletzt benutzte Apps
+    // =====================================================================
+    readonly property var aliases: ({
+        "code": "com.microsoft.vscode",
+        "code-url-handler": "com.microsoft.vscode",
+        "brave": "brave-browser",
+        "org.pulseaudio.pavucontrol": "pavucontrol",
+        "dolphin": "org.kde.dolphin"
+    })
+    function normId(id) {
+        const k = (id || "").toLowerCase().replace(/\.desktop$/, "");
+        return aliases[k] || k;
+    }
+    function isPinned(id) {
+        const k = normId(id);
+        return (settings.pinned || []).some(p => normId(p) === k);
+    }
+    function togglePin(id) {
+        const k = normId(id);
+        const list = (settings.pinned || []).slice();
+        const idx = list.findIndex(p => normId(p) === k);
+        if (idx >= 0) list.splice(idx, 1); else list.push(id);
+        settings.pinned = list;
+    }
+    function movePinned(fromIdx, toIdx) {
+        const list = (settings.pinned || []).slice();
+        if (fromIdx < 0 || fromIdx >= list.length) return;
+        toIdx = Math.max(0, Math.min(list.length - 1, toIdx));
+        if (fromIdx === toIdx) return;
+        const [item] = list.splice(fromIdx, 1);
+        list.splice(toIdx, 0, item);
+        settings.pinned = list;
+    }
+    // Reihenfolge in einer der Listen ändern ("pinned" oder "startPins")
+    function moveInList(name, fromIdx, toIdx) {
+        const list = (settings[name] || []).slice();
+        if (fromIdx < 0 || fromIdx >= list.length) return;
+        toIdx = Math.max(0, Math.min(list.length - 1, toIdx));
+        if (fromIdx === toIdx) return;
+        const [item] = list.splice(fromIdx, 1);
+        list.splice(toIdx, 0, item);
+        settings[name] = list;
+    }
+
+    // App-Ordner im Startmenü: [{ name, apps: [ids] }]
+    function folderOf(id) {
+        const k = normId(id);
+        for (const f of (settings.appFolders || []))
+            if ((f.apps || []).some(a => normId(a) === k)) return f.name;
+        return "";
+    }
+    function folderAddApp(folderName, id) {
+        const k = normId(id);
+        const all = (settings.appFolders || []).map(f => ({ name: f.name, apps: (f.apps || []).filter(a => normId(a) !== k) }));
+        let f = all.find(x => x.name === folderName);
+        if (!f) { f = { name: folderName, apps: [] }; all.push(f); }
+        f.apps.push(id);
+        settings.appFolders = all.filter(x => x.apps.length > 0);
+    }
+    function folderRemoveApp(id) {
+        const k = normId(id);
+        settings.appFolders = (settings.appFolders || [])
+            .map(f => ({ name: f.name, apps: (f.apps || []).filter(a => normId(a) !== k) }))
+            .filter(f => f.apps.length > 0);
+    }
+    function folderDissolve(folderName) {
+        settings.appFolders = (settings.appFolders || []).filter(f => f.name !== folderName);
+    }
+
+    function toggleStartPin(id) {
+        const k = normId(id);
+        const list = (settings.startPins || []).slice();
+        const idx = list.findIndex(p => normId(p) === k);
+        if (idx >= 0) list.splice(idx, 1); else list.push(id);
+        settings.startPins = list;
+    }
+    function isStartPinned(id) {
+        const k = normId(id);
+        return (settings.startPins || []).some(p => normId(p) === k);
+    }
+    function addRecent(id) {
+        if (!id) return;
+        const k = normId(id);
+        const list = (settings.recentApps || []).filter(p => normId(p) !== k);
+        list.unshift(id);
+        settings.recentApps = list.slice(0, 12);
+    }
+
+    function entryFor(id) {
+        if (!id) return null;
+        return DesktopEntries.byId(id) || DesktopEntries.heuristicLookup(id);
+    }
+    function iconFor(id, entry) {
+        if (entry && entry.icon) {
+            if (entry.icon.startsWith("/")) return "file://" + entry.icon;
+            return Quickshell.iconPath(entry.icon, "application-x-executable");
+        }
+        if (id && id.startsWith("steam_app_"))
+            return Quickshell.iconPath("steam_icon_" + id.substring(10), "steam");
+        return Quickshell.iconPath((id || "").toLowerCase(), "application-x-executable");
+    }
+    function launch(id, entry) {
+        addRecent(entry ? entry.id : id);
+        if (entry) entry.execute(); else run(id);
+    }
+
+    // =====================================================================
+    // Fenster fokussieren (Wayland-activate zählt in Hyprland nur als "dringend")
+    // =====================================================================
+    function hyprFor(wl) {
+        for (const h of Hyprland.toplevels.values) if (h.wayland === wl) return h;
+        return null;
+    }
+    function addressOf(h) {
+        const raw = String((h.lastIpcObject && h.lastIpcObject.address) || h.address || "");
+        if (raw === "") return "";
+        return raw.startsWith("0x") ? raw : "0x" + raw;
+    }
+    // Minimieren = Fenster in den versteckten Special-Workspace "minimized" legen (Hyprland kennt es nicht nativ)
+    readonly property string minWs: "name:minimized"        // normaler, nie angezeigter Workspace
+    readonly property string minWsName: "minimized"
+    function wsNameOf(h) {
+        if (!h) return "";
+        if (h.workspace && h.workspace.name) return h.workspace.name;
+        const o = h.lastIpcObject || {};
+        return (o.workspace && o.workspace.name) || "";
+    }
+    function isMinimizedH(h) { return h ? wsNameOf(h) === minWsName : false; }
+    function isMinimized(wl) { return isMinimizedH(hyprFor(wl)); }
+    // Minimieren/Wiederherstellen ohne sichtbare Reise über die Monitore:
+    //  - Fenster-Animation für die Dauer des Umzugs aus (no_anim)
+    //  - beim Minimieren werden Desktop, Position und Größe gemerkt, beim Wiederherstellen genau so zurückgesetzt
+    property var minState: ({})          // address -> { ws, x, y, w, h }
+    property var pendingAnim: []
+    Timer {
+        id: animReset
+        interval: 900
+        onTriggered: {
+            for (const a of root.pendingAnim) root.hypr("hl.dsp.window.set_prop({ window = \"address:" + a + "\", prop = \"no_anim\", value = \"0\" })");
+            root.pendingAnim = [];
+        }
+    }
+    function noAnim(a) {
+        hypr("hl.dsp.window.set_prop({ window = \"address:" + a + "\", prop = \"no_anim\", value = \"1\" })");
+        if (root.pendingAnim.indexOf(a) < 0) root.pendingAnim.push(a);
+        animReset.restart();
+    }
+    function toplevelByAddr(a) {
+        for (const h of Hyprland.toplevels.values) if (addressOf(h) === a) return h;
+        return null;
+    }
+    // Zustand (Desktop, Position, Größe, maximiert?) kommt live von Hyprland, nicht aus dem evtl. veralteten Shell-Cache
+    property var minQueue: []
+    Process {
+        id: minProbe
+        property string addr: ""
+        command: ["hyprctl", "-j", "clients"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const a = minProbe.addr;
+                try {
+                    for (const c of JSON.parse(text)) {
+                        if (c.address !== a) continue;
+                        if (c.workspace && c.workspace.name !== root.minWsName) {
+                            const all = Object.assign({}, root.minState);
+                            all[a] = { ws: c.workspace.id, x: c.at[0], y: c.at[1], w: c.size[0], h: c.size[1], fs: c.fullscreen || 0 };
+                            root.minState = all;
+                        }
+                        break;
+                    }
+                } catch (e) {}
+                root.doMinimize(a);
+                nextMinTimer.restart();
+            }
+        }
+    }
+    Timer { id: nextMinTimer; interval: 60; onTriggered: root.nextMin() }
+    function nextMin() {
+        if (minQueue.length === 0 || minProbe.running) return;
+        minProbe.addr = minQueue.shift();
+        minProbe.running = true;
+    }
+    function doMinimize(a) {
+        noAnim(a);
+        hypr("hl.dsp.window.move({ window = \"address:" + a + "\", workspace = \"" + minWs + "\", follow = false })");
+    }
+    function minimizeAddr(a) {
+        if (minQueue.indexOf(a) < 0) minQueue.push(a);
+        nextMin();
+    }
+
+    // Nach dem Zurückholen maximieren manche Apps (z. B. Steam) sich von selbst. War das Fenster vorher nicht
+    // maximiert, wird das für ein paar Sekunden wieder zurückgenommen; war es maximiert, wird es wiederhergestellt.
+    property var guardUntil: ({})        // address -> Zeitstempel (ms)
+    property var guardGeo: ({})          // address -> gemerkte Geometrie
+    function unmaximizeGuarded() {
+        const now = Date.now();
+        for (const a of Object.keys(guardUntil)) {
+            if (guardUntil[a] < now) { delete guardUntil[a]; delete guardGeo[a]; continue; }
+            hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"unset\" })");
+            const st = guardGeo[a];
+            if (st) {
+                hypr("hl.dsp.window.resize({ window = \"address:" + a + "\", x = " + st.w + ", y = " + st.h + ", relative = false })");
+                hypr("hl.dsp.window.move({ window = \"address:" + a + "\", x = " + st.x + ", y = " + st.y + ", relative = false })");
+            }
+        }
+    }
+    Timer { id: guardTimer; interval: 150; onTriggered: root.unmaximizeGuarded() }
+    function restoreAddr(a) {
+        const st = root.minState[a];
+        // Zurück auf den alten Desktop nur, wenn er gerade auf einem Monitor sichtbar ist – sonst auf den aktiven
+        let ws = Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : 1;
+        if (st) for (const m of Hyprland.monitors.values) if (m.activeWorkspace && m.activeWorkspace.id === st.ws) ws = st.ws;
+        console.log("EV restore " + a + " ws=" + ws + " wasMax=" + (st ? st.fs : "?"));
+        noAnim(a);
+        hypr("hl.dsp.window.move({ window = \"address:" + a + "\", workspace = " + ws + ", follow = false })");
+        if (st && st.fs === 0) {
+            // war nicht maximiert: hat die App sich im Versteck selbst maximiert (Steam), zuerst zurücknehmen
+            hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"unset\" })");
+            hypr("hl.dsp.window.resize({ window = \"address:" + a + "\", x = " + st.w + ", y = " + st.h + ", relative = false })");
+            hypr("hl.dsp.window.move({ window = \"address:" + a + "\", x = " + st.x + ", y = " + st.y + ", relative = false })");
+            root.guardUntil[a] = Date.now() + 8000;      // 8 s: ungewollte Selbst-Maximierung zurücknehmen
+            root.guardGeo[a] = st;
+        } else if (st && st.fs === 1) {
+            hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"set\" })");
+        }
+        hypr("hl.dsp.focus({ window = \"address:" + a + "\" })");
+    }
+    function minimizeH(h) { const a = addressOf(h); if (a !== "") minimizeAddr(a); }
+    function minimizeToplevel(wl) { minimizeH(hyprFor(wl)); }
+    function restoreH(h) { const a = addressOf(h); if (a !== "") restoreAddr(a); }
+
+    function focusHypr(h) {
+        if (!h) return;
+        if (isMinimizedH(h)) { restoreH(h); return; }
+        const a = addressOf(h);
+        if (a !== "") hypr("hl.dsp.focus({ window = \"address:" + a + "\" })");
+    }
+    function focusToplevel(wl) {
+        const h = hyprFor(wl);
+        if (h) focusHypr(h); else wl.activate();
+    }
+    function moveToWorkspace(h, id) {
+        const a = addressOf(h);
+        if (a !== "") hypr("hl.dsp.window.move({ window = \"address:" + a + "\", workspace = " + id + ", follow = false })");
+    }
+
+    // XWayland-Apps (z. B. Steam) minimieren über eine X-Nachricht, die Hyprland ignoriert: Wächter-Skript liest sie mit
+    property string lastIconify: ""
+    property double lastIconifyAt: 0
+    Process {
+        running: true
+        command: [Theme.home + "/.local/bin/dx-x11-iconify"]
+        stdout: SplitParser {
+            onRead: line => {
+                const m = line.match(/^iconify (0x[0-9a-f]+)/);
+                if (!m) return;
+                const now = Date.now();
+                if (m[1] === root.lastIconify && now - root.lastIconifyAt < 600) return;   // doppelte Meldung
+                root.lastIconify = m[1]; root.lastIconifyAt = now;
+                root.minimizeAddr(m[1]);
+            }
+        }
+    }
+
+    // Minimieren-Knopf von Apps: Hyprland sendet "minimized>>adresse,1|0" über den Event-Socket
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            // Fehlersuche: Ablauf rund ums Minimieren/Maximieren im Shell-Log festhalten (qs -c draconyx log | grep EV)
+            if (["minimized", "fullscreen", "movewindowv2", "openwindow", "changefloatingmode", "windowtitlev2"].indexOf(event.name) >= 0)
+                console.log("EV " + event.name + " " + event.data);
+            if (event.name === "fullscreen" && String(event.data) === "1") guardTimer.restart();
+            // Sobald die Engine ihre Fläche öffnet, liegt sie über dem Desktop -> sofort den Desktop neu darüberlegen
+            if (event.name === "openlayer" && String(event.data) === "linux-wallpaperengine") weRemapStart.restart();
+            // Nie auf dem Versteck-Desktop landen: Hyprland fokussiert nach dem Minimieren manchmal das versteckte Fenster
+            // (z. B. beim Öffnen des Startmenüs) und schaltet den Monitor dorthin -> sofort zurück zum vorigen Desktop
+            if (event.name === "workspacev2" && String(event.data).endsWith(",minimized")) {
+                console.log("EV zurück vom Versteck-Desktop");
+                hypr("hl.dsp.focus({ workspace = \"previous\" })");
+            }
+            if (event.name !== "minimized" || !root.handleMinimized) return;
+            const parts = String(event.data).split(",");
+            const addr = parts[0].startsWith("0x") ? parts[0] : "0x" + parts[0];
+            if (parts[1] === "1") root.minimizeAddr(addr); else root.restoreAddr(addr);
+        }
+    }
+
+    // =====================================================================
+    // Schalter
+    // =====================================================================
+    property var testSelect: null      // nur für Tests: Auswahlrahmen auf dem Desktop setzen
+    property bool handleMinimized: true   // Test: Ereignis-Handler für Minimieren abschaltbar
+    property string testQuery: ""      // nur für automatische Tests (IPC): Suchtext im Startmenü setzen
+    property bool nightLight: false
+    property bool gameMode: false
+    property bool dnd: false
+    property int notifCount: 0
+    property string netType: "none"
+    property string perfProfile: "balanced"
+    property int lastWorkspace: 1
+
+    function setNightLight(on) {
+        nightLight = on;
+        run(on ? "pkill -x hyprsunset; hyprsunset -t 4500" : "pkill -x hyprsunset");
+    }
+    function setGameMode(on) {
+        gameMode = on;
+        hyprEval(on
+            ? "hl.config({ animations = { enabled = false }, decoration = { blur = { enabled = false }, shadow = { enabled = false } } })"
+            : "hl.config({ animations = { enabled = true }, decoration = { blur = { enabled = true }, shadow = { enabled = true } } })");
+    }
+    function setPerfProfile(p) {
+        perfProfile = p;
+        run("powerprofilesctl set " + p);
+    }
+
+    // =====================================================================
+    // Hilfen
+    // =====================================================================
+    function run(cmd) { Quickshell.execDetached(["sh", "-c", cmd]); }
+    // Protokoll: was startet die Shell wann? (~/.local/state/draconyx/launch.log)
+    function logLaunch(source, what) {
+        Quickshell.execDetached(["sh", "-c", "printf '%s %s %s\\n' \"$(date +%T)\" \"$1\" \"$2\" >> \"$HOME/.local/state/draconyx/launch.log\"", "sh", source, what]);
+    }
+    function hypr(lua) { Hyprland.dispatch(lua); }
+    function hyprEval(lua) { Quickshell.execDetached(["hyprctl", "eval", lua]); }
+
+    PwObjectTracker { objects: [Pipewire.defaultAudioSink, Pipewire.defaultAudioSource] }
+
+    // Benachrichtigungen (swaync): Anzahl + Nicht-stören-Status
+    Process {
+        running: true
+        command: ["swaync-client", "-swb"]
+        stdout: SplitParser {
+            onRead: line => {
+                try {
+                    const j = JSON.parse(line);
+                    root.notifCount = parseInt(j.text) || 0;
+                    root.dnd = String(j.alt || "").startsWith("dnd");
+                } catch (e) {}
+            }
+        }
+    }
+
+    // Netzwerk: nmcli im Hintergrund, ereignisbasiert (monitor) statt ständigem Abfragen
+    Process {
+        id: netState
+        command: ["sh", "-c", "nmcli -t -f TYPE,STATE device | grep ':connected$' | cut -d: -f1 | head -1"]
+        stdout: SplitParser {
+            onRead: line => { root.netType = line === "ethernet" ? "ethernet" : (line === "wifi" ? "wifi" : "none"); }
+        }
+    }
+    Process {
+        running: true
+        command: ["nmcli", "monitor"]
+        stdout: SplitParser { onRead: line => { netDebounce.restart(); } }
+    }
+    Timer { id: netDebounce; interval: 400; onTriggered: netState.running = true }
+    // ---------- Desktop-Symbole: freie Plätze im Raster, auch auf anderen Monitoren ----------
+    function iconMetrics(mon) {
+        for (const s of Quickshell.screens) if (s.name === mon) {
+            const top = barTop ? barHeight + barMargin * 2 + 18 : 18;
+            const bottom = barTop ? 18 : barHeight + barMargin * 2 + 18;
+            return { cols: Math.max(1, Math.floor((s.width - 36) / iconGrid)), rows: Math.max(1, Math.floor((s.height - top - bottom) / (iconGrid + 14))) };
+        }
+        return { cols: 1, rows: 1 };
+    }
+    function _ik(m, c, r) { return m + ":" + c + ":" + r; }
+    function iconFindFree(mon, c0, r0, occ) {
+        const mt = iconMetrics(mon);
+        c0 = Math.max(0, Math.min(mt.cols - 1, c0)); r0 = Math.max(0, Math.min(mt.rows - 1, r0));
+        for (let d = 0; d <= mt.cols + mt.rows; d++)
+            for (let c = c0 - d; c <= c0 + d; c++)
+                for (let r = r0 - d; r <= r0 + d; r++) {
+                    if (Math.max(Math.abs(c - c0), Math.abs(r - r0)) !== d) continue;
+                    if (c < 0 || r < 0 || c >= mt.cols || r >= mt.rows) continue;
+                    if (!occ[_ik(mon, c, r)]) return { m: mon, c: c, r: r };
+                }
+        return null;
+    }
+    // Neue Dateien ohne Platz: von oben nach unten, links nach rechts auf dem ersten Symbol-Monitor
+    function iconAutoPlace(names) {
+        const pos = Object.assign({}, iconPos); const occ = {}; let changed = false;
+        for (const n of names) if (pos[n]) occ[_ik(pos[n].m, pos[n].c, pos[n].r)] = n;
+        const mons = (desktopMonitors && desktopMonitors.length > 0) ? desktopMonitors : (Quickshell.screens.length ? [Quickshell.screens[0].name] : []);
+        for (const n of names) {
+            if (pos[n]) continue;
+            let done = false;
+            for (const m of mons) {
+                const mt = iconMetrics(m);
+                for (let c = 0; c < mt.cols && !done; c++)
+                    for (let r = 0; r < mt.rows && !done; r++)
+                        if (!occ[_ik(m, c, r)]) { pos[n] = { m: m, c: c, r: r }; occ[_ik(m, c, r)] = n; done = true; changed = true; }
+                if (done) break;
+            }
+        }
+        if (changed) iconPos = pos;
+    }
+    // moves: [{ name, m, c, r }] – Ziel-Zellen; belegte Plätze (von nicht bewegten Symbolen) werden zum nächsten freien
+    function iconMove(moves) {
+        const pos = Object.assign({}, iconPos); const moving = {};
+        for (const mv of moves) moving[mv.name] = true;
+        const occ = {};
+        for (const n of Object.keys(pos)) if (!moving[n]) occ[_ik(pos[n].m, pos[n].c, pos[n].r)] = n;
+        for (const mv of moves) {
+            const spot = iconFindFree(mv.m, mv.c, mv.r, occ);
+            if (!spot) continue;
+            pos[mv.name] = spot; occ[_ik(spot.m, spot.c, spot.r)] = mv.name;
+        }
+        iconPos = pos;
+        const mons = (desktopMonitors || []).slice(); let add = false;
+        for (const mv of moves) if (mons.indexOf(pos[mv.name].m) < 0) { mons.push(pos[mv.name].m); add = true; }
+        if (add) desktopMonitors = mons;
+    }
+
+    // Wallpaper Engine: je Monitor ein Wallpaper; ein Prozess für alle Monitore
+    function weSet(mon, id) {
+        const m = Object.assign({}, weWallpapers);
+        if (id === "" || m[mon] === id) delete m[mon]; else m[mon] = id;
+        weWallpapers = m;
+        weApply();
+    }
+    // Die Engine liegt auf derselben Ebene wie der Desktop und käme sonst über die Symbole:
+    // Desktop kurz ausblenden, damit er danach wieder obenauf liegt
+    property bool weRemap: false
+    Timer { id: weRemapStart; interval: 60; onTriggered: { root.weRemap = true; weRemapEnd.restart(); } }
+    Timer { id: weRemapEnd; interval: 120; onTriggered: root.weRemap = false }
+    function weApply() {
+        const args = [Theme.home + "/.local/bin/dx-we-apply"];
+        for (const k of Object.keys(weWallpapers)) args.push(k + "=" + weWallpapers[k]);
+        Quickshell.execDetached(args);
+    }
+    Timer { interval: 4000; running: true; onTriggered: if (Object.keys(root.weWallpapers).length > 0) root.weApply() }
+
+    Component.onCompleted: {
+        netState.running = true;
+        perfRead.running = true;
+        zonesTimer.restart();
+        Quickshell.execDetached(["sh", "-c", "[ -f \"$XDG_RUNTIME_DIR/draconyx-snap.txt\" ] || echo none > \"$XDG_RUNTIME_DIR/draconyx-snap.txt\""]);
+    }
+
+    // Performance-Profil lesen
+    Process {
+        id: perfRead
+        command: ["powerprofilesctl", "get"]
+        stdout: SplitParser { onRead: line => { if (line) root.perfProfile = line.trim(); } }
+    }
+
+    // =====================================================================
+    // App-Badges und Fortschritt (com.canonical.Unity.LauncherEntry, von Electron-Apps u. a.)
+    // =====================================================================
+    property var badges: ({})      // normId -> { count, countVisible, progress, progressVisible }
+    function badgeFor(id) { return badges[normId(id)] || null; }
+
+    Process {
+        running: true
+        command: ["dbus-monitor", "--session", "type='signal',interface='com.canonical.Unity.LauncherEntry',member='Update'"]
+        stdout: SplitParser {
+            property string uri: ""
+            property string key: ""
+            property var cur: ({})
+            onRead: line => {
+                if (line.indexOf("member=Update") >= 0) { uri = ""; key = ""; cur = {}; return; }
+                const sm = line.match(/^\s*string "(.*)"$/);
+                if (sm) {
+                    const s = sm[1];
+                    if (s.startsWith("application://")) { uri = s.substring(14); return; }
+                    key = s;
+                    return;
+                }
+                const vm = line.match(/^\s*variant\s+(int32|int64|uint32|uint64|double|boolean)\s+(\S+)/);
+                if (vm && uri !== "") {
+                    const val = vm[1] === "boolean" ? vm[2] === "true" : Number(vm[2]);
+                    cur[key] = val;
+                    const id = root.normId(uri);
+                    const all = Object.assign({}, root.badges);
+                    all[id] = {
+                        count: cur["count"] !== undefined ? cur["count"] : ((all[id] || {}).count || 0),
+                        countVisible: cur["count-visible"] !== undefined ? cur["count-visible"] : ((all[id] || {}).countVisible || false),
+                        progress: cur["progress"] !== undefined ? cur["progress"] : ((all[id] || {}).progress || 0),
+                        progressVisible: cur["progress-visible"] !== undefined ? cur["progress-visible"] : ((all[id] || {}).progressVisible || false)
+                    };
+                    root.badges = all;
+                }
+            }
+        }
+    }
+}

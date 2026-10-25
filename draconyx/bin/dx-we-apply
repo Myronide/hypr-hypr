@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Draconyx: (neu) starten der Wallpaper Engine. Aufruf: dx-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
+PIDF="${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.pid"
+if [ -f "$PIDF" ]; then
+  old=$(cat "$PIDF"); kill "$old" 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$old" 2>/dev/null || break; sleep 0.2; done
+  kill -9 "$old" 2>/dev/null; rm -f "$PIDF"
+fi
+# übrig gebliebene Instanzen (z. B. aus schnellen Klicks) sicher beenden
+for p in $(pgrep -x linux-wallpaper); do kill "$p" 2>/dev/null; done
+sleep 0.4
+for p in $(pgrep -x linux-wallpaper); do kill -9 "$p" 2>/dev/null; done
+[ $# -eq 0 ] && exit 0
+args=()
+for kv in "$@"; do
+  m="${kv%%=*}"; id="${kv#*=}"
+  args+=(--screen-root "$m" --bg "$id" --scaling fill)
+done
+setsid "$HOME/.local/bin/dx-we-run" "${args[@]}" --layer "${DX_WE_LAYER:-bottom}" --fps 30 --silent --no-fullscreen-pause >"${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.log" 2>&1 &
+echo $! > "$PIDF"
