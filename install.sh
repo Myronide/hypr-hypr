@@ -303,6 +303,14 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
       say "Shell neu starten"
       qs -c draconyx kill >/dev/null 2>&1 || true
       sleep 1
+      # Hat "kill" nicht jede Instanz erwischt (z. B. beim Anmelden gestartet), den Rest hart beenden – sonst laufen zwei Shells
+      for p in $(pgrep -x qs || true); do
+        tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'draconyx' && kill "$p" 2>/dev/null || true
+      done
+      for _ in 1 2 3 4 5 6; do pgrep -x qs >/dev/null || break; sleep 0.5; done
+      for p in $(pgrep -x qs || true); do
+        tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'draconyx' && kill -9 "$p" 2>/dev/null || true
+      done
       # übrig gebliebene Wächter der alten Shell beenden (die neue startet sie selbst)
       for p in $(pgrep -x python3 || true); do
         c="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)"

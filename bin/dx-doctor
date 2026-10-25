@@ -61,6 +61,9 @@ if [ "$FIX" = 1 ]; then
   for p in $(pgrep -x python3); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'desktop-ui daemon' && { kill "$p"; echo "altes Aurora-Dock beendet ($p)" | tee -a "$OUT"; }; done
   # doppelte Wächter: nur den neuesten behalten
   for n in dx-x11-iconify dx-ui-bridge; do ids=$(for p in $(pgrep -x python3); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "$n" && echo $p; done | sort -n); keep=$(echo "$ids" | tail -1); for p in $ids; do [ "$p" != "$keep" ] && { kill "$p"; echo "doppelten $n beendet ($p)" | tee -a "$OUT"; }; done; done
+  # doppelte Shell: nur die neueste behalten
+  qsids=$(for p in $(pgrep -x qs); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q draconyx && echo $p; done | sort -n)
+  if [ "$(echo "$qsids" | wc -w)" -gt 1 ]; then keep=$(echo "$qsids" | tail -1); for p in $qsids; do [ "$p" != "$keep" ] && { kill "$p" 2>/dev/null; echo "doppelte Shell beendet ($p, behalten: $keep)" | tee -a "$OUT"; }; done; fi
   rm -f "${XDG_RUNTIME_DIR:-/tmp}"/aurora-dock.lock "${XDG_RUNTIME_DIR:-/tmp}"/aurora-waybar.pid 2>/dev/null
 fi
 cat "$OUT"; echo; echo ">>> Bericht gespeichert: $OUT"

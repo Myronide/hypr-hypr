@@ -2,6 +2,7 @@
 # Draconyx: sorgt dafür, dass die Shell läuft (Sicherheitsnetz zum Autostart). Mehrere Versuche, Protokoll:
 # ~/.cache/draconyx/shell-start.log. Kann beliebig oft aufgerufen werden – läuft die Shell schon, passiert nichts.
 LOG="$HOME/.cache/draconyx/shell-start.log"; mkdir -p "$(dirname "$LOG")"
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/draconyx-shell-ensure.lock"; flock -n 9 || exit 0     # nur ein Starter gleichzeitig
 QS="$(command -v qs || echo /usr/bin/qs)"
 [ -f "$HOME/.config/quickshell/draconyx/shell.qml" ] || exit 0
 [ -x "$QS" ] || { echo "$(date +%T) qs nicht gefunden" >> "$LOG"; exit 1; }
