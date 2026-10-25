@@ -1,13 +1,14 @@
 #!/usr/bin/python3
-import gi,json,subprocess,os,threading
+import gi,json,subprocess,os,threading,copy,math
 from pathlib import Path
 gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
 from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango,GObject
 UI_ALIVE=(Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-ui.sock').exists()   # altes Aurora-Dock/Alt+Tab-Programm läuft
+import monitors as MON
 from preferences import current_keymap,BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
 
 class Choice(Gtk.Box):
- """Auswahl als Knopfreihe statt Aufklappliste: GTK-Auswahllisten werden unter XWayland/Hyprland mittig im Fenster und fehlerhaft
+ """Auswahl als Knopfreihe (für wenige Optionen; bei vielen: Select). GTK-Auswahllisten werden unter XWayland/Hyprland mittig im Fenster und fehlerhaft
  geöffnet. Gleiche Bedienung wie ComboBoxText (append, set_active_id, get_active_id, Signal 'changed')."""
  __gsignals__={'changed':(GObject.SignalFlags.RUN_FIRST,None,())}
  def __init__(self):
@@ -28,6 +29,58 @@ class Choice(Gtk.Box):
    self.active=i
    if emit:self.emit('changed')
  def get_active_id(self):return self.active
+ def clear(self):
+  for b in list(self.buttons.values()):self.remove(b)
+  self.buttons={};self.active=None
+
+class Select(Gtk.MenuButton):
+ """Aufklappliste, die INNERHALB des Fensters aufgeht (Gtk.Popover). Die GTK-Standard-Auswahlliste (ComboBox) öffnet unter
+ XWayland/Hyprland als eigenes Fenster an der falschen Stelle; ein Popover wird dagegen im Fenster selbst gezeichnet und bleibt
+ daran gebunden. Gleiche Bedienung wie Choice (append, clear, set_active_id, get_active_id, Signal 'changed')."""
+ __gsignals__={'changed':(GObject.SignalFlags.RUN_FIRST,None,())}
+ def __init__(self):
+  super().__init__();self.set_valign(Gtk.Align.CENTER);self.items={};self.active=None
+  self.text=Gtk.Label(xalign=0);self.text.set_ellipsize(Pango.EllipsizeMode.END);self.text.set_max_width_chars(28)
+  row=Gtk.Box(spacing=10);row.pack_start(self.text,True,True,0);row.pack_end(Gtk.Image.new_from_icon_name('pan-down-symbolic',Gtk.IconSize.BUTTON),False,False,0)
+  self.add(row);self.set_size_request(190,-1)
+  self.pop=Gtk.Popover();self.pop.set_constrain_to(Gtk.PopoverConstraint.WINDOW);self.set_popover(self.pop)
+  self.scroll=Gtk.ScrolledWindow();self.scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);self.scroll.set_propagate_natural_height(True);self.scroll.set_max_content_height(320);self.scroll.set_min_content_width(210)
+  self.lb=Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE);self.lb.get_style_context().add_class('select-list');self.lb.connect('row-activated',self._row)
+  self.scroll.add(self.lb);self.pop.add(self.scroll);self.scroll.show_all()
+ def clear(self):
+  for c in self.lb.get_children():self.lb.remove(c)
+  self.items={};self.active=None;self.text.set_text('')
+ def append(self,i,label):
+  r=Gtk.ListBoxRow();r.value=i;l=Gtk.Label(label=label,xalign=0,margin=9);r.add(l);self.lb.add(r);r.show_all();self.items[i]=label
+ def _row(self,lb,row):
+  self.pop.popdown();self.set_active_id(row.value,True)
+ def set_active_id(self,i,emit=False):
+  if i in self.items:self.text.set_text(self.items[i])
+  else:self.text.set_text('')
+  if i!=self.active and i in self.items:
+   self.active=i
+   if emit:self.emit('changed')
+ def get_active_id(self):return self.active
+
+class PathButton(Gtk.Button):
+ """Ordner-/Dateiwahl als Knopf mit Pfad, öffnet einen normalen Auswahldialog (statt der GTK-FileChooserButton-Aufklappliste,
+ die unter XWayland ebenfalls an der falschen Stelle aufging). Gleiche Bedienung: set_filename, get_filename, unselect_all, 'file-set'."""
+ __gsignals__={'file-set':(GObject.SignalFlags.RUN_FIRST,None,())}
+ def __init__(self,title,folder=True,images=False):
+  super().__init__();self.title=title;self.folder=folder;self.images=images;self.path='';self.set_valign(Gtk.Align.CENTER)
+  self.lab=Gtk.Label(xalign=0);self.lab.set_ellipsize(Pango.EllipsizeMode.MIDDLE);self.lab.set_max_width_chars(34);self.add(self.lab);self.set_size_request(250,-1);self._show();self.connect('clicked',self._pick)
+ def _show(self):self.lab.set_text(self.path or '(nichts gewählt)')
+ def set_filename(self,p):self.path=p or '';self._show()
+ def get_filename(self):return self.path or None
+ def unselect_all(self):self.path='';self._show()
+ def _pick(self,*_):
+  d=Gtk.FileChooserDialog(title=self.title,parent=self.get_toplevel(),action=Gtk.FileChooserAction.SELECT_FOLDER if self.folder else Gtk.FileChooserAction.OPEN)
+  d.add_buttons('Abbrechen',Gtk.ResponseType.CANCEL,'Wählen',Gtk.ResponseType.OK)
+  if self.path:d.set_filename(self.path)
+  if self.images:
+   f=Gtk.FileFilter();f.set_name('Bilder');f.add_pixbuf_formats();d.add_filter(f)
+  if d.run()==Gtk.ResponseType.OK:self.path=d.get_filename() or '';self._show();d.destroy();self.emit('file-set')
+  else:d.destroy()
 
 SHELL_SETTINGS=Path.home()/'.local/state/draconyx/settings.json'
 def shell_get(key,default=None):
@@ -60,7 +113,7 @@ class Settings(Gtk.Application):
   apply=Gtk.Button(label='Übernehmen');apply.get_style_context().add_class('suggested-action');apply.connect('clicked',self.apply);head.pack_end(apply)
   self.status=Gtk.Label();self.status.get_style_context().add_class('subtitle');root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.window.add(root);body=Gtk.Box();root.pack_start(body,True,True,0)
   self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);sidebar=Gtk.StackSidebar();sidebar.set_stack(self.stack);sidebar.set_size_request(215,-1);body.pack_start(sidebar,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
-  self.general();self.windows()
+  self.general();self.windows();self.displays()
   if not SHELL:self.dock()   # Dock- und Schreibtisch-Seite gehören zum alten Aurora-Dock; mit der Shell gibt es sie nicht (Taskleiste-Seite stattdessen)
   self.taskbar();self.codespace();self.windowmode();self.colors()
   if not SHELL:self.desktop()
@@ -83,7 +136,7 @@ class Settings(Gtk.Application):
  def spin(self,box,title,key,minimum,maximum,step=1,description=''):
   w=Gtk.SpinButton.new_with_range(minimum,maximum,step);w.set_value(float(self.p.get(key,minimum)));w.connect('value-changed',lambda w:self.p.__setitem__(key,w.get_value() if step<1 else w.get_value_as_int()));return self.row(box,title,w,description)
  def combo(self,box,title,key,choices):
-  w=Choice()
+  w=Select() if len(choices)>4 else Choice()
   for value,text in choices:w.append(value,text)
   w.set_active_id(str(self.p.get(key,choices[0][0])));w.connect('changed',lambda w:self.p.__setitem__(key,w.get_active_id()));return self.row(box,title,w)
  def button(self,box,title,text,action,description=''):
@@ -125,6 +178,142 @@ class Settings(Gtk.Application):
     (BASE/'csd-apps').write_text('\n'.join(sorted(classes))+'\n');subprocess.run(['hyprctl','reload','config-only'],stdout=subprocess.DEVNULL)
    c.connect('toggled',changed);box.pack_start(c,False,False,0)
   d.show_all();d.run();d.destroy()
+
+ # ---------------------------------------------------------------- Bildschirme (wie Windows: anordnen, Auflösung, Skalierung)
+ def displays(self):
+  b=self.page('Bildschirme','Ordne deine Bildschirme so an, wie sie auf dem Schreibtisch stehen: Ziehen zum Verschieben, darunter Auflösung, Skalierung und Drehung. Nach „Übernehmen“ hast du 15 Sekunden Zeit zum Bestätigen – sonst geht alles automatisch zurück.')
+  self.mons=MON.live();self.applied=copy.deepcopy(self.mons);self.msel=0;self.mdrag=None
+  area=Gtk.DrawingArea();area.set_size_request(-1,280);area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK|Gdk.EventMask.BUTTON_RELEASE_MASK|Gdk.EventMask.POINTER_MOTION_MASK)
+  frame=Gtk.Frame();frame.get_style_context().add_class('setting-row');frame.add(area);b.pack_start(frame,False,False,0);self.marea=area
+  self.mbox=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12);b.pack_start(self.mbox,False,False,0)
+  bar=Gtk.Box(spacing=10)
+  for text,fn in [('Übernehmen',self.mon_apply),('Zurücksetzen',self.mon_reset),('Neu erkennen',self.mon_reset)]:
+   x=Gtk.Button(label=text);x.connect('clicked',fn);bar.pack_start(x,False,False,0)
+  bar.get_children()[0].get_style_context().add_class('suggested-action');b.pack_start(bar,False,False,0)
+  def view():   # Abbildung Bildschirm -> Zeichenfläche (Maßstab und Versatz), aus allen eingeschalteten Bildschirmen
+   act=[m for m in self.mons if not m['disabled']] or self.mons
+   if not act:return 1,0,0
+   sizes=[MON.logical_size(m) for m in act];x0=min(m['x'] for m in act);y0=min(m['y'] for m in act)
+   x1=max(m['x']+s[0] for m,s in zip(act,sizes));y1=max(m['y']+s[1] for m,s in zip(act,sizes))
+   W=area.get_allocated_width();H=area.get_allocated_height();pad=30
+   k=min((W-2*pad)/max(1,x1-x0),(H-2*pad)/max(1,y1-y0),0.25);ox=(W-(x1-x0)*k)/2-x0*k;oy=(H-(y1-y0)*k)/2-y0*k
+   return k,ox,oy
+  self.mview=view
+  def draw(w,cr):
+   k,ox,oy=view();cr.select_font_face('Inter');
+   for i,m in enumerate(self.mons):
+    if m['disabled']:continue
+    sw,sh=MON.logical_size(m);x=ox+m['x']*k;y=oy+m['y']*k;sw*=k;sh*=k
+    cr.new_sub_path();r=10
+    for cx,cy,a0 in ((x+sw-r,y+r,-math.pi/2),(x+sw-r,y+sh-r,0),(x+r,y+sh-r,math.pi/2),(x+r,y+r,math.pi)):cr.arc(cx,cy,r,a0,a0+math.pi/2)
+    cr.close_path();sel=i==self.msel
+    cr.set_source_rgba(0.30,0.56,0.88,0.95 if sel else 0.35);cr.fill_preserve();cr.set_source_rgba(1,1,1,0.9 if sel else 0.25);cr.set_line_width(3 if sel else 1.2);cr.stroke()
+    cr.set_source_rgba(1,1,1,1);cr.set_font_size(min(46,max(18,sh*0.4)));ext=cr.text_extents(str(i+1));cr.move_to(x+sw/2-ext.width/2,y+sh/2+ext.height/2-6);cr.show_text(str(i+1))
+    cr.set_font_size(12);label='%s · %d×%d'%(m['name'],m['w'],m['h']);ext=cr.text_extents(label);cr.move_to(x+sw/2-ext.width/2,y+sh-10);cr.show_text(label)
+   return False
+  area.connect('draw',draw)
+  def hit(ev):
+   k,ox,oy=view()
+   for i in reversed(range(len(self.mons))):
+    m=self.mons[i]
+    if m['disabled']:continue
+    sw,sh=MON.logical_size(m)
+    if ox+m['x']*k<=ev.x<=ox+(m['x']+sw)*k and oy+m['y']*k<=ev.y<=oy+(m['y']+sh)*k:return i
+   return None
+  def press(w,ev):
+   i=hit(ev)
+   if i is None:return
+   k,ox,oy=view();m=self.mons[i];self.mdrag=(i,ev.x/k-m['x'],ev.y/k-m['y']);self.mon_select(i,redraw_panel=(i!=self.msel))
+  def motion(w,ev):
+   if not self.mdrag:return
+   k,ox,oy=view();i,dx,dy=self.mdrag;self.mons[i]['x']=round(ev.x/k-dx-ox/k);self.mons[i]['y']=round(ev.y/k-dy-oy/k);area.queue_draw()
+  def release(w,ev):
+   if not self.mdrag:return
+   i=self.mdrag[0];self.mdrag=None;self.mons[i]['x'],self.mons[i]['y']=MON.snap(self.mons,i,self.mons[i]['x'],self.mons[i]['y']);MON.normalize(self.mons);area.queue_draw()
+  area.connect('button-press-event',press);area.connect('motion-notify-event',motion);area.connect('button-release-event',release)
+  self.mon_panel()
+ def mon_select(self,i,redraw_panel=True):
+  self.msel=i;self.marea.queue_draw()
+  if redraw_panel:self.mon_panel()
+ def mon_changed(self):   # Größe/Drehung geändert: wieder bündig anlegen
+  m=self.mons[self.msel]
+  if not m['disabled']:m['x'],m['y']=MON.snap(self.mons,self.msel,m['x'],m['y'])
+  MON.normalize(self.mons);self.marea.queue_draw()
+ def mon_panel(self):
+  for c in self.mbox.get_children():self.mbox.remove(c)
+  if not self.mons:
+   self.mbox.pack_start(Gtk.Label(label='Keine Bildschirme erkannt (läuft Hyprland?)',xalign=0),False,False,0);self.mbox.show_all();return
+  self.msel=min(self.msel,len(self.mons)-1);m=self.mons[self.msel]
+  who=Select() if len(self.mons)>4 else Choice()
+  for i,x in enumerate(self.mons):who.append(str(i),'%d · %s'%(i+1,x['name']))
+  who.set_active_id(str(self.msel))
+  def pick(w):
+   if w.get_active_id() is not None:self.mon_select(int(w.get_active_id()))
+  who.connect('changed',pick);self.row(self.mbox,'Bildschirm',who,m['desc'])
+  def on(w,_):
+   if not w.get_active() and sum(1 for x in self.mons if not x['disabled'])<=1:w.set_active(True);self.message('Mindestens ein Bildschirm muss an bleiben.');return
+   m['disabled']=not w.get_active()
+   if not m['disabled']:m['x'],m['y']=MON.snap(self.mons,self.msel,m['x'],m['y'])
+   MON.normalize(self.mons);self.marea.queue_draw()
+  sw=Gtk.Switch(active=not m['disabled']);sw.set_valign(Gtk.Align.CENTER);sw.connect('notify::active',on);self.row(self.mbox,'Eingeschaltet',sw)
+  if m['modes']:
+   res=sorted({(w,h) for w,h,_ in m['modes']},key=lambda r:-r[0]*r[1])
+   cur=(m['w'],m['h']);
+   if cur not in res:res=[cur]+res
+   rc=Select()
+   for w,h in res:rc.append('%dx%d'%(w,h),'%d × %d'%(w,h))
+   rc.set_active_id('%dx%d'%cur)
+   hz_row=Select();self.mon_hz(hz_row,m)
+   def setres(w):
+    v=w.get_active_id()
+    if not v:return
+    a,bb=v.split('x');m['w'],m['h']=int(a),int(bb);hzs=sorted({round(z,2) for ww,hh,z in m['modes'] if (ww,hh)==(m['w'],m['h'])},reverse=True)
+    if hzs and round(m['hz'],2) not in hzs:m['hz']=hzs[0]
+    self.mon_hz(hz_row,m);self.mon_changed()
+   rc.connect('changed',setres);self.row(self.mbox,'Auflösung',rc);self.row(self.mbox,'Bildwiederholrate',hz_row)
+  sc=Choice()
+  for v,t in (('1','100 %'),('1.25','125 %'),('1.5','150 %'),('1.75','175 %'),('2','200 %')):sc.append(v,t)
+  sc.set_active_id('%g'%m['scale'] if '%g'%m['scale'] in ('1','1.25','1.5','1.75','2') else None)
+  def setscale(w):
+   if w.get_active_id():m['scale']=float(w.get_active_id());self.mon_changed()
+  sc.connect('changed',setscale);self.row(self.mbox,'Skalierung',sc,'Größe von Text und Fenstern')
+  rot=Choice()
+  for v,t in (('0','0°'),('1','90°'),('2','180°'),('3','270°')):rot.append(v,t)
+  rot.set_active_id(str(m['transform']) if m['transform']<4 else None)
+  def setrot(w):
+   if w.get_active_id():m['transform']=int(w.get_active_id());self.mon_changed()
+  rot.connect('changed',setrot);self.row(self.mbox,'Drehung',rot)
+  self.mbox.show_all()
+ def mon_hz(self,box,m):
+  box.clear()
+  hzs=sorted({round(z,2) for w,h,z in m['modes'] if (w,h)==(m['w'],m['h'])},reverse=True) or [round(m['hz'],2)]
+  best=min(hzs,key=lambda z:abs(z-m['hz']))
+  for z in hzs:box.append('%g'%z,'%g Hz'%z)
+  box.set_active_id('%g'%best)
+  def sethz(w):
+   if w.get_active_id():m['hz']=float(w.get_active_id())
+  box.connect('changed',sethz);box.show_all()
+ def mon_reset(self,*_):
+  self.mons=MON.live();self.applied=copy.deepcopy(self.mons);self.msel=0;self.mon_panel();self.marea.queue_draw();self.message('Bildschirme neu eingelesen.')
+ def mon_apply(self,*_):
+  if not any(not m['disabled'] for m in self.mons):self.message('Mindestens ein Bildschirm muss an sein.');return
+  MON.normalize(self.mons);prev=copy.deepcopy(self.applied)
+  if not MON.apply_live(self.mons):self.message('Hyprland hat die Einstellung nicht angenommen – zurückgesetzt.');MON.apply_live(prev);return
+  d=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.QUESTION,text='Bildschirmeinstellungen beibehalten?')
+  d.add_button('Zurücksetzen',Gtk.ResponseType.NO);keep=d.add_button('Beibehalten',Gtk.ResponseType.YES);keep.get_style_context().add_class('suggested-action');d.set_default_response(Gtk.ResponseType.NO)
+  left=[15]
+  def tick():
+   left[0]-=1;d.format_secondary_text('Wenn du nichts tust, geht alles in %d s automatisch zurück.'%left[0])
+   if left[0]<=0:d.response(Gtk.ResponseType.NO);return False
+   return True
+  d.format_secondary_text('Wenn du nichts tust, geht alles in 15 s automatisch zurück.');tid=GLib.timeout_add_seconds(1,tick);d.show_all();r=d.run();d.destroy()
+  if tid:GLib.source_remove(tid) if left[0]>0 else None
+  if r==Gtk.ResponseType.YES:
+   try:MON.write_config(self.mons)
+   except OSError as e:self.message('Angewendet, aber nicht gespeichert: %s'%e);return
+   self.applied=copy.deepcopy(self.mons);self.message('Bildschirmanordnung gespeichert.')
+  else:
+   MON.apply_live(prev);self.mons=copy.deepcopy(prev);self.mon_panel();self.marea.queue_draw();self.message('Zurückgesetzt.')
  def dock(self):
   b=self.page('Dock','Angeheftete Apps, gruppierte Fenster und Vorschauen direkt am jeweiligen Icon.')
   self.combo(b,'Bildschirm','dock_monitor',[(m,m) for m in self.monitor_names]);self.spin(b,'Icon-Größe','dock_icon_size',20,42)
@@ -145,10 +334,8 @@ class Settings(Gtk.Application):
   self.spin(b,'Rasterbreite','grid_width',110,220);self.spin(b,'Rasterhöhe','grid_height',105,220)
   for title,mode in [('Nach Namen','name'),('Nach Dateityp','type'),('Nach Änderungsdatum','modified')]:self.button(b,title,'Sortieren',lambda mode=mode:send_ui('desktop-sort',mode))
  def chooser(self,box,title,key,folder=False):
-  b=Gtk.FileChooserButton(title=title,action=Gtk.FileChooserAction.SELECT_FOLDER if folder else Gtk.FileChooserAction.OPEN);b.set_width_chars(26)
+  b=PathButton(title,folder=folder,images=not folder)
   if self.p.get(key):b.set_filename(self.p[key])
-  if not folder:
-   f=Gtk.FileFilter();f.set_name('Bilder');f.add_pixbuf_formats();b.add_filter(f)
   b.connect('file-set',lambda w:self.p.__setitem__(key,w.get_filename()));self.row(box,title,b);return b
  def wallpaper(self):
   b=self.page('Hintergrund','Statische Bilder pro Bildschirm auswählen. Die aktuelle Auswahl bleibt nach dem Login erhalten.')
@@ -393,13 +580,36 @@ class Settings(Gtk.Application):
   self.sw(b,'Datum unter der Uhr','showDate',True);self.sw(b,'Sekunden anzeigen','showSeconds',False)
  def codespace(self):
   b=self.page('Coding Space','Hier liegen deine Workspaces. Workspace = Ordner mit „Workspace“ im Namen; darin liegen die Projekte. „+ Workspace“ im Coding Space legt neue Ordner genau hier an.')
-  chooser=Gtk.FileChooserButton(title='Ordner für den Coding Space',action=Gtk.FileChooserAction.SELECT_FOLDER)
+  chooser=PathButton('Ordner für den Coding Space')
   current=shell_get('codeRoot','') or ''
   if current and Path(current).is_dir():chooser.set_filename(current)
   chooser.connect('file-set',lambda w:(shell_set('codeRoot',w.get_filename() or ''),self.message('Coding-Space-Ordner gesetzt: '+(w.get_filename() or 'automatisch'))))
   self.row(b,'Coding-Space-Ordner',chooser,'Leer = automatisch: der Ordner „Code Space“ auf einem eingehängten Laufwerk.')
   reset=Gtk.Button(label='Automatisch erkennen');reset.connect('clicked',lambda *_:(shell_set('codeRoot',''),chooser.unselect_all(),self.message('Coding Space: automatisch.')))
   self.row(b,'Zurücksetzen',reset)
+  # ---- weitere Ordner ----
+  more=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
+  def refill():
+   for c in more.get_children():more.remove(c)
+   roots=list(shell_get('codeRoots',[]) or [])
+   for r in roots:
+    line=Gtk.Box(spacing=8);l=Gtk.Label(label=r,xalign=0);l.set_ellipsize(Pango.EllipsizeMode.MIDDLE);l.set_max_width_chars(48);line.pack_start(l,True,True,0)
+    x=Gtk.Button(label='Entfernen')
+    def rm(_,r=r):
+     shell_set('codeRoots',[p for p in (shell_get('codeRoots',[]) or []) if p!=r]);refill();self.message('Ordner entfernt: '+r)
+    x.connect('clicked',rm);line.pack_end(x,False,False,0);more.pack_start(line,False,False,0)
+   if not roots:more.pack_start(Gtk.Label(label='Keine weiteren Ordner.',xalign=0),False,False,0)
+   add=Gtk.Button(label='Ordner hinzufügen …')
+   def pick(*_):
+    d=Gtk.FileChooserDialog(title='Weiteren Ordner für den Coding Space wählen',parent=self.window,action=Gtk.FileChooserAction.SELECT_FOLDER)
+    d.add_buttons('Abbrechen',Gtk.ResponseType.CANCEL,'Hinzufügen',Gtk.ResponseType.OK)
+    if d.run()==Gtk.ResponseType.OK:
+     p=d.get_filename();cur=list(shell_get('codeRoots',[]) or [])
+     if p and p not in cur:shell_set('codeRoots',cur+[p]);self.message('Ordner hinzugefügt: '+p)
+    d.destroy();refill()
+   add.connect('clicked',pick);more.pack_start(add,False,False,0);more.show_all()
+  refill()
+  self.row(b,'Weitere Ordner',more,'Zusätzliche Ordner, die im Coding Space mitlaufen. Ein Git-Projekt erscheint als Projekt, ein Ordner mit „Workspace“ im Namen als Workspace, jeder andere zeigt seine Unterordner.')
   new=Gtk.Entry();new.set_placeholder_text('Name, z. B. Spiele');new.set_width_chars(22)
   def create(*_):
    name=new.get_text().strip().replace('/','')

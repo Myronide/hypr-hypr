@@ -1,0 +1,166 @@
+"""Draconyx/Aurora: Bildschirme erkennen, anordnen und in ~/.config/hypr/monitors_local.lua speichern.
+
+Gemeinsam genutzt von der Einstellungs-App (Seite „Bildschirme“) und dem Installer (dx-monitors init).
+Reine Logik ohne GTK, damit sie sich ohne Anzeige testen lässt.
+"""
+import json
+import re
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+CONF = Path.home() / ".config/hypr/monitors_local.lua"
+MANAGED = ("output", "mode", "position", "scale", "transform", "disabled")   # alles andere (HDR, vrr …) bleibt unverändert
+
+
+def _run(args):
+    return subprocess.run(args, capture_output=True, text=True, timeout=10).stdout
+
+
+def live():
+    """Alle Bildschirme (auch ausgeschaltete) aus dem laufenden Hyprland."""
+    try:
+        data = json.loads(_run(["hyprctl", "monitors", "all", "-j"]))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return []
+    out = []
+    for m in data:
+        modes = []
+        for s in m.get("availableModes", []):
+            g = re.match(r"(\d+)x(\d+)@([\d.]+)Hz", s)
+            if g:
+                modes.append((int(g[1]), int(g[2]), float(g[3])))
+        out.append({
+            "name": m["name"], "desc": m.get("description", ""), "w": int(m["width"]), "h": int(m["height"]),
+            "hz": float(m.get("refreshRate", 60)), "x": int(m["x"]), "y": int(m["y"]), "scale": round(float(m.get("scale", 1)), 2),
+            "transform": int(m.get("transform", 0)), "disabled": bool(m.get("disabled", False)), "modes": modes,
+        })
+    return out
+
+
+def logical_size(m):
+    w, h = m["w"] / m["scale"], m["h"] / m["scale"]
+    return (h, w) if m["transform"] % 2 else (w, h)
+
+
+# ---------------------------------------------------------------- Anordnen
+def _overlap(ax, ay, aw, ah, bx, by, bw, bh):
+    return ax < bx + bw - 0.5 and bx < ax + aw - 0.5 and ay < by + bh - 0.5 and by < ay + ah - 0.5
+
+
+def snap(mons, idx, x, y):
+    """Setzt Bildschirm idx möglichst nahe an (x, y), aber bündig an einem anderen und ohne Überlappung."""
+    me = mons[idx]
+    w, h = logical_size(me)
+    others = [(m, *logical_size(m)) for i, m in enumerate(mons) if i != idx and not m["disabled"]]
+    if not others:
+        return 0, 0
+    cands = []
+    for o, ow, oh in others:
+        ox, oy = o["x"], o["y"]
+        ys = [oy, oy + oh - h, oy + (oh - h) / 2, min(max(y, oy - h + 80), oy + oh - 80)]
+        xs = [ox, ox + ow - w, ox + (ow - w) / 2, min(max(x, ox - w + 80), ox + ow - 80)]
+        for cy in ys:
+            cands += [(ox + ow, cy), (ox - w, cy)]            # rechts / links daneben
+        for cx in xs:
+            cands += [(cx, oy + oh), (cx, oy - h)]            # darunter / darüber
+    best, bd = None, None
+    for cx, cy in cands:
+        if any(_overlap(cx, cy, w, h, o["x"], o["y"], ow, oh) for o, ow, oh in others):
+            continue
+        d = (cx - x) ** 2 + (cy - y) ** 2
+        if bd is None or d < bd:
+            best, bd = (cx, cy), d
+    if best is None:
+        o, ow, oh = others[0]
+        best = (o["x"] + ow, o["y"])
+    return round(best[0]), round(best[1])
+
+
+def normalize(mons):
+    """Alle Positionen so verschieben, dass links/oben bei 0 beginnt."""
+    act = [m for m in mons if not m["disabled"]]
+    if not act:
+        return
+    mx, my = min(m["x"] for m in act), min(m["y"] for m in act)
+    for m in act:
+        m["x"] -= mx
+        m["y"] -= my
+
+
+# ---------------------------------------------------------------- Konfiguration lesen / schreiben
+def parse_config(path=CONF):
+    """Vorhandene hl.monitor({...})-Blöcke: Name -> {Schlüssel: Wert-Text}. Wir behalten damit HDR, vrr, bitdepth …"""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    out = {}
+    for m in re.finditer(r"hl\.monitor\s*\(\s*\{(.*?)\}\s*\)", text, re.S):
+        body = re.sub(r"--[^\n]*", "", m.group(1))
+        kv = {k: v.strip() for k, v in re.findall(r'(\w+)\s*=\s*("[^"]*"|[^,\n}]+)', body)}
+        name = kv.get("output", "").strip('"')
+        if name:
+            out[name] = kv
+    return out
+
+
+def lua_block(m, extras=None):
+    lines = ['    output   = "%s",' % m["name"]]
+    if m["disabled"]:
+        lines.append("    disabled = true,")
+    else:
+        lines.append('    mode     = "%dx%d@%s",' % (m["w"], m["h"], ("%.2f" % m["hz"]).rstrip("0").rstrip(".")))
+        lines.append('    position = "%dx%d",' % (m["x"], m["y"]))
+        lines.append("    scale    = %s," % ("%g" % m["scale"]))
+        if m["transform"]:
+            lines.append("    transform = %d," % m["transform"])
+    for k, v in (extras or {}).items():
+        if k not in MANAGED and not m["disabled"]:
+            lines.append("    %s = %s," % (k, v))
+    return "-- %s\nhl.monitor({\n%s\n})\n" % (m["desc"] or m["name"], "\n".join(lines))
+
+
+def write_config(mons, path=CONF):
+    """Schreibt monitors_local.lua (alte Datei vorher gesichert). Gibt den Sicherungspfad zurück (oder '')."""
+    path = Path(path)
+    old = parse_config(path)
+    backup = ""
+    if path.exists():
+        backup = str(path) + ".vor-" + time.strftime("%Y%m%d-%H%M%S")
+        shutil.copy2(path, backup)
+    parts = ["-- Monitore dieses Rechners – geschrieben von Aurora (Einstellungen → Bildschirme). Von Hand änderbar;\n"
+             "-- HDR/vrr/bitdepth-Zeilen bleiben beim nächsten Speichern erhalten. Mit `hyprctl reload` sofort sichtbar.\n"]
+    for m in mons:
+        parts.append(lua_block(m, old.get(m["name"])))
+    parts.append('-- Alles andere (z. B. ein neu angeschlossener Monitor): rechts anhängen\n'
+                 'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })\n')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(parts), encoding="utf-8")
+    return backup
+
+
+def apply_live(mons, extras_from=CONF):
+    """Wendet die Anordnung sofort an (ohne zu speichern). True, wenn Hyprland alles angenommen hat."""
+    old = parse_config(extras_from)
+    ok = True
+    for m in mons:
+        block = lua_block(m, old.get(m["name"]))
+        code = re.sub(r"^--[^\n]*\n", "", block)
+        r = subprocess.run(["hyprctl", "eval", code], capture_output=True, text=True, timeout=10)
+        if r.returncode != 0 or ("error" in (r.stdout + r.stderr).lower()):
+            ok = False
+    return ok
+
+
+def init_config(path=CONF):
+    """Installer: gibt es noch keine monitors_local.lua, aus dem laufenden Zustand eine anlegen (richtige Namen, Modi, Lage)."""
+    if Path(path).exists():
+        return 0
+    mons = live()
+    if not mons:
+        return 0
+    normalize(mons)
+    write_config(mons, path)
+    return len(mons)

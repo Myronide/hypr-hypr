@@ -9,7 +9,7 @@ sudo ./install.sh --keymap=us   # Tastaturbelegung vorgeben: de = QWERTZ, us = Q
 sudo ./install.sh --no-we # ohne Wallpaper Engine
 ```
 Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).
-`~/.config/hypr/monitors_local.lua` ist eine Vorlage von SyntaxJason und muss an die eigenen Monitore angepasst werden (`hyprctl monitors`).
+Die Monitore erkennt der Installer selbst (`~/.config/hypr/monitors_local.lua`, nur wenn es sie noch nicht gibt). Anordnen wie unter Windows: Aurora-Einstellungen → Bildschirme (mit 15-Sekunden-Rückfrage, damit nie ein schwarzer Bildschirm übrig bleibt). Anzeigen: `dx-monitors show`.
 
 ## Inhalt
 | Ordner | Was |

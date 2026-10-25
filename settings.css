@@ -60,3 +60,11 @@ scrollbar { background:transparent; border:0; }
 scrollbar slider { background:alpha(white,0.22); min-width:6px; min-height:30px; border-radius:99px; border:0; }
 scrollbar slider:hover { background:alpha(white,0.38); }
 label.hint, .hint { color:@shell_muted; }
+
+/* ---------- Aufklappliste (Select) und Auswahlfenster ---------- */
+popover, popover.background { background:shade(@shell_bg,1.10); color:@shell_text; border:1px solid alpha(white,0.10); border-radius:12px; box-shadow:0 10px 30px alpha(black,0.5); }
+.select-list { background:transparent; }
+.select-list row { border-radius:8px; margin:2px 4px; }
+.select-list row:hover { background:alpha(@shell_accent,0.22); }
+menubutton > button { background:@shell_bg; border:1px solid alpha(white,0.08); border-radius:10px; padding:8px 12px; color:@shell_text; }
+menubutton > button:hover { border-color:alpha(@shell_accent,0.55); }

@@ -5,9 +5,7 @@
 ------------------
 ---- MONITORE ----
 ------------------
--- Anordnung wie in COSMIC: links DP-1, Mitte DP-2, rechts HDMI-A-2 (alle oben bündig)
--- HDR: cm = "hdr". Helligkeit normaler (SDR) Fenster = 80 nits × sdrbrightness (KDE hatte 200 bzw. 300 nits).
--- Zu hell? Wert senken, zu dunkel? erhöhen. Mit `hyprctl reload` sofort sichtbar.
+-- Die Anordnung der Bildschirme liegt NICHT hier, sondern pro Rechner in monitors_local.lua (Aurora → Bildschirme).
 
 -- Monitore stehen pro Rechner in ~/.config/hypr/monitors_local.lua (Vorlage: monitors_local.lua.example)
 local okMon = pcall(require, "monitors_local")

@@ -23,4 +23,14 @@ emit() {
     p="${p%/}"
     emit "$p" "$(classify "$p")"
   done
-} | sort -t$'\t' -k2,2r -k1,1nr
+  # Weitere Ordner (Einstellungen → Coding Space): Git-Projekt = ein Projekt, "Workspace" im Namen = ein Workspace, sonst Unterordner
+  IFS=: read -ra more <<< "${DX_CODE_ROOTS:-}"
+  for r in "${more[@]}"; do
+    r="${r%/}"; [ -d "$r" ] || continue
+    if [ -d "$r/.git" ]; then emit "$r" project
+    elif case "$(basename "$r" | tr A-Z a-z)" in *workspace*) true;; *) false;; esac; then emit "$r" workspace
+    else
+      for p in "$r"/*/; do [ -d "$p" ] && { p="${p%/}"; emit "$p" "$(classify "$p")"; }; done
+    fi
+  done
+} | awk -F'\t' '!seen[$5]++' | sort -t$'\t' -k2,2r -k1,1nr

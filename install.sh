@@ -161,7 +161,7 @@ fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
 for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
-# Monitore: NICHT automatisch aktiv schalten (die Vorlage stammt von SyntaxJasons Rechner). Eigene Datei bleibt unangetastet.
+# Monitore: die Vorlage ist nur ein neutrales Beispiel. Die echte monitors_local.lua entsteht aus den erkannten Bildschirmen (siehe unten); eine vorhandene bleibt unangetastet.
 put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
 if [ -e "$CONF/hypr/hyprland.lua" ] && cmp -s "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; then
   :   # schon unsere hyprland.lua
@@ -195,6 +195,16 @@ elif [ -e "$CONF/hypr/hyprland.lua" ]; then
 else
   cp "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"
 fi
+# Bildschirme: gibt es noch keine monitors_local.lua, aus dem laufenden Zustand eine anlegen (richtige Namen, Auflösung, Lage)
+if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+  for d in $(ls -t "${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr" 2>/dev/null); do
+    if HYPRLAND_INSTANCE_SIGNATURE="$d" hyprctl version >/dev/null 2>&1; then export HYPRLAND_INSTANCE_SIGNATURE="$d"; break; fi
+  done
+fi
+mkdir -p "$CONF/hypr/aurora"; put "$REPO/monitors.py" "$CONF/hypr/aurora/monitors.py" 644
+if [ ! -e "$CONF/hypr/monitors_local.lua" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+  r="$(python3 -I "$HERE/bin/dx-monitors" init 2>&1 || true)"; echo "    $r"
+fi
 FRESH_LOCK=0
 for f in hypridle.conf hyprlock.conf; do
   if [ ! -e "$CONF/hypr/$f" ]; then cp "$HERE/hypr/$f" "$CONF/hypr/$f"; [ "$f" = hyprlock.conf ] && FRESH_LOCK=1; fi
@@ -215,7 +225,7 @@ say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css
 A="$CONF/hypr/aurora"; mkdir -p "$A"
 # Echte Kopien statt Verknüpfungen ins Repo: Wer das Repo neu klont oder verschiebt, behielt sonst eine Verknüpfung auf den alten Stand
 # (alte Einstellungen-App, obwohl frisch installiert). Alte Verknüpfungen werden hier ersetzt.
-for f in settings-app preferences.py settings.css; do
+for f in settings-app preferences.py monitors.py settings.css; do
   [ -L "$A/$f" ] && { rm -f "$A/$f"; echo "    Verknüpfung durch Kopie ersetzt: $f"; CHANGED=$((CHANGED+1)); }
   put "$REPO/$f" "$A/$f" $([ "$f" = settings-app ] && echo 755 || echo 644)
 done

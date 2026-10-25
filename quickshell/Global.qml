@@ -108,6 +108,7 @@ Singleton {
     property alias startLeft:     settings.startLeft
     property alias zoneLayouts:   settings.zoneLayouts
     property alias codeRoot:      settings.codeRoot
+    property alias codeRoots:     settings.codeRoots
     readonly property int barMargin: 16
 
     FileView {
@@ -138,7 +139,7 @@ Singleton {
             property bool groupApps: true
             property bool showSeconds: false
             property var monitors: ({})          // { "DP-1": { enabled: true, autohide: null } }
-            property var desktopMonitors: []   // Desktop-Icons nur auf diesen Monitoren
+            property var desktopMonitors: ["DP-2"]   // Desktop-Icons nur auf diesen Monitoren
             property string wallpaper: ""
             property var barItems: ({})            // { start, search, taskview, code, wallpaper, desktops, apps, tray, system, notifications, clock, showDesktop, mode, settings } an/aus
             property bool showDate: true            // Datum unter der Uhrzeit
@@ -155,6 +156,7 @@ Singleton {
             property var wallpapers: ({})        // { "DP-1": "/pfad/bild.png" } überschreibt das Standard-Wallpaper
             property int iconGrid: 96            // Rasterbreite der Desktop-Icons
             property bool startLeft: true        // Startmenü links (Windows-10-Stil); false = mittig
+            property var codeRoots: []              // weitere Ordner, die im Coding Space mitlaufen (zusätzlich zum Hauptordner)
             property string codeRoot: ""            // leer = automatisch: <Laufwerk>/Code Space unter /run/media/<user>/
             property var zoneLayouts: ({})       // { "DP-2": Teilungsbaum } eigene Zonen pro Monitor
         }
@@ -191,6 +193,8 @@ Singleton {
         id: codeList
         property string dir: ""
         property string extra: ""
+        property string roots: ""
+        environment: ({ DX_CODE_ROOTS: roots })
         command: [Theme.home + "/.local/bin/dx-code-list", dir, extra]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -201,6 +205,7 @@ Singleton {
             }
         }
     }
+    onCodeRootsChanged: codeListTimer.restart()
     function refreshProjects() {
         codeRootProbe.running = false; codeRootProbe.running = true;
         codeListTimer.restart();
@@ -215,6 +220,7 @@ Singleton {
             codeList.running = false;
             codeList.dir = cur !== "" ? cur : rootDir;
             codeList.extra = (cur !== "" || root.codeRoot !== "") ? "" : rootDir.replace(/\/[^\/]+$/, "");   // Elternordner des Code Space = Laufwerk
+            codeList.roots = cur !== "" ? "" : (root.codeRoots || []).join(":");                           // weitere Ordner nur in der Wurzelansicht
             codeList.running = true;
         }
     }
