@@ -14,6 +14,8 @@ Row {
         delegate: BarButton {
             id: trayBtn
             required property var modelData
+            required property int index
+            property bool menuOpen: false
             tip: modelData.tooltipTitle || modelData.title || modelData.id || ""
             minWidth: 32
             padding: 7
@@ -23,11 +25,14 @@ Row {
                 if (mouse.button === Qt.LeftButton && !modelData.onlyMenu) {
                     modelData.activate();
                 } else if (modelData.hasMenu) {
-                    const p = trayBtn.mapToItem(null, 0, 0);
-                    modelData.display(trayRow.bar, p.x, p.y);
+                    menuOpen = !menuOpen;                      // Rechtsklick (oder Symbol nur mit Menü): eigenes Kontextmenü
                 } else {
                     modelData.secondaryActivate();
                 }
+            }
+            Loader {
+                active: trayBtn.menuOpen
+                sourceComponent: TrayMenu { trayItem: trayBtn.modelData; anchorItem: trayBtn; onDismissed: trayBtn.menuOpen = false }
             }
             onScrolled: wheel => modelData.scroll(wheel.angleDelta.y, false)
         }
