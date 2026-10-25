@@ -6,15 +6,15 @@ from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango,GObject
 UI_ALIVE=(Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-ui.sock').exists()   # altes Aurora-Dock/Alt+Tab-Programm läuft
 from preferences import current_keymap,BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
 
-class Choice(Gtk.FlowBox):
+class Choice(Gtk.Box):
  """Auswahl als Knopfreihe statt Aufklappliste: GTK-Auswahllisten werden unter XWayland/Hyprland mittig im Fenster und fehlerhaft
  geöffnet. Gleiche Bedienung wie ComboBoxText (append, set_active_id, get_active_id, Signal 'changed')."""
  __gsignals__={'changed':(GObject.SignalFlags.RUN_FIRST,None,())}
  def __init__(self):
-  super().__init__(selection_mode=Gtk.SelectionMode.NONE,max_children_per_line=3,column_spacing=6,row_spacing=6,homogeneous=False)
+  super().__init__(orientation=Gtk.Orientation.HORIZONTAL,spacing=6)   # eine Reihe (ein FlowBox stapelte die Knöpfe in der schmalen Zeile untereinander)
   self.set_valign(Gtk.Align.CENTER);self.buttons={};self.active=None;self._lock=False
  def append(self,i,label):
-  b=Gtk.ToggleButton(label=label);b.connect('toggled',self._toggled,i);self.buttons[i]=b;self.insert(b,-1);b.show()
+  b=Gtk.ToggleButton(label=label);b.connect('toggled',self._toggled,i);self.buttons[i]=b;self.pack_start(b,False,False,0);b.show()
  def _toggled(self,b,i):
   if self._lock:return
   if b.get_active():self.set_active_id(i,True)
