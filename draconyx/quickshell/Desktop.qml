@@ -54,7 +54,7 @@ PanelWindow {
     Image {
         visible: !(Global.weWallpapers || {})[desk.mon]
         anchors.fill: parent
-        source: "file://" + desk.wallpaperPath
+        source: desk.wallpaperPath !== "" ? "file://" + desk.wallpaperPath : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false

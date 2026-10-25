@@ -1,6 +1,31 @@
 #!/usr/bin/env bash
 # Draconyx: (neu) starten der Wallpaper Engine. Aufruf: dx-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
 PIDF="${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.pid"
+PREFS="$HOME/.config/hypr/aurora/preferences.json"
+
+# Aurora-Einstellungen spiegeln (die Wallpaper-Engine-Seite zeigt dann den aktuellen Stand)
+mirror() {
+  [ -f "$PREFS" ] || return 0
+  python3 -I - "$PREFS" "$@" <<'PY' 2>/dev/null || true
+import json, os, subprocess, sys
+prefs, pairs = sys.argv[1], sys.argv[2:]
+try: p = json.load(open(prefs))
+except (OSError, ValueError): sys.exit(0)
+if not pairs:
+    p["engine_active"] = False
+else:
+    first = pairs[0].split("=", 1)[1]
+    folder = ""
+    for line in subprocess.run([os.path.expanduser("~/.local/bin/dx-we-list")], capture_output=True, text=True).stdout.splitlines():
+        f = line.split("\t")
+        if f and f[0] == first and len(f) > 3 and f[3]: folder = os.path.dirname(f[3])
+    if folder: p["engine_path"] = folder
+    p["engine_active"] = True
+    p["engine_monitor"] = pairs[0].split("=", 1)[0] if len(pairs) == 1 else ""
+json.dump(p, open(prefs, "w"), ensure_ascii=False, indent=2)
+PY
+}
+
 if [ -f "$PIDF" ]; then
   old=$(cat "$PIDF"); kill "$old" 2>/dev/null
   for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$old" 2>/dev/null || break; sleep 0.2; done
@@ -10,11 +35,27 @@ fi
 for p in $(pgrep -x linux-wallpaper); do kill "$p" 2>/dev/null; done
 sleep 0.4
 for p in $(pgrep -x linux-wallpaper); do kill -9 "$p" 2>/dev/null; done
+mirror "$@"
 [ $# -eq 0 ] && exit 0
+
 args=()
 for kv in "$@"; do
   m="${kv%%=*}"; id="${kv#*=}"
   args+=(--screen-root "$m" --bg "$id" --scaling fill)
 done
+# Assets der Wallpaper Engine (die Steam-Bibliothek kann überall liegen): Datei, Aurora-Einstellung oder Steam-Bibliotheken
+assets=""
+[ -f "$HOME/.config/draconyx/we-assets" ] && assets="$(head -1 "$HOME/.config/draconyx/we-assets")"
+[ -z "$assets" ] && [ -f "$PREFS" ] && assets="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1])).get("engine_assets",""))' "$PREFS" 2>/dev/null)"
+if [ -z "$assets" ] || [ ! -d "$assets" ]; then
+  assets=""
+  for vdf in "$HOME/.local/share/Steam/steamapps/libraryfolders.vdf" "$HOME/.steam/steam/steamapps/libraryfolders.vdf"; do
+    [ -f "$vdf" ] || continue
+    while IFS= read -r lib; do
+      [ -d "$lib/steamapps/common/wallpaper_engine/assets" ] && { assets="$lib/steamapps/common/wallpaper_engine/assets"; break 2; }
+    done < <(sed -n 's/.*"path"[[:space:]]*"\([^"]*\)".*/\1/p' "$vdf")
+  done
+fi
+[ -n "$assets" ] && args+=(--assets-dir "$assets")
 setsid "$HOME/.local/bin/dx-we-run" "${args[@]}" --layer "${DX_WE_LAYER:-bottom}" --fps 30 --silent --no-fullscreen-pause >"${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.log" 2>&1 &
 echo $! > "$PIDF"

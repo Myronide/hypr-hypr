@@ -36,7 +36,16 @@ def save_preferences(p):
  subprocess.run(['hyprctl','reload','config-only'],stdout=subprocess.DEVNULL);send_ui('reload-settings')
  if changed:
   subprocess.run(['pkill','-x','waybar']);subprocess.Popen([str(BASE/'start-dock')],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+def _shell_we(assign):
+ """Mit der Draconyx-Shell: Wallpaper Engine der Shell steuern (settings.json + Neustart über die Shell)."""
+ import json as _j
+ f=Path.home()/'.local/state/draconyx/settings.json'
+ try:data=_j.loads(f.read_text())
+ except (OSError,ValueError):data={}
+ data['weWallpapers']=assign;tmp=f.with_suffix('.tmp');tmp.write_text(_j.dumps(data,indent=4));tmp.replace(f)
+ subprocess.Popen(['qs','-c','draconyx','ipc','call','shell','weReapply'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 def stop_engine():
+ if SHELL:_shell_we({});return
  pidfile=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-wallpaper-pids.json'
  if pidfile.exists():
   for pid in json.loads(pidfile.read_text()):
@@ -46,6 +55,13 @@ def stop_engine():
    except OSError:pass
   pidfile.unlink(missing_ok=True)
 def apply_background(p,engine=False,preview=False):
+ if engine and SHELL:
+  folder=Path(p['engine_path']).expanduser()
+  if not (folder/'project.json').is_file():raise ValueError('Bitte einen Wallpaper-Engine-Hintergrund auswählen.')
+  if preview:raise ValueError('Vorschau gibt es mit der Shell nicht – direkt anwenden.')
+  (BASE/'preferences.json').write_text(json.dumps(p,ensure_ascii=False,indent=2))
+  monitors=[p['engine_monitor']] if p['engine_monitor'] else [m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
+  _shell_we({m:folder.name for m in monitors});p['engine_active']=True;return
  if engine:
   folder=Path(p['engine_path']).expanduser()
   if not (folder/'project.json').is_file():raise ValueError('Bitte einen Wallpaper-Engine-Hintergrund auswählen.')

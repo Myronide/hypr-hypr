@@ -23,6 +23,14 @@ PanelWindow {
                                            ? hyprMonitor.activeWorkspace.hasFullscreen : false
     readonly property bool keepOpen: !autohideHere || Global.popupOpenOn(mon) || hover.hovered
     property bool shown: true
+    // Dock + Auto-Hide + "Teile einzeln": jede Kapsel fährt nur hoch, wenn die Maus bei ihr ist
+    readonly property bool partMode: dock && autohideHere && Global.barPartHide
+    property bool shownMain: true
+    property bool shownSys: true
+    readonly property bool mainShown: partMode ? shownMain : shown
+    readonly property bool sysShown: partMode ? shownSys : shown
+    readonly property bool keepMain: !partMode ? true : (!autohideHere || (Global.popupOpenOn(mon) && !Global.sysPopupOn(mon)) || hoverMain.hovered)
+    readonly property bool keepSys: !partMode ? true : (!autohideHere || Global.sysPopupOn(mon) || hoverSys.hovered)
     readonly property bool dock: Global.barStyle === "dock"
     readonly property int gap: Global.barMargin        // Abstand zum Bildschirmrand
 
@@ -38,12 +46,17 @@ PanelWindow {
         if (keepOpen) { hideTimer.stop(); shown = true; }
         else hideTimer.restart();
     }
-    Component.onCompleted: if (!keepOpen) hideTimer.restart()
+    onKeepMainChanged: { if (keepMain) { hideMain.stop(); shownMain = true; } else hideMain.restart(); }
+    onKeepSysChanged: { if (keepSys) { hideSys.stop(); shownSys = true; } else hideSys.restart(); }
+    Timer { id: hideMain; interval: 700; onTriggered: if (!bar.keepMain) bar.shownMain = false }
+    Timer { id: hideSys;  interval: 700; onTriggered: if (!bar.keepSys) bar.shownSys = false }
+    Component.onCompleted: { if (!keepOpen) hideTimer.restart(); if (partMode) { if (!keepMain) hideMain.restart(); if (!keepSys) hideSys.restart(); } }
     Timer { id: hideTimer; interval: 900; onTriggered: if (!bar.keepOpen) bar.shown = false }
 
     // Eingabebereich: ganze Leiste, wenn sichtbar; sonst nur ein 3-px-Streifen am Rand
     // Dock: nur die beiden Kapseln fangen Klicks, der Rest der Zeile bleibt durchlässig
-    mask: dock && shown ? dockMask : fullMask
+    mask: partMode ? partMask : (dock && shown ? dockMask : fullMask)
+    Region { id: partMask; item: mainZone; Region { item: sysZone } }
     Region { id: fullMask; item: inputArea }
     Region { id: dockMask; item: surf; Region { item: sysPill } }
     Item {
@@ -122,6 +135,22 @@ PanelWindow {
         anchors.fill: parent
         HoverHandler { id: hover }
 
+        // Hover-/Eingabezonen der Kapseln (im Teile-Modus: voll, solange sichtbar, sonst ein 3-px-Streifen am Rand)
+        Item {
+            id: mainZone
+            x: surf.x; width: surf.width
+            height: bar.mainShown ? parent.height : 3
+            y: Global.barTop ? 0 : parent.height - height
+            HoverHandler { id: hoverMain }
+        }
+        Item {
+            id: sysZone
+            x: sysPill.x; width: sysPill.width
+            height: bar.sysShown ? parent.height : 3
+            y: Global.barTop ? 0 : parent.height - height
+            HoverHandler { id: hoverSys }
+        }
+
         // Dock-Stil: Tray, System, Uhr in einer eigenen Kapsel rechts
         Surface {
             id: sysPill
@@ -132,8 +161,12 @@ PanelWindow {
             width: rightRow.width + 14
             height: Global.barHeight
             x: parent.width - width - Global.barMargin
-            y: surf.y
-            opacity: surf.opacity
+            readonly property real shownY: Global.barTop ? bar.gap : parent.height - height - bar.gap
+            readonly property real hiddenY: Global.barTop ? -height - 12 : parent.height + 12
+            y: bar.sysShown ? shownY : hiddenY
+            opacity: bar.sysShown ? 1 : 0
+            Behavior on y       { NumberAnimation { duration: Theme.durSlow; easing.type: Theme.easeOut } }
+            Behavior on opacity { NumberAnimation { duration: Theme.durBase } }
         }
 
         Surface {
@@ -149,8 +182,8 @@ PanelWindow {
 
             readonly property real shownY: Global.barTop ? bar.gap : parent.height - height - bar.gap
             readonly property real hiddenY: Global.barTop ? -height - 12 : parent.height + 12
-            y: bar.shown ? shownY : hiddenY
-            opacity: bar.shown ? 1 : 0
+            y: bar.mainShown ? shownY : hiddenY
+            opacity: bar.mainShown ? 1 : 0
             Behavior on y       { NumberAnimation { duration: Theme.durSlow; easing.type: Theme.easeOut } }
             Behavior on opacity { NumberAnimation { duration: Theme.durBase } }
 

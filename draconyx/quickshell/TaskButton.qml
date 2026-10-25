@@ -85,11 +85,9 @@ BarButton {
     // ---------- Indikator: Punkt = läuft, Strich = mehrere Fenster, breit + violett = aktiv ----------
     Rectangle {
         parent: tb
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: tb.belowBar ? undefined : parent.bottom
-        anchors.top: tb.belowBar ? parent.top : undefined
-        anchors.bottomMargin: 2
-        anchors.topMargin: 2
+        // feste Position statt bedingter Anker (manche Qt-Versionen dehnen sonst den Strich über das ganze Symbol)
+        x: Math.round((parent.width - width) / 2)
+        y: tb.belowBar ? 2 : parent.height - height - 2
         height: 3
         radius: 2
         opacity: tb.count > 0 ? 1 : 0

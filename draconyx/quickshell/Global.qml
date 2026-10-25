@@ -35,6 +35,7 @@ Singleton {
         const big = startOpen || controlOpen || calendarOpen || taskViewOpen || codeOpen || weOpen;
         return (big && popupScreen === mon) || (taskPopupOpen && taskPopupScreen === mon);
     }
+    function sysPopupOn(mon) { return (controlOpen || calendarOpen) && popupScreen === mon; }
     function closeAll() { gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
     function focusedScreenName() { return Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; }
     function _toggle(prop, screenName) {
@@ -86,6 +87,7 @@ Singleton {
     property alias gitSessions:   settings.gitSessions
     property alias startLogo:     settings.startLogo
     property alias barStyle:      settings.barStyle
+    property alias barPartHide:   settings.barPartHide
     property alias barItems:      settings.barItems
     property alias showDate:      settings.showDate
     property alias settingsCmd:   settings.settingsCmd
@@ -125,6 +127,7 @@ Singleton {
             property var barItems: ({})            // { start, search, taskview, code, wallpaper, desktops, apps, tray, system, notifications, clock, showDesktop, mode, settings } an/aus
             property bool showDate: true            // Datum unter der Uhrzeit
             property string settingsCmd: ""         // Befehl der Einstellungs-App (leer = automatisch)
+            property bool barPartHide: false        // Dock mit Auto-Hide: nur die Kapsel unter der Maus fährt hoch
             property string barStyle: "bar"     // "bar" = durchgehende Leiste, "dock" = schwebendes Dock (wie Aurora)
             property string startLogo: ""        // "" = Draconyx, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild
             property var gitSessions: ({})        // { "Repo-Pfad": "Claude-Session-UUID" } je Repository eine fortlaufende Claude-Session
@@ -750,7 +753,7 @@ Singleton {
     // Benachrichtigungen (swaync): Anzahl + Nicht-stören-Status
     Process {
         running: true
-        command: ["swaync-client", "-swb"]
+        command: ["sh", "-c", "command -v swaync-client >/dev/null && exec swaync-client -swb || exec sleep infinity"]
         stdout: SplitParser {
             onRead: line => {
                 try {

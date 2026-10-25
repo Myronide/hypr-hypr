@@ -174,6 +174,7 @@ class Settings(Gtk.Application):
   b=self.page('Taskleiste','Alles, was in der Taskleiste der Shell erscheint. Änderungen gelten sofort.')
   self.shell_combo(b,'Stil','barStyle',[('bar','Durchgehende Leiste'),('dock','Schwebendes Dock')],'bar')
   self.sw(b,'Oben statt unten','barTop',False)
+  self.sw(b,'Dock: nur die Kapsel unter der Maus ausfahren','barPartHide',False,'Gilt für „Schwebendes Dock“ mit „Automatisch ausblenden“: Apps-Kapsel und System-Kapsel fahren einzeln hoch.')
   self.sw(b,'Apps mittig','barCenter',True,'Aus: die Apps folgen direkt hinter den Knöpfen links.')
   self.sw(b,'Automatisch ausblenden','autohide',False,'Die Leiste fährt ein, wenn sie nicht benutzt wird.')
   self.sw(b,'Fenster einer App gruppieren','groupApps',True)
