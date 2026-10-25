@@ -41,6 +41,7 @@ ShellRoot {
     WallpaperPicker {}
     SearchOverlay {}
     SnipTool {}
+    UpdateProgress {}
     SnipEditor { id: snipEditor }
     GitClient { id: gitClient }
     WindowMenu {}

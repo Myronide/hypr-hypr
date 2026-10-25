@@ -48,6 +48,17 @@ def check():
 
 
 LOG = HOME / ".cache/draconyx/update.log"
+PROGRESS = HOME / ".cache/draconyx/update-progress.json"
+
+def progress(percent, text, state="running"):
+    """Stand für die Anzeige oben rechts (UpdateProgress.qml in der Shell) schreiben."""
+    try:
+        PROGRESS.parent.mkdir(parents=True, exist_ok=True)
+        tmp = PROGRESS.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"state": state, "percent": percent, "text": text, "ts": int(time.time())}, ensure_ascii=False))
+        tmp.replace(PROGRESS)
+    except OSError:
+        pass
 
 def notify(title, body="", urgent=False):
     subprocess.run(["notify-send", "-a", "Draconyx", "-i", "system-software-update"] + (["-u", "critical"] if urgent else []) + [title, body],
@@ -61,7 +72,9 @@ def sync_repo(repo, log):
         if check and r.returncode != 0:
             raise RuntimeError("git %s fehlgeschlagen: %s" % (a[0], (r.stderr.strip().splitlines() or ["?"])[-1]))
         return r
+    progress(8, "Hole den neuen Stand …")
     g("fetch", "origin")
+    progress(14, "Sichere lokale Änderungen und gleiche ab …")
     up = g("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", check=False).stdout.strip() or "origin/master"
     stamp = time.strftime("%Y%m%d-%H%M%S")
     if g("status", "--porcelain", check=False).stdout.strip():                    # lokale Änderungen im Repo: sichern, nicht löschen
@@ -94,6 +107,7 @@ def apply(foreground=False, terminal=False):
     with open(LOG, "w") as log:
         log.write("Draconyx-Update %s\n" % time.strftime("%F %T"))
         old = info.get("version", "?")
+        progress(3, "Starte …")
         notify("Draconyx wird aktualisiert …", "Alles läuft im Hintergrund. Gleich fragt ein kleines Fenster nach deinem sudo-Passwort.")
         try:
             sync_repo(repo, log)
@@ -101,16 +115,26 @@ def apply(foreground=False, terminal=False):
             if not (HOME / ".local/bin/dx-askpass").exists():
                 env["SUDO_ASKPASS"] = str(Path(repo) / "bin/dx-askpass")
             # Der Installer sichert und überschreibt keine Einstellungen (siehe install.sh) und startet die Shell am Ende neu.
-            r = subprocess.run(["sudo", "-A", str(Path(repo) / "install.sh"), "--yes"], cwd=repo, env=env,
-                               stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
-            rc = r.returncode
+            progress(18, "Warte auf dein sudo-Passwort …")
+            proc = subprocess.Popen(["sudo", "-A", str(Path(repo) / "install.sh"), "--yes"], cwd=repo, env=env,
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            steps = 0                                           # der Installer meldet jeden Schritt mit "==>"; daran messen wir den Fortschritt
+            for line in proc.stdout:
+                log.write(line); log.flush()
+                clean = re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+                if clean.startswith("==>"):
+                    steps += 1
+                    progress(20 + 74 * min(1.0, steps / 14.0), clean[3:].strip()[:90])
+            rc = proc.wait()
         except Exception as e:
             log.write("FEHLER: %s\n" % e); rc = 1
     new = read_json(INSTALL, {}).get("version", old)
     if rc == 0:
         notify("Draconyx aktualisiert", "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old))
         check()
+        progress(100, "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old), "done")
     else:
+        progress(100, "Nichts wurde überschrieben – Protokoll: update.log", "error")
         notify("Draconyx-Update fehlgeschlagen", "Nichts wurde überschrieben. Protokoll: %s" % LOG, True)
         sys.exit(rc)
 
