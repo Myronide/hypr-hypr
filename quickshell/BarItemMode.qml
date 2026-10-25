@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Fenstermodus: frei schwebend <-> Kacheln (Standard für neue Fenster)
 BarButton {
+    tip: "Fenstermodus – umschalten zwischen frei schwebend und Kacheln"
     property var bar: null
     minWidth: 40
     implicitHeight: Global.barHeight - 10

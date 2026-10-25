@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Einstellungen (Aurora)
 BarButton {
+    tip: "Einstellungen (Aurora)"
     property var bar: null
     minWidth: 38
     implicitHeight: Global.barHeight - 10

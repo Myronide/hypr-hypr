@@ -14,6 +14,7 @@ Row {
         delegate: BarButton {
             id: trayBtn
             required property var modelData
+            tip: modelData.tooltipTitle || modelData.title || modelData.id || ""
             minWidth: 32
             padding: 7
             implicitHeight: Global.barHeight - 14

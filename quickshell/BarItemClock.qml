@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Uhr -> Kalender
 BarButton {
+    tip: "Datum und Kalender"
     property var bar: null
     implicitHeight: Global.barHeight - 10
     active: Global.calendarOpen && Global.popupScreen === bar.mon

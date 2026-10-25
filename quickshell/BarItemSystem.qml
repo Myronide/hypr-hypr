@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Netzwerk + Lautstärke -> Schnelleinstellungen
 BarButton {
+    tip: "Schnelleinstellungen – Netzwerk, Lautstärke, Helligkeit, Energie"
     property var bar: null
     implicitHeight: Global.barHeight - 10
     active: Global.controlOpen && Global.popupScreen === bar.mon

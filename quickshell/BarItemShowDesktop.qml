@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Schmaler Streifen: Desktop anzeigen
 BarButton {
+    tip: "Schreibtisch zeigen – alle Fenster ausblenden / zurückholen"
     property var bar: null
     minWidth: 12; padding: 0
     implicitHeight: Global.barHeight - 14

@@ -5,6 +5,7 @@ import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 
 BarButton {
+    tip: "Coding Space – Projekte und Git"
     property var bar: null
     minWidth: 40
     implicitHeight: Global.barHeight - 10

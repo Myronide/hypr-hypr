@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Benachrichtigungen mit Zähler
 BarButton {
+    tip: "Benachrichtigungen"
     id: notifBtn
     property var bar: null
     implicitHeight: Global.barHeight - 10

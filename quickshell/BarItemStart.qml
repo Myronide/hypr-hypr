@@ -6,6 +6,7 @@ import Quickshell.Services.SystemTray
 
 // Startknopf (Rechtsklick: Symbol wählen)
 BarButton {
+    tip: "Startmenü – Apps, Suche und Ein/Aus (Rechtsklick: Symbol ändern)"
     id: startBtn
     property var bar: null
     minWidth: 44
