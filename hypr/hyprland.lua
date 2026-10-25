@@ -422,3 +422,11 @@ hl.layer_rule({ match = { namespace = "swaync-control-center" },        blur = t
 hl.layer_rule({ match = { namespace = "swaync-notification-window" },   blur = true, ignore_alpha = 0.3 })
 
 DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App schreiben
+
+-- Einstellungen aus der Aurora-Einstellungs-App (Rahmen, Unschärfe, Tastaturbelegung, Fokus …): ohne diese Zeilen hätten sie
+-- bei einer reinen Draconyx-Installation keine Wirkung.
+aurora_bindings = aurora_bindings or {}
+do
+    local f = io.open((os.getenv("HOME") or "") .. "/.config/hypr/aurora/preferences.lua", "r")
+    if f then f:close(); pcall(dofile, (os.getenv("HOME") or "") .. "/.config/hypr/aurora/preferences.lua") end
+end
