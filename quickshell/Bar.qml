@@ -51,9 +51,17 @@ PanelWindow {
 
     // Eingabebereich: ganze Leiste, wenn sichtbar; sonst nur ein 3-px-Streifen am Rand
     // Dock: nur die beiden Kapseln fangen Klicks, der Rest der Zeile bleibt durchlässig
-    mask: dock ? dockMask : fullMask
+    mask: dock ? (Global.barRevealAnywhere && autohideHere ? dockMaskAny : dockMask) : fullMask
     Region { id: fullMask; item: inputArea }
     Region { id: dockMask; item: islL.zone; Region { item: islC.zone; Region { item: islR.zone } } }
+    // "Überall öffnen": zusätzlich ein Streifen am Rand über die ganze Breite (Maus irgendwo dort öffnet die schwebende Leiste)
+    Region { id: dockMaskAny; item: islL.zone; Region { item: islC.zone; Region { item: islR.zone; Region { item: edgeStrip } } } }
+    Item {
+        id: edgeStrip
+        width: parent.width
+        height: bar.shown ? 14 : 3
+        y: Global.barTop ? 0 : parent.height - height
+    }
     Item {
         id: inputArea
         width: parent.width

@@ -79,6 +79,7 @@ Singleton {
     property alias recentApps:    settings.recentApps
     property alias autohide:      settings.autohide
     property alias tooltips:      settings.tooltips
+    property alias barRevealAnywhere: settings.barRevealAnywhere
     property alias notifiedUpdate: settings.notifiedUpdate
     property alias barHeight:     settings.barHeight
     property alias barOpacity:    settings.barOpacity
@@ -127,6 +128,7 @@ Singleton {
             property var recentApps: []
             property bool autohide: true
             property string notifiedUpdate: ""       // Version, für die schon eine Update-Meldung kam
+            property bool barRevealAnywhere: false  // Schwebende Leiste: öffnet sich überall am Rand, nicht nur bei den Kapseln
             property bool tooltips: true            // Quickinfos beim Überfahren der Taskleistenknöpfe
             property int barHeight: 48
             property real barOpacity: 0.90
