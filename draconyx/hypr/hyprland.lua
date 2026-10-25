@@ -1,52 +1,19 @@
 -- Hyprland: "Draconyx Dark" im Windows-11-Stil
 -- Schwebende Taskleiste unten (Waybar), Startmenü (nwg-drawer), Desktop mit Icons (pcmanfm-qt), schwebende Fenster.
--- Farben: Schwarz-Grün, Akzent Violett #8b5cf6, Zweitakzent Grün #6ee05c (Augen des Drachens)
+-- Farben: Schwarz-Grün, Aurora-Farbwelt: Akzent Blau #4d8fe0, Zweitakzent #6ba9ff
 
 ------------------
 ---- MONITORE ----
 ------------------
--- Anordnung wie in COSMIC: links DP-1, Mitte DP-2, rechts HDMI-A-2 (alle oben bündig)
--- HDR: cm = "hdr". Helligkeit normaler (SDR) Fenster = 80 nits × sdrbrightness (KDE hatte 200 bzw. 300 nits).
--- Zu hell? Wert senken, zu dunkel? erhöhen. Mit `hyprctl reload` sofort sichtbar.
-
-hl.monitor({
-    output        = "DP-1",            -- Acer VG270U E
-    mode          = "2560x1440@59.95",
-    position      = "0x0",
-    scale         = 1,
-    bitdepth      = 10,
-    cm            = "hdr",
-    sdrbrightness = 3.75,          -- ≈ 300 nits wie vorher in KDE
-    sdrsaturation = 1.0,
-})
-
-hl.monitor({
-    output        = "DP-2",            -- Acer XV271U M3 (180 Hz)
-    mode          = "2560x1440@179.88",
-    position      = "2560x0",
-    scale         = 1,
-    bitdepth      = 10,
-    cm            = "hdr",
-    sdrbrightness = 2.5,           -- ≈ 200 nits wie vorher in KDE
-    sdrsaturation = 1.0,
-    vrr           = 1,
-})
-
-hl.monitor({
-    output   = "HDMI-A-2",             -- 236 FHD (kein HDR)
-    mode     = "1920x1080@60",
-    position = "5120x0",
-    scale    = 1,
-})
-
--- Alles andere (z. B. neuer Monitor): rechts anhängen
-hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+-- Monitore stehen pro Rechner in ~/.config/hypr/monitors_local.lua (Vorlage: monitors_local.lua.example)
+local okMon = pcall(require, "monitors_local")
+if not okMon then hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 }) end
 
 
 ---------------------
 ---- PROGRAMME ------
 ---------------------
-local terminal    = "sh -c 'command -v ghostty >/dev/null && exec ghostty || exec kitty'"
+local terminal    = os.getenv("HOME") .. "/.local/bin/dx-terminal"
 local fileManager = "dolphin"
 local browser     = "gtk-launch \"$(xdg-settings get default-web-browser)\""
 local runMenu     = "fuzzel"
@@ -103,7 +70,7 @@ hl.config({
         gaps_out = 8,
         border_size = 1,
         col = {
-            active_border   = { colors = {"rgba(8b5cf6dd)", "rgba(6ee05cdd)"}, angle = 45 },
+            active_border   = { colors = {"rgba(4d8fe0dd)", "rgba(6ba9ffdd)"}, angle = 45 },
             inactive_border = "rgba(ffffff12)",
         },
         resize_on_border = true,    -- Fenster an den Rändern ziehen wie in Windows
@@ -409,7 +376,7 @@ hl.window_rule({ name = "ghostty-size", match = { class = "^(com\\.mitchellh\\.g
 
 -- Spiele: echtes Vollbild auf eigenem Desktop (10) auf dem 180-Hz-Monitor.
 -- So liegt die Taskleiste nicht darüber, und Alt+Tab lässt das Spiel im Hintergrund weiterlaufen.
-hl.workspace_rule({ workspace = "10", monitor = "DP-2", default_name = "Spiel" })
+hl.workspace_rule({ workspace = "10", default_name = "Spiel" })
 hl.workspace_rule({ workspace = "8", default_name = "Code" })
 -- no_shortcuts_inhibit: Spiele dürfen Alt+Tab / Super nicht schlucken
 hl.window_rule({ name = "games-steam", match = { class = "^(steam_app_.*|gamescope|RocketLeague.*)$" },

@@ -138,7 +138,7 @@ PanelWindow {
                     anchors.leftMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
                     width: 72; height: 72; radius: 12
-                    color: Qt.rgba(0.545, 0.361, 0.965, 0.25)
+                    color: Theme.alpha(Theme.accent, 0.25)
                     clip: true
                     Icon { anchors.centerIn: parent; name: "music"; size: 28; visible: art.status !== Image.Ready }
                     Image {

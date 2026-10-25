@@ -141,8 +141,28 @@ hl.on("window.fullscreen", function(w)
     pcall(function()
         if w ~= nil and w.fullscreen == 1 then
             local a = "address:" .. w.address
+            local wasMax = M.isMaxed(w)
             hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
-            if M.isMaxed(w) then M.unMax(w) else M.setMax(w) end
+            -- Die App (z. B. Brave über XWayland) reagiert auf das Zurücknehmen mit einer eigenen Größenänderung.
+            -- Erst danach das eigene Maximieren/Wiederherstellen anwenden, sonst springt das Fenster wieder klein.
+            local addr = w.address
+            local function apply()
+                for _, ww in ipairs(hl.get_windows()) do
+                    if ww.address == addr then
+                        if wasMax then M.unMax(ww) else M.setMax(ww) end
+                        return
+                    end
+                end
+            end
+            hl.timer(apply, { timeout = 140, type = "oneshot" })
+            hl.timer(function() pcall(function()
+                for _, ww in ipairs(hl.get_windows()) do
+                    if ww.address == addr then
+                        if wasMax then if M.isMaxed(ww) then M.unMax(ww) end else if not M.isMaxed(ww) then M.setMax(ww) end end
+                        return
+                    end
+                end
+            end) end, { timeout = 420, type = "oneshot" })
         end
     end)
 end)

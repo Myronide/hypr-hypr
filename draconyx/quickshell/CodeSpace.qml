@@ -295,7 +295,7 @@ PanelWindow {
                     spacing: 12
                     Rectangle {
                         width: 36; height: 36; radius: 11
-                        color: row.isWs ? Qt.rgba(0.545, 0.361, 0.965, 0.22) : (row.modelData.git ? Qt.rgba(0.43, 0.88, 0.36, 0.14) : Theme.tile)
+                        color: row.isWs ? Theme.alpha(Theme.accent, 0.22) : (row.modelData.git ? Qt.rgba(0.43, 0.88, 0.36, 0.14) : Theme.tile)
                         Icon {
                             anchors.centerIn: parent
                             name: row.isWs ? "apps" : (row.modelData.git ? "branch" : "folder")

@@ -2,6 +2,7 @@
 // Start: qs -c draconyx      Steuern: qs -c draconyx ipc call shell <funktion>
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 
@@ -71,6 +72,25 @@ ShellRoot {
         function gitView(ref: string): void { gitClient.viewRef = ref; gitClient.tab = "history"; gitClient.loadLog(); }
         function gitClaudeMsg(): void { gitClient.claudeCommitMessage(); }
         function gitClaude(t: string): void { gitClient.claudeDo(t); }
+        // Minimieren-Knopf (Plugin/Titelleiste): minimiert oder holt das Fenster zurück
+        function toggleMinAddr(addr: string): void {
+            const a = addr.startsWith("0x") ? addr : "0x" + addr;
+            const bare = a.substring(2).toLowerCase();
+            for (const t of Hyprland.toplevels.values) {
+                if (String(t.address).toLowerCase().replace(/^0x/, "") === bare) {
+                    if (Global.isMinimizedH(t)) Global.restoreAddr(a); else Global.minimizeAddr(a);
+                    return;
+                }
+            }
+            Global.minimizeAddr(a);
+        }
+        function minimizeActive(): void {
+            const t = Hyprland.activeToplevel;
+            if (t) Global.minimizeAddr("0x" + String(t.address).replace(/^0x/, ""));
+        }
+        function barStyle(v: string): void { Global.barStyle = v; }
+        function openSettings(): void { Global.openSettings(); }
+        function setStartLogo(v: string): void { Global.startLogo = v; }
         function gitStage(path: string): void { gitClient.stage([path]); }
         function gitCommit(msg: string): void { gitClient.act("Commit", ["commit", "-m", msg]); }
         function gitPick(hash: string): void { gitClient.picked = ({}); gitClient.togglePick(hash, false); gitClient.cherryPick(); }

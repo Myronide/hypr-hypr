@@ -66,11 +66,11 @@ PanelWindow {
                 x: modelData.x + 4; y: modelData.y + 4
                 width: modelData.w - 8; height: modelData.h - 8
                 radius: Theme.rM
-                color: isHint ? Qt.rgba(0.545, 0.361, 0.965, 0.32)
-                     : isSel ? Qt.rgba(0.545, 0.361, 0.965, 0.24)
-                     : (ge.mode === "pick" && hovered) ? Qt.rgba(0.545, 0.361, 0.965, 0.28)
+                color: isHint ? Theme.alpha(Theme.accent, 0.32)
+                     : isSel ? Theme.alpha(Theme.accent, 0.24)
+                     : (ge.mode === "pick" && hovered) ? Theme.alpha(Theme.accent, 0.28)
                      : Qt.rgba(1, 1, 1, 0.06)
-                border.color: isHint || isSel ? Theme.accent : Qt.rgba(0.545, 0.361, 0.965, 0.55)
+                border.color: isHint || isSel ? Theme.accent : Theme.alpha(Theme.accent, 0.55)
                 border.width: isHint || isSel ? 3 : 2
                 Behavior on color { ColorAnimation { duration: Theme.durFast } }
 

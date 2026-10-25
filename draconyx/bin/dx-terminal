@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Draconyx/Aurora: startet das gewählte Terminal.  dx-terminal [--dir ORDNER] [-- BEFEHL ...]
+# Auswahl: $DX_TERMINAL, sonst ~/.config/draconyx/terminal (eine Zeile), sonst Aurora-Einstellung, sonst erstes installiertes.
+dir=""; cmd=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2;;
+    --) shift; cmd=("$@"); break;;
+    *) cmd=("$@"); break;;
+  esac
+done
+term="${DX_TERMINAL:-}"
+[ -z "$term" ] && [ -f "$HOME/.config/draconyx/terminal" ] && term="$(head -1 "$HOME/.config/draconyx/terminal" | tr -d '[:space:]')"
+if [ -z "$term" ] && [ -f "$HOME/.config/hypr/aurora/preferences.json" ]; then
+  term="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1])).get("terminal",""))' "$HOME/.config/hypr/aurora/preferences.json" 2>/dev/null)"
+fi
+if [ -z "$term" ] || ! command -v "$term" >/dev/null 2>&1; then
+  for t in ghostty kitty foot alacritty wezterm konsole; do command -v "$t" >/dev/null 2>&1 && term="$t" && break; done
+fi
+[ -n "$dir" ] && cd "$dir" 2>/dev/null
+case "$term" in
+  ghostty)   exec ghostty ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
+  kitty)     exec kitty ${dir:+--directory "$dir"} "${cmd[@]}";;
+  foot)      exec foot ${dir:+-D "$dir"} "${cmd[@]}";;
+  alacritty) exec alacritty ${dir:+--working-directory "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
+  wezterm)   exec wezterm start ${dir:+--cwd "$dir"} ${cmd[@]:+-- "${cmd[@]}"};;
+  konsole)   exec konsole ${dir:+--workdir "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
+  *) echo "Kein Terminal gefunden" >&2; exit 127;;
+esac

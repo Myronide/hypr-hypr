@@ -12,7 +12,7 @@ PanelWindow {
     screen: modelData
 
     readonly property string mon: modelData.name
-    readonly property bool showIcons: (Global.desktopMonitors || []).indexOf(mon) >= 0
+    readonly property bool showIcons: (Global.desktopMonitors || []).length > 0 ? (Global.desktopMonitors || []).indexOf(mon) >= 0 : (Quickshell.screens.length > 0 && Quickshell.screens[0].name === mon)
     readonly property string wallpaperPath: (Global.wallpapers || {})[mon] || Global.wallpaper
     property var selection: ({})           // Pfad -> true (Mehrfachauswahl)
     property var baseSelection: ({})       // Auswahl beim Start des Ziehrahmens (für Strg)
@@ -391,7 +391,7 @@ PanelWindow {
                 width: ctxCol.width
                 iconName: "add"
                 label: "Im Terminal öffnen"
-                onTriggered: { Quickshell.execDetached(["ghostty", "--working-directory=" + desk.menu.path]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/dx-terminal", "--dir", desk.menu.path]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "item"
@@ -428,7 +428,7 @@ PanelWindow {
                 width: ctxCol.width
                 iconName: "add"
                 label: "Terminal hier"
-                onTriggered: { Quickshell.execDetached(["ghostty", "--working-directory=" + Theme.home + "/Schreibtisch"]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/dx-terminal", "--dir", Theme.home + "/Schreibtisch"]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "empty"

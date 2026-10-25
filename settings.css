@@ -1,31 +1,59 @@
+@define-color shell_accent #4d8fe0;
+@define-color shell_accent_deep #397acb;
 @import url("palette.css");
-* { font-family:"Sans"; font-size:12px; }
-window { background:@shell_bg; color:@shell_text; }
-headerbar { background:@shell_bg; color:@shell_text; border:0; border-bottom:1px solid @shell_border; box-shadow:none; min-height:42px; }
-headerbar .title { font-size:13px; font-weight:600; }
+
+* { font-family:"Inter","Sans"; font-size:13px; outline-style:none; }
+window { background:shade(@shell_bg,0.86); color:@shell_text; }
+
+/* ---------- Kopfleiste ---------- */
+headerbar { background:shade(@shell_bg,0.86); color:@shell_text; border:0; box-shadow:none; min-height:54px; padding:0 10px; }
+headerbar .title { font-size:15px; font-weight:700; letter-spacing:0.4px; }
 headerbar .subtitle { font-size:11px; color:@shell_muted; }
-stacksidebar { background:#22262c; border-right:1px solid @shell_border; padding:10px 6px; }
-stacksidebar list { background:transparent; }
-stacksidebar row { color:@shell_muted; border-radius:8px; margin:2px 0; padding:9px 10px; }
-stacksidebar row:selected { background:@shell_selected; color:#edf5ff; }
-stacksidebar row:hover { background:@shell_hover; }
-.page-title { font-size:24px; font-weight:600; color:@shell_text; }
-.subtitle { color:@shell_muted; font-size:12px; }
-.setting-row { background:@shell_surface; border:1px solid #3d444e; border-radius:10px; padding:12px 14px; margin-bottom:3px; }
-button { background:#3a424e; color:@shell_text; border:1px solid #4d5968; border-radius:8px; padding:8px 12px; box-shadow:none; text-shadow:none; }
-button:hover { background:#465363; border-color:#6984a5; }
-button:focus { border-color:@shell_blue; }
-button.suggested-action { background:#397acb; border-color:#4d8fe0; color:white; }
-entry,spinbutton { background:#242b34; color:@shell_text; border:1px solid #505d6e; border-radius:8px; box-shadow:none; }
-entry:focus,spinbutton:focus { border-color:@shell_blue; }
-spinbutton button { background:transparent; border:0; padding:6px; }
-combobox button { background:#343e4b; color:@shell_text; }
-switch { background:#4b5767; border:0; border-radius:12px; }
-switch:checked { background:#397acb; }
-switch slider { background:#dfe8f4; border:0; border-radius:11px; }
-list,row,viewport,scrolledwindow { background:transparent; color:@shell_text; }
-row:selected { background:@shell_selected; }
-menu,menuitem { background:@shell_bg; color:@shell_text; }
-menuitem:hover { background:@shell_selected; }
-scrollbar { background:transparent; }
-scrollbar slider { background:#57667a; min-width:5px; border-radius:5px; }
+headerbar button.titlebutton { background:transparent; border:0; border-radius:99px; min-width:34px; min-height:34px; padding:0; margin:0 2px; color:@shell_muted; }
+headerbar button.titlebutton:hover { background:@shell_hover; color:@shell_text; }
+headerbar button.titlebutton.close:hover { background:alpha(#ff6b6b,0.85); color:white; }
+headerbar button.suggested-action { margin-right:8px; }
+
+/* ---------- Seitenleiste ---------- */
+stacksidebar { background:shade(@shell_bg,0.92); border-right:1px solid alpha(white,0.05); padding:12px 8px; }
+stacksidebar list { background:transparent; padding:14px 12px; }
+stacksidebar separator { background:transparent; min-height:0; margin:0; }
+stacksidebar row { color:@shell_muted; border-radius:10px; margin:2px 0; padding:11px 16px; font-weight:500; transition:all 120ms ease; }
+stacksidebar row:hover { background:alpha(white,0.06); color:@shell_text; }
+stacksidebar row:selected { background:alpha(@shell_accent,0.22); color:@shell_text; box-shadow:inset 3px 0 0 @shell_accent; font-weight:700; }
+
+/* ---------- Seiten ---------- */
+.page-title { font-size:26px; font-weight:700; color:@shell_text; margin-bottom:2px; }
+.subtitle { color:@shell_muted; font-size:12.5px; }
+.setting-row { background:@shell_bg; border:1px solid alpha(white,0.06); border-radius:14px; padding:14px 18px; margin-bottom:4px; transition:border-color 140ms ease; }
+.setting-row:hover { border-color:alpha(@shell_accent,0.45); }
+
+/* ---------- Bedienelemente ---------- */
+button { background:@shell_hover; color:@shell_text; border:1px solid alpha(white,0.07); border-radius:10px; padding:7px 16px; box-shadow:none; text-shadow:none; transition:all 120ms ease; }
+button:hover { background:shade(@shell_hover,1.18); border-color:alpha(@shell_accent,0.6); }
+button:active { background:shade(@shell_hover,0.9); }
+button:focus { border-color:@shell_accent; }
+button.suggested-action { background:@shell_accent; border-color:@shell_accent; color:white; font-weight:700; }
+button.suggested-action:hover { background:shade(@shell_accent,1.15); }
+entry, spinbutton { background:shade(@shell_bg,0.8); color:@shell_text; border:1px solid alpha(white,0.08); border-radius:10px; box-shadow:none; min-height:34px; padding:0 10px; }
+entry:focus, spinbutton:focus { border-color:@shell_accent; box-shadow:0 0 0 3px alpha(@shell_accent,0.22); }
+spinbutton { padding:0; }
+spinbutton entry { border:0; background:transparent; box-shadow:none; min-width:46px; }
+spinbutton button { background:transparent; border:0; border-radius:8px; min-width:28px; padding:0; margin:3px 1px; }
+spinbutton button:hover { background:alpha(@shell_accent,0.28); }
+combobox button { background:@shell_hover; border-radius:10px; padding:7px 14px; min-width:150px; }
+combobox arrow { color:@shell_muted; }
+switch { background:alpha(white,0.14); border:0; border-radius:99px; min-width:48px; min-height:26px; transition:all 160ms ease; }
+switch:checked { background:@shell_accent; }
+switch slider { background:white; border:0; border-radius:99px; min-width:20px; min-height:20px; margin:3px; box-shadow:0 1px 3px alpha(black,0.4); }
+colorbutton button { padding:5px; min-width:64px; }
+filechooserbutton button { min-width:200px; }
+list, row, viewport, scrolledwindow { background:transparent; color:@shell_text; }
+row:selected { background:alpha(@shell_accent,0.22); }
+menu, menuitem { background:@shell_bg; color:@shell_text; border-radius:8px; }
+menuitem:hover { background:alpha(@shell_accent,0.25); }
+tooltip { background:@shell_surface; color:@shell_text; border-radius:8px; }
+scrollbar { background:transparent; border:0; }
+scrollbar slider { background:alpha(white,0.22); min-width:6px; min-height:30px; border-radius:99px; border:0; }
+scrollbar slider:hover { background:alpha(white,0.38); }
+label.hint, .hint { color:@shell_muted; }

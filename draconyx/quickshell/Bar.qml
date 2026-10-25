@@ -23,12 +23,14 @@ PanelWindow {
                                            ? hyprMonitor.activeWorkspace.hasFullscreen : false
     readonly property bool keepOpen: !autohideHere || Global.popupOpenOn(mon) || hover.hovered
     property bool shown: true
+    readonly property bool dock: Global.barStyle === "dock"
+    readonly property int gap: Global.barMargin        // Abstand zum Bildschirmrand
 
     visible: enabledHere && !fullscreenHere
     anchors { left: true; right: true; top: Global.barTop; bottom: !Global.barTop }
-    implicitHeight: Global.barHeight + Global.barMargin * 2 + 6
+    implicitHeight: Global.barHeight + gap * 2 + 6
     color: "transparent"
-    exclusiveZone: autohideHere ? 0 : Global.barHeight + Global.barMargin * 2
+    exclusiveZone: autohideHere ? 0 : Global.barHeight + gap * 2
     WlrLayershell.namespace: "draconyx-bar"
     WlrLayershell.layer: WlrLayer.Top
 
@@ -40,7 +42,10 @@ PanelWindow {
     Timer { id: hideTimer; interval: 900; onTriggered: if (!bar.keepOpen) bar.shown = false }
 
     // Eingabebereich: ganze Leiste, wenn sichtbar; sonst nur ein 3-px-Streifen am Rand
-    mask: Region { item: inputArea }
+    // Dock: nur die beiden Kapseln fangen Klicks, der Rest der Zeile bleibt durchlässig
+    mask: dock && shown ? dockMask : fullMask
+    Region { id: fullMask; item: inputArea }
+    Region { id: dockMask; item: surf; Region { item: sysPill } }
     Item {
         id: inputArea
         width: parent.width
@@ -77,6 +82,38 @@ PanelWindow {
         return out;
     }
 
+
+    // Rechtsklick auf den Startknopf: Symbol wählen (Draconyx / Arch / eigenes Bild)
+    PopupWindow {
+        id: logoMenu
+        anchor.item: startBtn
+        anchor.edges: Global.barTop ? Edges.Bottom : Edges.Top
+        anchor.gravity: Global.barTop ? Edges.Bottom : Edges.Top
+        anchor.margins.top: Global.barTop ? 8 : 0
+        anchor.margins.bottom: Global.barTop ? 0 : 8
+        implicitWidth: 240
+        implicitHeight: logoCol.implicitHeight + 16
+        color: "transparent"
+        visible: false
+        HyprlandFocusGrab { windows: [logoMenu]; active: logoMenu.visible; onCleared: logoMenu.visible = false }
+        Surface {
+            anchors.fill: parent
+            level: 2
+            radius: Theme.rM
+            Column {
+                id: logoCol
+                anchors.fill: parent; anchors.margins: 8; spacing: 2
+                Text { text: "Symbol des Startknopfs"; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs; leftPadding: 6; bottomPadding: 4 }
+                MenuRow { width: logoCol.width; label: "Draconyx-Logo" + (Global.startLogo === "" ? "  ✓" : ""); iconName: "apps"
+                          onTriggered: { Global.startLogo = ""; logoMenu.visible = false; } }
+                MenuRow { width: logoCol.width; label: "Arch-Logo" + (Global.startLogo === "arch" ? "  ✓" : ""); iconName: "apps"
+                          onTriggered: { Global.startLogo = "arch"; logoMenu.visible = false; } }
+                MenuRow { width: logoCol.width; label: "Eigenes Bild wählen …" + (Global.startLogo !== "" && Global.startLogo !== "arch" ? "  ✓" : ""); iconName: "folder-open"
+                          onTriggered: { logoMenu.visible = false; Global.pickStartLogo(); } }
+            }
+        }
+    }
+
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property real volume: sink && sink.audio ? sink.audio.volume : 0
     readonly property bool muted: sink && sink.audio ? sink.audio.muted : false
@@ -85,16 +122,32 @@ PanelWindow {
         anchors.fill: parent
         HoverHandler { id: hover }
 
+        // Dock-Stil: Tray, System, Uhr in einer eigenen Kapsel rechts
+        Surface {
+            id: sysPill
+            visible: bar.dock
+            level: 1
+            opacityScale: Global.barOpacity / 0.90
+            radius: Theme.rL
+            width: rightRow.width + 14
+            height: Global.barHeight
+            x: parent.width - width - Global.barMargin
+            y: surf.y
+            opacity: surf.opacity
+        }
+
         Surface {
             id: surf
             level: 1
             opacityScale: Global.barOpacity / 0.90
             radius: Theme.rL
-            x: Global.barMargin
-            width: parent.width - 2 * Global.barMargin
+            x: bar.dock ? Math.round((parent.width - width) / 2) : Global.barMargin
+            width: bar.dock ? Math.min(parent.width - 2 * Global.barMargin, leftRow.width + appsRow.width + 34) : parent.width - 2 * Global.barMargin
             height: Global.barHeight
+            Behavior on width { NumberAnimation { duration: Theme.durBase; easing.type: Theme.easeOut } }
+            Behavior on x { NumberAnimation { duration: Theme.durBase; easing.type: Theme.easeOut } }
 
-            readonly property real shownY: Global.barTop ? Global.barMargin : parent.height - height - Global.barMargin
+            readonly property real shownY: Global.barTop ? bar.gap : parent.height - height - bar.gap
             readonly property real hiddenY: Global.barTop ? -height - 12 : parent.height + 12
             y: bar.shown ? shownY : hiddenY
             opacity: bar.shown ? 1 : 0
@@ -110,22 +163,25 @@ PanelWindow {
                 spacing: 2
 
                 BarButton {
+                    id: startBtn
+                    visible: Global.item("start")
                     anchors.verticalCenter: parent.verticalCenter
                     minWidth: 44
                     implicitHeight: Global.barHeight - 10
                     active: Global.startOpen && Global.popupScreen === bar.mon
                     Image {
-                        source: Theme.logo
+                        source: Global.startLogoUrl
                         width: 34; height: 34
                         sourceSize: Qt.size(68, 68)
                         smooth: true; mipmap: true
                     }
-                    onClicked: Global.toggleStart(bar.mon)
+                    onClicked: mouse => { if (mouse.button === Qt.RightButton) logoMenu.visible = !logoMenu.visible; else Global.toggleStart(bar.mon); }
                 }
                 BarButton {
                     anchors.verticalCenter: parent.verticalCenter
                     minWidth: 40
                     implicitHeight: Global.barHeight - 10
+                    visible: Global.item("search")
                     Icon { name: "search"; size: 19 }
                     onClicked: Global.toggleStart(bar.mon)
                 }
@@ -133,6 +189,7 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     minWidth: 40
                     implicitHeight: Global.barHeight - 10
+                    visible: Global.item("taskview")
                     active: Global.taskViewOpen && Global.popupScreen === bar.mon
                     Icon { name: "apps"; size: 19 }
                     onClicked: Global.toggleTaskView(bar.mon)
@@ -141,6 +198,7 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     minWidth: 40
                     implicitHeight: Global.barHeight - 10
+                    visible: Global.item("code")
                     active: Global.codeOpen && Global.popupScreen === bar.mon
                     Icon { name: "code"; size: 19; accent: Global.codeOpen && Global.popupScreen === bar.mon }
                     onClicked: Global.toggleCode(bar.mon)
@@ -150,13 +208,26 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     minWidth: 40
                     implicitHeight: Global.barHeight - 10
+                    visible: Global.item("wallpaper")
                     active: Global.weOpen && Global.popupScreen === bar.mon
                     Icon { name: "desktop"; size: 19; accent: Global.weOpen && Global.popupScreen === bar.mon }
                     onClicked: Global.toggleWe(bar.mon)
                 }
 
+                // Fenstermodus: frei schwebend <-> Kacheln (Standard für neue Fenster)
+                BarButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Global.item("mode")
+                    minWidth: 40
+                    implicitHeight: Global.barHeight - 10
+                    active: Global.windowMode === "tiling"
+                    Icon { name: Global.windowMode === "tiling" ? "apps" : "window"; size: 19; accent: Global.windowMode === "tiling" }
+                    onClicked: Global.toggleWindowMode()
+                }
+
                 // Desktops: kompakte Leiste (aktiv = lang und violett)
                 Row {
+                    visible: Global.item("desktops")
                     anchors.verticalCenter: parent.verticalCenter
                     leftPadding: 8
                     spacing: 4
@@ -198,8 +269,9 @@ PanelWindow {
             // ================= MITTE: Apps =================
             Row {
                 id: appsRow
+                visible: Global.item("apps")
                 anchors.verticalCenter: parent.verticalCenter
-                x: Global.barCenter ? (parent.width - width) / 2 : leftRow.x + leftRow.width + 16
+                x: bar.dock ? leftRow.x + leftRow.width + 18 : (Global.barCenter ? (parent.width - width) / 2 : leftRow.x + leftRow.width + 16)
                 spacing: 2
                 Behavior on x { NumberAnimation { duration: Theme.durBase; easing.type: Theme.easeOut } }
 
@@ -218,13 +290,15 @@ PanelWindow {
 
             // ================= RECHTS =================
             Row {
+                id: rightRow
+                parent: bar.dock ? sysPill : surf
                 anchors.right: parent.right
                 anchors.rightMargin: 6
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2
 
                 Repeater {
-                    model: SystemTray.items.values
+                    model: Global.item("tray") ? SystemTray.items.values : []
                     delegate: BarButton {
                         id: trayBtn
                         required property var modelData
@@ -247,10 +321,11 @@ PanelWindow {
                     }
                 }
 
-                Rectangle { width: 1; height: 22; color: Theme.borderSoft; anchors.verticalCenter: parent.verticalCenter }
+                Rectangle { visible: Global.item("tray"); width: 1; height: 22; color: Theme.borderSoft; anchors.verticalCenter: parent.verticalCenter }
 
                 // Netzwerk + Lautstärke -> Schnelleinstellungen
                 BarButton {
+                    visible: Global.item("system")
                     anchors.verticalCenter: parent.verticalCenter
                     implicitHeight: Global.barHeight - 10
                     active: Global.controlOpen && Global.popupScreen === bar.mon
@@ -270,6 +345,7 @@ PanelWindow {
                 // Benachrichtigungen mit Zähler
                 BarButton {
                     id: notifBtn
+                    visible: Global.item("notifications")
                     anchors.verticalCenter: parent.verticalCenter
                     implicitHeight: Global.barHeight - 10
                     Icon { name: Global.dnd ? "notif-dnd" : (Global.notifCount > 0 ? "notif-new" : "notif"); size: 18 }
@@ -289,6 +365,7 @@ PanelWindow {
 
                 // Uhr -> Kalender
                 BarButton {
+                    visible: Global.item("clock")
                     anchors.verticalCenter: parent.verticalCenter
                     implicitHeight: Global.barHeight - 10
                     active: Global.calendarOpen && Global.popupScreen === bar.mon
@@ -300,6 +377,7 @@ PanelWindow {
                             color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsM; font.weight: Font.DemiBold
                         }
                         Text {
+                            visible: Global.showDate
                             anchors.right: parent.right
                             text: Qt.formatDateTime(clock.date, "dd.MM.yyyy")
                             color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs
@@ -308,8 +386,19 @@ PanelWindow {
                     onClicked: Global.toggleCalendar(bar.mon)
                 }
 
+                // Einstellungen (Aurora)
+                BarButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Global.item("settings")
+                    minWidth: 38
+                    implicitHeight: Global.barHeight - 10
+                    Icon { name: "settings"; size: 19 }
+                    onClicked: Global.openSettings()
+                }
+
                 // Schmaler Streifen ganz rechts: Desktop anzeigen
                 BarButton {
+                    visible: Global.item("showDesktop")
                     anchors.verticalCenter: parent.verticalCenter
                     minWidth: 12; padding: 0
                     implicitHeight: Global.barHeight - 14

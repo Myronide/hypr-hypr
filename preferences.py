@@ -1,6 +1,7 @@
 import json,subprocess,os,re,shutil,time
 from pathlib import Path
 BASE=Path.home()/'.config/hypr/aurora'
+SHELL=(Path.home()/'.config/quickshell/draconyx/shell.qml').exists()   # Draconyx-Shell vorhanden -> eigene Taskleiste statt waybar
 DEFAULTS={'dock_visibility':'always','dock_monitor':'DP-2','dock_icon_size':32,'dock_opacity':0.95,'desktop_icon_size':44,'desktop_font_size':11,'grid_snap':True,'grid_visible':False,'grid_width':122,'grid_height':112,'titlebar_height':28,'titlebar_font':10,'tile_gap':12,'rounding':12,'border_size':0,'blur':True,'blur_size':6,'blur_passes':3,'wallpaper':'','wallpaper_monitor':'','wallpaper_fit':'cover','workshop':'/mnt/Games/Steam/steamapps/workshop/content/431960','engine_assets':'/mnt/Games/Steam/steamapps/common/wallpaper_engine/assets','engine_fps':30,'engine_volume':0,'engine_path':'','engine_monitor':'DP-2','engine_mouse':True,'engine_parallax':True,'engine_fullscreen_pause':True,'engine_active':False}
 def load_preferences():
  try:return DEFAULTS|json.loads((BASE/'preferences.json').read_text())
@@ -12,6 +13,8 @@ def send_ui(*args):
  except OSError:pass
 def save_preferences(p):
  (BASE/'preferences.json').write_text(json.dumps(p,ensure_ascii=False,indent=2))
+ if p.get('terminal'):
+  shared=Path.home()/'.config/draconyx';shared.mkdir(parents=True,exist_ok=True);(shared/'terminal').write_text(str(p['terminal'])+'\n')   # gemeinsam mit dem Draconyx-Teil (dx-terminal)
  n=lambda key,lo,hi:max(lo,min(hi,int(p[key])))
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p['blur'] else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))
@@ -25,6 +28,7 @@ def save_preferences(p):
  (BASE/'preferences.lua').write_text(source)
  custom='.desktop-label {font-size: %dpx;} .app-dock {background: transparent;} window#waybar {background: rgba(38,42,48,%.2f);}\n'%(n('desktop_font_size',8,20),max(.2,min(1,float(p['dock_opacity']))))
  (BASE/'preferences.css').write_text(custom)
+ if SHELL:return   # mit der Draconyx-Shell gibt es keine waybar/Aurora-Dock-Neustarts
  config=Path.home()/'.config/waybar/config.jsonc';c=json.loads(config.read_text())
  adaptive=p.get('dock_visibility','always') in ('auto','dodge')
  options={'output':p['dock_monitor'],'exclusive':not adaptive,'layer':'overlay' if adaptive else 'top','mode':'default','passthrough':False,'on-sigusr1':'hide','on-sigusr2':'show'}

@@ -26,7 +26,8 @@ Rectangle {
     radius: radiusSize
     color: dragging ? Theme.accentSoft
          : area.pressed ? Theme.tilePress
-         : (area.containsMouse || active) ? Theme.tileHover
+         : active ? Theme.selected
+         : area.containsMouse ? Theme.tileHover
          : "transparent"
     Behavior on color { ColorAnimation { duration: Theme.durFast } }
     z: dragging ? 10 : 0

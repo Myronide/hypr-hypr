@@ -16,6 +16,18 @@ local orig = {}       -- address -> { x, y, w, h } Geometrie vor dem Kacheln
 local wsAuto = {}     -- Desktop-ID -> true: neue Fenster werden automatisch gekachelt
 local applying = false
 
+-- Standard-Fenstermodus (einstellbar, bleibt gespeichert): "floating" oder "tiling".
+-- Bei "tiling" werden neue Fenster auf jedem Desktop automatisch in das Raster gesetzt.
+local MODE_FILE = (os.getenv("HOME") or "") .. "/.config/draconyx/window-mode"
+M.defaultTiling = false
+do
+    local f = io.open(MODE_FILE, "r")
+    if f then
+        local v = f:read("*l"); f:close()
+        M.defaultTiling = (v == "tiling")
+    end
+end
+
 local function addr(a) return "address:" .. a end
 
 local function indexOf(a)
@@ -237,6 +249,34 @@ function M.toggleWorkspace()
     end
 end
 
+-- Standardmodus umstellen: "tiling" kachelt alle passenden Fenster, "floating" gibt alle frei
+function M.setDefault(mode)
+    local tilingNow = (mode == "tiling")
+    pcall(function()
+        local f = io.open(MODE_FILE, "w")
+        if f then f:write(tilingNow and "tiling\n" or "floating\n"); f:close() end
+    end)
+    M.defaultTiling = tilingNow
+    if tilingNow then
+        local seen = {}
+        for _, w in ipairs(hl.get_windows()) do
+            if canTile(w) and not tiled[w.address] and w.workspace ~= nil then
+                unmaximize(w)
+                orig[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
+                tiled[w.address] = true
+                table.insert(order, w.address)
+                seen[w.workspace.id] = true
+            end
+        end
+        M.retileAll()
+        notify("Standard: Kacheln (" .. MODE_NAMES[M.mode] .. ")")
+    else
+        M.releaseAll()
+        notify("Standard: Frei schwebend")
+    end
+end
+function M.getDefault() return M.defaultTiling and "tiling" or "floating" end
+
 function M.releaseAll()
     local map = windowMap()
     local list = {}
@@ -292,7 +332,7 @@ end
 local function safe(fn) return function(...) pcall(fn, ...) end end
 
 hl.on("window.open", safe(function(w)
-    if w ~= nil and w.workspace ~= nil and wsAuto[w.workspace.id] then
+    if w ~= nil and w.workspace ~= nil and (wsAuto[w.workspace.id] or M.defaultTiling) then
         hl.timer(function() M.add(w) end, { timeout = 120, type = "oneshot" })
     end
 end))

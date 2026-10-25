@@ -1,33 +1,29 @@
 # Draconyx — unsere Änderungen
 
-Ordner für den Stand von SyntaxJason ("Draconyx"). Der Rest des Repos ist Myronides "Aurora".
-Ziel: beide Welten vergleichen und per Cherry-Pick das Beste zusammenführen.
+Ordner für den Stand von SyntaxJason ("Draconyx"), zusammengeführt mit Myronides "Aurora" (Rest des Repos).
+
+## Einrichten
+```sh
+./draconyx/install.sh              # Pakete (fragt vorher), Shell, Skripte, Wallpaper Engine bauen
+./draconyx/install.sh --no-we      # ohne Wallpaper Engine
+```
+Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).
+`~/.config/hypr/monitors_local.lua` ist eine Vorlage von SyntaxJason und muss an die eigenen Monitore angepasst werden (`hyprctl monitors`).
 
 ## Inhalt
 | Ordner | Was |
 |---|---|
-| `hypr/` | `hyprland.lua` + Module `dx_snap` (Snap/Maximieren), `dx_tiling` (eigenes Raster), `dx_zones` (frei einstellbare Zonen), `hypridle`, `hyprlock` |
-| `quickshell/` | Shell in QML: Taskleiste, Startmenü, Alt+Tab, Task View, Desktop (Symbole frei ziehbar, Multi-Monitor), Coding Space, Git-Client, Wallpaper-Auswahl, Zonen-Editor |
-| `bin/` | Hilfsskripte `dx-*` (Wallpaper Engine, Code-Liste, X11-Minimieren), `claude-sessions` |
-| `patches/` | Fixes für linux-wallpaperengine (Web-Wallpaper-Textur, Mausposition über Hyprland) |
-| `docs/` | Übergabe-Dokument mit allen Entscheidungen und Fallstricken |
+| `quickshell/` | Shell in QML: Taskleiste (Teile einzeln an/aus), Startmenü (Symbol wählbar), Alt+Tab, Task View, Desktop (Symbole frei ziehbar, mehrere Monitore), Coding Space + Git-Client, Wallpaper-Auswahl, Zonen-Editor |
+| `hypr/` | `hyprland.lua` + `dx_snap` (Snap/Maximieren), `dx_tiling` (Kacheln, Standardmodus floating/tiling), `dx_zones`; Monitore in `monitors_local.lua` |
+| `bin/` | `dx-*` Hilfsskripte: `dx-colors` (gemeinsame Farbwelt), `dx-terminal` (Terminal-Auswahl), Wallpaper Engine, Code-Liste |
+| `patches/`, `wallpaper-engine/` | Fixes für linux-wallpaperengine (Web-Wallpaper, Mausposition) – `install.sh` baut es |
+| `docs/` | Übergabe mit allen Entscheidungen und Fallstricken |
+| Repo-Wurzel | `settings-app`, `preferences.py`, `settings.css`: Aurora-Einstellungen, neu gestylt, mit Seiten für Taskleiste, Coding Space, Fenstermodus, Farben, Terminal |
 
-## Unterschiede zu Aurora (Stand der ersten Sichtung)
-| Thema | Aurora (Myronide) | Draconyx |
-|---|---|---|
-| Shell/Dock | waybar + Python/GTK (`desktop-ui`) | Quickshell (QML), eine verbundene Leiste |
-| Fenstertitel mit Knöpfen | hyprbars-Plugin + eigenes C++-Plugin (Minimieren) | keine Titelleisten; eigenes Minimieren/Maximieren per Skript, Alt+Leertaste-Menü |
-| Tastenkürzel | `SUPER + …` | `STRG + ALT + …` (Super-Taste defekt) |
-| Fenster-Modi | Tiling ↔ Desktop umschaltbar | Floating + eigenes Zonen-Raster |
-| Launcher | rofi | eigenes Startmenü in QML |
-| Wallpaper | eigenes natives Programm (`aurora-wallpaper`) | linux-wallpaperengine (selbst gebaut) |
-| Einstellungen | `settings-app` / `control_center.py` | Einstellungen in `settings.json`, Control Center in QML |
+## Zusammengeführt (Cherry-Pick)
+- **Von Aurora:** Farbwelt (Grau-Blau), Aussehen der Taskleiste, Einstellungs-App (umgestylt und erweitert), Terminal-Auswahl.
+- **Von Draconyx:** Zonen-Raster, Snap/Maximieren, Coding Space, Git-Client, Wallpaper Engine in der Taskleiste, frei ziehbare Desktop-Symbole.
+- **Gemeinsam steuerbar:** Farben (`~/.config/draconyx/colors.json`), Terminal (`~/.config/draconyx/terminal`), Fenstermodus (`~/.config/draconyx/window-mode`), Taskleiste (`~/.local/state/draconyx/settings.json`).
 
-## Cherry-Pick-Kandidaten (Vorschlag)
-- **von Aurora → Draconyx:** hyprbars-Titelleisten mit echten Knöpfen (löst Qt/KDE ohne Buttons), natives Minimieren-Plugin, Einstellungs-App, Wallpaper-Programm.
-- **von Draconyx → Aurora:** Zonen-Raster, Snap/Maximieren, Coding Space, Git-Client, Desktop-Symbole mit freier Anordnung.
-
-## Noch zu tun, bevor beide es nutzen können
-- Hartkodierte Pfade (`/home/syntaxjason`) durch `$HOME`/`Theme.home` ersetzen.
-- Monitore pro Rechner in eine lokale Datei (nicht im Repo) auslagern.
-- `settings.json` bleibt lokal.
+## Bewusst NICHT drin
+- Auroras Plugins (hyprbars, `aurora-native`): Sie lagen in einem Test im Weg und haben beim Laden in eine laufende Sitzung Hyprland zum Absturz gebracht. Nicht per Live-Reload laden. Wer sie nutzt, lädt sie nur beim Login.

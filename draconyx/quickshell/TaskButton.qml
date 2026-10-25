@@ -94,7 +94,7 @@ BarButton {
         radius: 2
         opacity: tb.count > 0 ? 1 : 0
         width: tb.focused ? 20 : (tb.count > 1 ? 12 : 5)
-        color: tb.focused ? Theme.accent : Theme.textDim
+        color: tb.focused ? Theme.accentBright : Theme.textDim
         Behavior on width   { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
         Behavior on opacity { NumberAnimation { duration: Theme.durBase } }
         Behavior on color   { ColorAnimation { duration: Theme.durBase } }

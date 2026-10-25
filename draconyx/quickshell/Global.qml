@@ -84,11 +84,16 @@ Singleton {
     property alias weMouse:       settings.weMouse
     property alias iconPos:       settings.iconPos
     property alias gitSessions:   settings.gitSessions
+    property alias startLogo:     settings.startLogo
+    property alias barStyle:      settings.barStyle
+    property alias barItems:      settings.barItems
+    property alias showDate:      settings.showDate
+    property alias settingsCmd:   settings.settingsCmd
     property alias iconGrid:      settings.iconGrid
     property alias startLeft:     settings.startLeft
     property alias zoneLayouts:   settings.zoneLayouts
     property alias codeRoot:      settings.codeRoot
-    readonly property int barMargin: 8
+    readonly property int barMargin: 16
 
     FileView {
         id: settingsFile
@@ -115,8 +120,13 @@ Singleton {
             property bool groupApps: true
             property bool showSeconds: false
             property var monitors: ({})          // { "DP-1": { enabled: true, autohide: null } }
-            property var desktopMonitors: ["DP-2"]   // Desktop-Icons nur auf diesen Monitoren
-            property string wallpaper: "/home/syntaxjason/Bilder/Wallpapers/draconyx-dark.png"
+            property var desktopMonitors: []   // Desktop-Icons nur auf diesen Monitoren
+            property string wallpaper: ""
+            property var barItems: ({})            // { start, search, taskview, code, wallpaper, desktops, apps, tray, system, notifications, clock, showDesktop, mode, settings } an/aus
+            property bool showDate: true            // Datum unter der Uhrzeit
+            property string settingsCmd: ""         // Befehl der Einstellungs-App (leer = automatisch)
+            property string barStyle: "bar"     // "bar" = durchgehende Leiste, "dock" = schwebendes Dock (wie Aurora)
+            property string startLogo: ""        // "" = Draconyx, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild
             property var gitSessions: ({})        // { "Repo-Pfad": "Claude-Session-UUID" } je Repository eine fortlaufende Claude-Session
             property var iconPos: ({})            // { "Dateiname": { m: "DP-2", c: Spalte, r: Zeile } } Platz der Desktop-Symbole
             property var weMouse: []              // Monitore, auf denen die Maus ans Wallpaper (statt an die Desktop-Symbole) geht
@@ -183,7 +193,7 @@ Singleton {
             const cur = root.codeCurrent;
             codeList.running = false;
             codeList.dir = cur !== "" ? cur : rootDir;
-            codeList.extra = cur !== "" ? "" : rootDir.replace(/\/[^\/]+$/, "");   // Elternordner des Code Space = Laufwerk
+            codeList.extra = (cur !== "" || root.codeRoot !== "") ? "" : rootDir.replace(/\/[^\/]+$/, "");   // Elternordner des Code Space = Laufwerk
             codeList.running = true;
         }
     }
@@ -223,8 +233,9 @@ Singleton {
         let n = name.trim().replace(/[\/\\]/g, "");
         if (n === "" || codeRootEffective === "") return;
         if (!/workspace/i.test(n)) n += " Workspace";
-        const drive = codeRootEffective.replace(/\/[^\/]+$/, "");
-        Quickshell.execDetached(["mkdir", "-p", drive + "/" + n]);
+        // Eigener Code-Space-Ordner (Aurora-Einstellungen): Workspaces entstehen darin; sonst neben dem automatisch gefundenen "Code Space"
+        const base = codeRoot !== "" ? codeRoot : codeRootEffective.replace(/\/[^\/]+$/, "");
+        Quickshell.execDetached(["mkdir", "-p", base + "/" + n]);
         codeListTimer.interval = 600; codeListTimer.restart();
     }
 
@@ -245,10 +256,10 @@ Singleton {
         closeAll();
         const list = [];
         if (how === "folder" || how === "all") list.push(["dolphin", path]);
-        if (how === "term")   list.push(["ghostty", "--working-directory=" + path]);
+        if (how === "term")   list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path]);
         if (how === "idea") list.push(["idea", path]);
         if (how === "code" || how === "all") list.push(["code", path]);
-        if (how === "claude" || how === "all") list.push(["ghostty", "--working-directory=" + path, "-e", Theme.home + "/.local/bin/claude"]);
+        if (how === "claude" || how === "all") list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path, "--", Theme.home + "/.local/bin/claude"]);
         hypr("hl.dsp.focus({ workspace = 8 })");
         codePending = list;
         codeLaunchTimer.restart();
@@ -821,6 +832,37 @@ Singleton {
         for (const mv of moves) if (mons.indexOf(pos[mv.name].m) < 0) { mons.push(pos[mv.name].m); add = true; }
         if (add) desktopMonitors = mons;
     }
+
+    // Bestandteile der Taskleiste an/aus (Standard: an, außer "power")
+    function item(key) { const v = (barItems || {})[key]; return v === undefined ? key !== "power" : v === true; }
+    function setItem(key, on) { const m = Object.assign({}, barItems); m[key] = on; barItems = m; }
+
+    // Fenstermodus (Standard): "floating" oder "tiling" – Datei wird von Lua (DXTiling.setDefault) geschrieben
+    property string windowMode: "floating"
+    FileView {
+        id: modeFile
+        path: Theme.home + "/.config/draconyx/window-mode"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: { const v = text().trim(); root.windowMode = v === "tiling" ? "tiling" : "floating"; }
+    }
+    function setWindowMode(m) { windowMode = m; hyprEval("DXTiling.setDefault(\"" + m + "\")"); }
+    function toggleWindowMode() { setWindowMode(windowMode === "tiling" ? "floating" : "tiling"); }
+    function openSettings() {
+        const c = settingsCmd !== "" ? settingsCmd : "python3 \"$HOME/.config/hypr/aurora/settings-app\"";
+        Quickshell.execDetached(["sh", "-c", c]);
+    }
+
+    // Symbol des Startknopfs: Draconyx (Standard), Arch oder eigenes Bild
+    readonly property string startLogoUrl: startLogo === "" ? Theme.logo
+        : startLogo === "arch" ? "file:///usr/share/pixmaps/archlinux-logo.png"
+        : "file://" + startLogo
+    Process {
+        id: logoPicker
+        command: ["zenity", "--file-selection", "--title=Symbol für den Startknopf", "--file-filter=Bilder | *.png *.svg *.jpg *.jpeg *.webp"]
+        stdout: StdioCollector { onStreamFinished: { const p = text.trim(); if (p !== "") root.startLogo = p; } }
+    }
+    function pickStartLogo() { logoPicker.running = false; logoPicker.running = true; }
 
     // Wallpaper Engine: je Monitor ein Wallpaper; ein Prozess für alle Monitore
     function weSet(mon, id) {
