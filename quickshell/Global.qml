@@ -79,6 +79,7 @@ Singleton {
     property alias recentApps:    settings.recentApps
     property alias autohide:      settings.autohide
     property alias tooltips:      settings.tooltips
+    property alias altTabMouse:   settings.altTabMouse
     property alias barRevealAnywhere: settings.barRevealAnywhere
     property alias notifiedUpdate: settings.notifiedUpdate
     property alias barHeight:     settings.barHeight
@@ -130,6 +131,7 @@ Singleton {
             property bool autohide: true
             property string notifiedUpdate: ""       // Version, für die schon eine Update-Meldung kam
             property bool barRevealAnywhere: false  // Schwebende Leiste: öffnet sich überall am Rand, nicht nur bei den Kapseln
+            property bool altTabMouse: true         // Alt+Tab-Übersicht mit der Maus bedienbar (Klick, Hover, Mausrad)
             property bool tooltips: true            // Quickinfos beim Überfahren der Taskleistenknöpfe
             property int barHeight: 48
             property real barOpacity: 0.90

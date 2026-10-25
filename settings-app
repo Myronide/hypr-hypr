@@ -160,6 +160,7 @@ class Settings(Gtk.Application):
   self.toggle(b,'Fokus folgt der Maus','focus_follows_mouse','Ausgeschaltet bleibt der Tastaturfokus beim zuletzt angeklickten Fenster.')
  def windows(self):
   b=self.page('Fenster','Größe und Erscheinung der Titelleisten, Fensterkanten und Effekte.')
+  self.sw(b,'Alt+Tab mit der Maus bedienen','altTabMouse',True,'Aus: Die Alt+Tab-Übersicht reagiert nur auf die Tastatur (Tab, Pfeile, Alt loslassen). Antippen springt sofort zum vorigen Fenster, Alt halten und Tab weiter drücken schaltet durch.')
   self.spin(b,'Titelleistenhöhe','titlebar_height',22,48);self.spin(b,'Titelschrift','titlebar_font',8,16)
   self.spin(b,'Abgerundete Ecken','rounding',0,40);self.spin(b,'Rahmenbreite','border_size',0,6)
   self.toggle(b,'Hintergrundunschärfe','blur');self.spin(b,'Unschärferadius','blur_size',1,15);self.spin(b,'Unschärfedurchgänge','blur_passes',1,5)
