@@ -115,8 +115,9 @@ def apply(foreground=False, terminal=False):
             if not (HOME / ".local/bin/dx-askpass").exists():
                 env["SUDO_ASKPASS"] = str(Path(repo) / "bin/dx-askpass")
             # Der Installer sichert und überschreibt keine Einstellungen (siehe install.sh) und startet die Shell am Ende neu.
+            # --keep-config: bei einem Update wird eine fremde hyprland.lua nie ersetzt (nur eine unveränderte eigene Fassung wird aktualisiert).
             progress(18, "Warte auf dein sudo-Passwort …")
-            proc = subprocess.Popen(["sudo", "-A", str(Path(repo) / "install.sh"), "--yes"], cwd=repo, env=env,
+            proc = subprocess.Popen(["sudo", "-A", str(Path(repo) / "install.sh"), "--yes", "--keep-config"], cwd=repo, env=env,
                                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
             steps = 0                                           # der Installer meldet jeden Schritt mit "==>"; daran messen wir den Fortschritt
             for line in proc.stdout:

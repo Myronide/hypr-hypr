@@ -82,6 +82,9 @@ Singleton {
     property alias altTabMouse:   settings.altTabMouse
     property alias barRevealAnywhere: settings.barRevealAnywhere
     property alias notifiedUpdate: settings.notifiedUpdate
+    property alias updateNotify:  settings.updateNotify
+    property alias updateLastNotified: settings.updateLastNotified
+    property alias updateMuted:   settings.updateMuted
     property alias barHeight:     settings.barHeight
     property alias barOpacity:    settings.barOpacity
     property alias barTop:        settings.barTop
@@ -129,6 +132,9 @@ Singleton {
             property var appFolders: []          // [{ name: "Spiele", apps: ["steam", ...] }]
             property var recentApps: []
             property bool autohide: true
+            property bool updateNotify: true         // Update-Benachrichtigungen überhaupt zeigen (Aurora → System)
+            property real updateLastNotified: 0      // wann zuletzt gemeldet (Unixzeit): höchstens einmal pro Tag
+            property string updateMuted: ""          // Version, für die der Nutzer "nicht mehr erinnern" gewählt hat
             property string notifiedUpdate: ""       // Version, für die schon eine Update-Meldung kam
             property bool barRevealAnywhere: false  // Schwebende Leiste: öffnet sich überall am Rand, nicht nur bei den Kapseln
             property bool altTabMouse: true         // Alt+Tab-Übersicht mit der Maus bedienbar (Klick, Hover, Mausrad)
@@ -950,9 +956,14 @@ Singleton {
         onLoaded: {
             try { root.updateInfo = JSON.parse(text()); } catch (e) { return; }
             const u = root.updateInfo;
-            if (u.available && (root.updateManual || u.latest !== root.notifiedUpdate)) {
-                root.notifiedUpdate = u.latest;
-                updNotify.command = ["notify-send", "-a", "Draconyx", "-i", "system-software-update", "-w", "-A", "update=Aktualisieren", "-A", "later=Später",
+            // Höchstens einmal pro Tag melden; "Nicht mehr erinnern" gilt für diese Version, der Schalter in Aurora für alles
+            const now = Date.now() / 1000;
+            const due = root.updateManual || (now - root.updateLastNotified > 86400);
+            if (u.available && root.updateNotify && u.latest !== root.updateMuted && due) {
+                root.updateLastNotified = now;
+                updNotify.version = u.latest;
+                updNotify.command = ["notify-send", "-a", "Draconyx", "-i", "system-software-update", "-w",
+                    "-A", "update=Aktualisieren", "-A", "later=Später", "-A", "mute=Nicht mehr erinnern",
                     "Draconyx-Update " + u.latest + " verfügbar", "Installiert: " + u.installed + (u.notes && u.notes.length ? "\n• " + u.notes.slice(0, 4).join("\n• ") : "")];
                 updNotify.running = false; updNotify.running = true;
             }
@@ -961,7 +972,14 @@ Singleton {
     }
     Process {
         id: updNotify
-        stdout: StdioCollector { onStreamFinished: if (text.trim() === "update") root.runUpdate() }
+        property string version: ""
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const a = text.trim();
+                if (a === "update") root.runUpdate();
+                else if (a === "mute") root.updateMuted = updNotify.version;
+            }
+        }
     }
     function checkUpdate(manual) { updateManual = !!manual; updCheck.running = false; updCheck.running = true; }
     function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/dx-update", "apply"]); }
