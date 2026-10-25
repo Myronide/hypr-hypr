@@ -95,6 +95,8 @@ ShellRoot {
         function editImage(path: string): void { Global.editFile = path; Global.popupScreen = Global.focusedScreenName(); Global.editOpen = true; }
         function editDemo(): void { snipEditor.demo(); }
         function editDeliver(mode: string): void { snipEditor.deliver(mode); }
+        function updateCheck(): void { Global.checkUpdate(true); }
+        function updateRun(): void { Global.runUpdate(); }
         function snip(mode: string): void { Global.snip(mode); }
         function toggleSearchBox(): void { Global.toggleSearchBox(""); }
         function fullscreenBar(v: string): void { Global.fullscreenBar = v; }

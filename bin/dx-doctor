@@ -9,6 +9,7 @@ sec() { printf '\n===== %s =====\n' "$1"; }
 echo "dx-doctor $(date '+%F %T')  user=$USER"
 sec "System"
 uname -sr; hyprctl version 2>/dev/null | head -1; qs --version 2>/dev/null | head -1; echo "Sitzung: ${XDG_CURRENT_DESKTOP:-?} / ${XDG_SESSION_TYPE:-?}  Instanz: ${HYPRLAND_INSTANCE_SIGNATURE:-keine}"
+echo "Draconyx-Version: installiert $(jq -r .version "$HOME/.config/draconyx/install.json" 2>/dev/null || echo ?)  Repo $(jq -r .repo "$HOME/.config/draconyx/install.json" 2>/dev/null)"
 sec "Laufende Prozesse (relevante)"
 for n in qs waybar swaync hypridle linux-wallpaper; do printf '%-16s %s\n' "$n" "$(pgrep -x "$n" | tr '\n' ' ')"; done
 for p in $(pgrep -x python3 2>/dev/null); do c=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null); case "$c" in *desktop-ui*|*dx-ui-bridge*|*dx-x11-iconify*|*settings-app*) echo "python3 $p: $c";; esac; done

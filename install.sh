@@ -354,5 +354,10 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
   fi
 fi
 
+# Installierte Version und Repo-Pfad merken (für die Update-Prüfung der Shell: dx-update)
+mkdir -p "$CONF/draconyx"
+printf '{"version": "%s", "repo": "%s"}\n' "$(cat "$REPO/VERSION" 2>/dev/null || echo 0)" "$REPO" > "$CONF/draconyx/install.json"
+[ -x "$HOME/.local/bin/dx-update" ] && "$HOME/.local/bin/dx-update" check --quiet >/dev/null 2>&1 || true
+
 [ "$CHANGED" -eq 0 ] && say "Alles war schon auf dem neuesten Stand." || say "$CHANGED Teile aktualisiert."
-say "Fertig. Einstellungen: Zahnrad in der Taskleiste. Bei Problemen:  dx-doctor"
+say "Version $(cat "$REPO/VERSION" 2>/dev/null)  –  Fertig. Einstellungen: Zahnrad in der Taskleiste. Bei Problemen:  dx-doctor"

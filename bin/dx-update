@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+# Draconyx: Update-Prüfung und -Installation für das System selbst (das Git-Repo, aus dem installiert wurde).
+#   dx-update check [--quiet]   beim Remote nachsehen, ob es eine neuere Version gibt (schreibt ~/.local/state/draconyx/update.json)
+#   dx-update status            gespeicherten Stand zeigen
+#   dx-update apply             in einem Terminal: git pull + sudo ./install.sh (fragt nach dem Passwort)
+# Die installierte Version und der Repo-Pfad stehen in ~/.config/draconyx/install.json (schreibt der Installer).
+import json, os, re, subprocess, sys, time
+from pathlib import Path
+
+HOME = Path.home()
+INSTALL = HOME / ".config/draconyx/install.json"
+STATE = HOME / ".local/state/draconyx/update.json"
+
+def read_json(p, default):
+    try: return json.loads(p.read_text())
+    except (OSError, ValueError): return default
+
+def vkey(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) + (0,) * (3 - len(re.findall(r"\d+", v)[:3]))
+
+def git(repo, *args, timeout=40):
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout)
+
+def check():
+    info = read_json(INSTALL, {})
+    repo = Path(info.get("repo", ""))
+    out = {"installed": info.get("version", "?"), "latest": info.get("version", "?"), "available": False, "notes": [], "checked": int(time.time()), "error": ""}
+    if not (repo / ".git").exists():
+        out["error"] = "Repo nicht gefunden – ./install.sh erneut aus dem Repo starten"
+    else:
+        try:
+            f = git(repo, "fetch", "--quiet", "origin")
+            if f.returncode != 0:
+                out["error"] = (f.stderr.strip().splitlines() or ["fetch fehlgeschlagen"])[-1]
+            else:
+                up = git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").stdout.strip() or "origin/master"
+                latest = git(repo, "show", up + ":VERSION").stdout.strip() or out["installed"]
+                out["latest"] = latest
+                out["available"] = vkey(latest) > vkey(out["installed"])
+                log = git(repo, "log", "--format=%s", "-n", "8", "HEAD.." + up).stdout.strip().splitlines()
+                out["notes"] = log
+        except (subprocess.TimeoutExpired, OSError) as e:
+            out["error"] = str(e)
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    if cmd == "check":
+        o = check()
+        if "--quiet" not in sys.argv:
+            print("installiert: %s  neueste: %s  %s" % (o["installed"], o["latest"], "→ UPDATE VERFÜGBAR" if o["available"] else "(aktuell)"))
+            if o["error"]: print("Hinweis:", o["error"])
+        print(json.dumps(o, ensure_ascii=False)) if "--json" in sys.argv else None
+    elif cmd == "status":
+        print(json.dumps(read_json(STATE, {}), ensure_ascii=False, indent=2))
+    elif cmd == "apply":
+        repo = read_json(INSTALL, {}).get("repo", "")
+        if not repo or not Path(repo).is_dir():
+            print("Repo nicht gefunden", file=sys.stderr); sys.exit(1)
+        script = 'cd "$1" && git pull --ff-only && sudo ./install.sh; echo; read -r -p "Fertig – Enter zum Schließen " _'
+        os.execvp(str(HOME / ".local/bin/dx-terminal"), ["dx-terminal", "--", "sh", "-c", script, "dx-update", repo])
+    else:
+        print(__doc__); sys.exit(2)
+
+if __name__ == "__main__":
+    main()

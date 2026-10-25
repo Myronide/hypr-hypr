@@ -79,6 +79,7 @@ Singleton {
     property alias recentApps:    settings.recentApps
     property alias autohide:      settings.autohide
     property alias tooltips:      settings.tooltips
+    property alias notifiedUpdate: settings.notifiedUpdate
     property alias barHeight:     settings.barHeight
     property alias barOpacity:    settings.barOpacity
     property alias barTop:        settings.barTop
@@ -125,6 +126,7 @@ Singleton {
             property var appFolders: []          // [{ name: "Spiele", apps: ["steam", ...] }]
             property var recentApps: []
             property bool autohide: true
+            property string notifiedUpdate: ""       // Version, für die schon eine Update-Meldung kam
             property bool tooltips: true            // Quickinfos beim Überfahren der Taskleistenknöpfe
             property int barHeight: 48
             property real barOpacity: 0.90
@@ -920,6 +922,41 @@ Singleton {
     function setDockGeom(mon, g) { const m = Object.assign({}, dockGeom); m[mon] = g; dockGeom = m; }
     function popupLeft() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(barMargin, g.x) : barMargin; }
     function popupRightMargin() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(8, g.screenW - (g.sx + g.sw)) : 14; }
+
+
+    // ---------- System-Update (Draconyx selbst) ----------
+    // dx-update check holt beim Remote die neueste Versionsnummer; bei einer neuen Version kommt einmal pro Version eine Meldung
+    // mit Knopf "Aktualisieren" (öffnet ein Terminal: git pull + sudo ./install.sh).
+    property var updateInfo: ({})
+    property bool updateManual: false
+    Process {
+        id: updCheck
+        command: [Theme.home + "/.local/bin/dx-update", "check", "--quiet"]
+        onExited: updRead.reload()
+    }
+    FileView {
+        id: updRead
+        path: Theme.home + "/.local/state/draconyx/update.json"
+        onLoaded: {
+            try { root.updateInfo = JSON.parse(text()); } catch (e) { return; }
+            const u = root.updateInfo;
+            if (u.available && (root.updateManual || u.latest !== root.notifiedUpdate)) {
+                root.notifiedUpdate = u.latest;
+                updNotify.command = ["notify-send", "-a", "Draconyx", "-i", "system-software-update", "-w", "-A", "update=Aktualisieren", "-A", "later=Später",
+                    "Draconyx-Update " + u.latest + " verfügbar", "Installiert: " + u.installed + (u.notes && u.notes.length ? "\n• " + u.notes.slice(0, 4).join("\n• ") : "")];
+                updNotify.running = false; updNotify.running = true;
+            }
+            root.updateManual = false;
+        }
+    }
+    Process {
+        id: updNotify
+        stdout: StdioCollector { onStreamFinished: if (text.trim() === "update") root.runUpdate() }
+    }
+    function checkUpdate(manual) { updateManual = !!manual; updCheck.running = false; updCheck.running = true; }
+    function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/dx-update", "apply"]); }
+    Timer { interval: 6 * 3600 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
+    Timer { interval: 120000; running: true; onTriggered: root.checkUpdate(false) }      // zwei Minuten nach dem Start
 
     // ---------- Snip-Werkzeug ----------
     // snip("region"): alle Bildschirme einfrieren, Bereich aufziehen. snip("screen"): ganzen Bildschirm unter dem Fokus direkt kopieren+speichern.

@@ -435,5 +435,27 @@ class Settings(Gtk.Application):
   c.connect('color-set',picked);self.row(b,'Akzentfarbe',c,'Hell- und Dunkelvarianten werden daraus abgeleitet.')
  def system(self):
   b=self.page('System','Weitere Geräteeinstellungen ohne Konfigurationsdateien öffnen.')
+  # ---- Draconyx-Update ----
+  upd=Path.home()/'.local/state/draconyx/update.json'
+  def upd_info():
+   try:return json.loads(upd.read_text())
+   except (OSError,ValueError):return {}
+  info=upd_info()
+  vl=Gtk.Label(xalign=1);vl.set_line_wrap(True)
+  def show(i):
+   if not i:vl.set_text('Noch nicht geprüft')
+   elif i.get('error'):vl.set_text('Installiert: %s – Prüfung nicht möglich (%s)'%(i.get('installed','?'),i['error']))
+   elif i.get('available'):vl.set_text('Installiert: %s – NEU: %s'%(i.get('installed','?'),i.get('latest','?')))
+   else:vl.set_text('Installiert: %s – aktuell'%i.get('installed','?'))
+  show(info)
+  self.row(b,'Draconyx-Version',vl,'Die Shell prüft alle paar Stunden selbst und meldet neue Versionen als Benachrichtigung.')
+  def check(*_):
+   vl.set_text('Prüfe …')
+   def work():
+    subprocess.run([str(Path.home()/'.local/bin/dx-update'),'check','--quiet'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    GLib.idle_add(show,upd_info())
+   threading.Thread(target=work,daemon=True).start()
+  self.button(b,'Nach Updates suchen','Jetzt prüfen',check)
+  self.button(b,'System aktualisieren','Aktualisieren',lambda:subprocess.Popen([str(Path.home()/'.local/bin/dx-update'),'apply'],start_new_session=True),'Öffnet ein Terminal: neuesten Stand holen und installieren (fragt nach dem sudo-Passwort).')
   for title,args in [('Netzwerkverbindungen',['nm-connection-editor']),('Audio-Geräte',['kcmshell6','kcm_pulseaudio']),('Bluetooth',['kcmshell6','kcm_bluetooth']),('Tastatur',['kcmshell6','kcm_keyboard']),('Maus',['kcmshell6','kcm_mouse']),('Schriften und Darstellung',['systemsettings']),('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
 Settings().run(None)
