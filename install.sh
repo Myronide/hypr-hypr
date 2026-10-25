@@ -76,15 +76,46 @@ done
 [ -d "$BACKUP" ] && say "Einstellungen gesichert in ${BACKUP/#$HOME/~}"
 
 # ---------------------------------------------------------------- 1. Pakete
-PKGS=(quickshell jq python python-gobject python-pillow gtk3 grim wl-clipboard zenity xdotool git rsync ttf-inter papirus-icon-theme
+# Jeder Eintrag: "Name" oder "Name|Alternative|…" (je nach Distribution heißt ein Paket anders, z. B. ttf-inter / inter-font).
+# Es wird das erste Paket genommen, das es in den Paketquellen gibt; ein fehlendes Paket stoppt die anderen nicht mehr.
+PKGS=(hyprland quickshell jq python python-gobject python-pillow gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
+      "inter-font|ttf-inter" papirus-icon-theme noto-fonts noto-fonts-emoji
+      qt6-wayland qt6-svg qt6-5compat qt6-imageformats qt6-multimedia
+      pipewire pipewire-pulse wireplumber playerctl networkmanager nm-connection-editor bluez bluez-utils blueman pavucontrol
+      power-profiles-daemon libnotify glib2 xdg-utils xdg-user-dirs xdg-desktop-portal-hyprland polkit procps-ng pciutils
       kitty ghostty dolphin swaync hypridle hyprlock cliphist plocate)
-WE_PKGS=(base-devel cmake glm sdl2 wayland-protocols ffmpeg mpv glfw glew freeglut lz4 libpulse libcups at-spi2-core
-         nss libxcomposite libxdamage nspr libxrandr)
-missing=()
-for p in "${PKGS[@]}" $([ "$DO_WE" = 1 ] && echo "${WE_PKGS[@]}"); do pacman -Qq "$p" >/dev/null 2>&1 || missing+=("$p"); done
-if [ "$DO_PKGS" = 1 ] && [ "${#missing[@]}" -gt 0 ]; then
-  say "Fehlende Pakete: ${missing[*]}"
-  if ask "Mit sudo pacman installieren?"; then sudo pacman -S --needed --noconfirm "${missing[@]}" || warn "Einige Pakete ließen sich nicht installieren – bitte von Hand nachholen."
+WE_PKGS=(base-devel cmake make gcc pkgconf glm sdl2 wayland wayland-protocols libxkbcommon ffmpeg mpv glfw glew freeglut lz4 zlib
+         libpulse libcups at-spi2-core nss libxcomposite libxdamage nspr libxrandr libxss libxi libxcursor libxinerama libglvnd mesa)
+
+# Paketname auflösen: installiert → fertig; sonst erste Alternative aus den Paketquellen (pacman -Si)
+want=(); aur=()
+resolve_pkg() {
+  local spec="$1" alt
+  IFS='|' read -ra alts <<< "$spec"
+  for alt in "${alts[@]}"; do pacman -Qq "$alt" >/dev/null 2>&1 && return 0; done      # schon da
+  for alt in "${alts[@]}"; do pacman -Si "$alt" >/dev/null 2>&1 && { want+=("$alt"); return 0; }; done
+  aur+=("${alts[0]}")                                                                    # nicht in den Paketquellen
+}
+for p in "${PKGS[@]}" $([ "$DO_WE" = 1 ] && echo "${WE_PKGS[@]}"); do resolve_pkg "$p"; done
+FAILED_PKGS=()
+if [ "$DO_PKGS" = 1 ] && { [ "${#want[@]}" -gt 0 ] || [ "${#aur[@]}" -gt 0 ]; }; then
+  [ "${#want[@]}" -gt 0 ] && say "Fehlende Pakete: ${want[*]}"
+  if ask "Mit sudo pacman installieren?"; then
+    if [ "${#want[@]}" -gt 0 ]; then
+      if ! sudo pacman -S --needed --noconfirm "${want[@]}"; then
+        warn "Sammel-Installation fehlgeschlagen – versuche jedes Paket einzeln"
+        for p in "${want[@]}"; do sudo pacman -S --needed --noconfirm "$p" >/dev/null 2>&1 || FAILED_PKGS+=("$p"); done
+      fi
+    fi
+    # Was die Paketquellen nicht kennen (z. B. AUR): mit paru/yay versuchen, sofern vorhanden
+    for p in "${aur[@]}"; do
+      helper=""; for h in paru yay; do command -v "$h" >/dev/null && { helper="$h"; break; }; done
+      if [ -n "$helper" ]; then "$helper" -S --needed --noconfirm "$p" >/dev/null 2>&1 || FAILED_PKGS+=("$p (AUR)")
+      else FAILED_PKGS+=("$p (nicht in den Paketquellen)"); fi
+    done
+    if [ "${#FAILED_PKGS[@]}" -gt 0 ]; then
+      warn "Diese Pakete fehlen noch und müssen von Hand installiert werden: ${FAILED_PKGS[*]}"
+    else say "Alle Pakete sind installiert"; fi
   else warn "Übersprungen. Ohne diese Pakete funktionieren Teile nicht."; fi
 fi
 
@@ -167,11 +198,16 @@ fi
 
 # ---------------------------------------------------------------- 4. Wallpaper Engine (repariert)
 if [ "$DO_WE" = 1 ]; then
+  # Ein Fehler beim Bauen darf den Rest der Installation nicht abbrechen: eigener Unterprozess
+  set +e
+  (
+  set -euo pipefail
+  for t in cmake make g++ git; do command -v "$t" >/dev/null || { echo "    Werkzeug fehlt: $t" >&2; exit 4; }; done
   SRC="$HOME/.local/src/linux-wallpaperengine"; PREFIX="$HOME/.local/opt/linux-wallpaperengine"
   STAMP="$PREFIX/.draconyx-build"
   WANT="$(cat "$HERE/patches/linux-wallpaperengine-fixes.patch" "$HERE/wallpaper-engine/UPSTREAM_COMMIT" | sha256sum | cut -c1-16)"
   if [ "$FORCE" != 1 ] && [ -x "$PREFIX/linux-wallpaperengine" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT" ]; then
-    say "Wallpaper Engine ist aktuell – nichts zu bauen"
+    say "Wallpaper Engine ist aktuell – nichts zu bauen"; exit 3
   else
     say "Wallpaper Engine bauen (Web-Wallpaper-Fix + Mausposition)"
     if [ ! -d "$SRC/.git" ]; then
@@ -190,9 +226,17 @@ if [ "$DO_WE" = 1 ]; then
           -DCMAKE_CXX_FLAGS="-ffat-lto-objects -Wno-builtin-macro-redefined" -DCMAKE_C_FLAGS="-Wno-builtin-macro-redefined"
     cmake --build "$SRC/build" -j"$(nproc)"      # nur was sich geändert hat (Build-Ordner bleibt erhalten)
     cmake --install "$SRC/build" >/dev/null
-    echo "$WANT" > "$STAMP"; CHANGED=$((CHANGED+1))
+    echo "$WANT" > "$STAMP"
     say "Wallpaper Engine ist installiert: $PREFIX"
   fi
+  )
+  rc=$?
+  set -e
+  case "$rc" in
+    0) CHANGED=$((CHANGED+1));;
+    3) ;;
+    *) warn "Wallpaper Engine konnte nicht gebaut werden (Code $rc) – der Rest ist installiert. Fehlende Pakete nachholen und ./install.sh erneut starten.";;
+  esac
 fi
 
 # ---------------------------------------------------------------- 5. Aurora komplett auf die Shell umstellen
