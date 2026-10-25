@@ -33,15 +33,24 @@ if [ -f "$PIDF" ]; then
 fi
 # übrig gebliebene Instanzen (z. B. aus schnellen Klicks) sicher beenden
 for p in $(pgrep -x linux-wallpaper); do kill "$p" 2>/dev/null; done
+# Reste des alten Aurora-Renderers (liegt sonst unter dem neuen Wallpaper und kommt beim Abwählen wieder zum Vorschein)
+for p in $(pgrep -f '/aurora/native/wallpaper/aurora-wallpaper' | grep -vx "$$"); do kill "$p" 2>/dev/null; done
+rm -f "${XDG_RUNTIME_DIR:-/tmp}/aurora-wallpaper-pids.json"
 sleep 0.4
 for p in $(pgrep -x linux-wallpaper); do kill -9 "$p" 2>/dev/null; done
 mirror "$@"
 [ $# -eq 0 ] && exit 0
 
+# Ordner jeder Wallpaper-ID aus der Liste holen: die Engine findet eine bloße ID nur in der Standard-Steam-Bibliothek
+# (liegt der Workshop-Ordner woanders, bleibt der Bildschirm schwarz) – mit vollem Pfad klappt es überall.
+LIST="$("$HOME/.local/bin/dx-we-list" 2>/dev/null)"
 args=()
 for kv in "$@"; do
   m="${kv%%=*}"; id="${kv#*=}"
-  args+=(--screen-root "$m" --bg "$id" --scaling fill)
+  dir="$(printf '%s\n' "$LIST" | awk -F'\t' -v id="$id" '$1==id && $4!="" {print $4; exit}')"
+  dir="${dir%/*}"
+  [ -f "$dir/project.json" ] || dir="$id"
+  args+=(--screen-root "$m" --bg "$dir" --scaling fill)
 done
 # Assets der Wallpaper Engine (die Steam-Bibliothek kann überall liegen): Datei, Aurora-Einstellung oder Steam-Bibliotheken
 assets=""
