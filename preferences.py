@@ -53,14 +53,7 @@ def _shell_we(assign):
  subprocess.Popen(['qs','-c','draconyx','ipc','call','shell','weReapply'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 def stop_engine():
  if SHELL:_shell_we({});return
- pidfile=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-wallpaper-pids.json'
- if pidfile.exists():
-  for pid in json.loads(pidfile.read_text()):
-   try:
-    command=Path('/proc')/str(pid)/'cmdline'
-    if b'/aurora/native/wallpaper/aurora-wallpaper' in command.read_bytes():os.kill(pid,15)
-   except OSError:pass
-  pidfile.unlink(missing_ok=True)
+ return
 def apply_background(p,engine=False,preview=False):
  if engine and SHELL:
   folder=Path(p['engine_path']).expanduser()
@@ -69,20 +62,7 @@ def apply_background(p,engine=False,preview=False):
   (BASE/'preferences.json').write_text(json.dumps(p,ensure_ascii=False,indent=2))
   monitors=[p['engine_monitor']] if p['engine_monitor'] else [m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
   _shell_we({m:folder.name for m in monitors});p['engine_active']=True;return
- if engine:
-  folder=Path(p['engine_path']).expanduser()
-  if not (folder/'project.json').is_file():raise ValueError('Bitte einen Wallpaper-Engine-Hintergrund auswählen.')
-  exe=BASE/'native/wallpaper/aurora-wallpaper'
-  if not exe.is_file():raise ValueError('Der Hintergrund-Renderer ist noch nicht verfügbar.')
-  (BASE/'preferences.json').write_text(json.dumps(p,ensure_ascii=False,indent=2))
-  if preview:
-   subprocess.Popen([str(exe),str(folder),p['engine_monitor'] or 'DP-2','--preview'],start_new_session=True,stdout=subprocess.DEVNULL,stderr=open(Path.home()/'.cache/aurora/wallpaper-preview.log','a'));return
-  stop_engine();monitors=[p['engine_monitor']] if p['engine_monitor'] else [m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
-  processes=[]
-  for monitor in monitors:
-   log=open(Path.home()/'.cache/aurora/wallpaper.log','a')
-   proc=subprocess.Popen([str(exe),str(folder),monitor],start_new_session=True,stdout=log,stderr=log);processes.append(proc.pid)
-  (Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-wallpaper-pids.json').write_text(json.dumps(processes));p['engine_active']=True
+ if engine:raise ValueError('Animierte Hintergründe laufen über die Draconyx-Shell (Wallpaper Engine) – bitte die Shell starten.')
  else:
   path=Path(p['wallpaper']).expanduser()
   if not path.is_file():raise ValueError('Bitte ein vorhandenes Hintergrundbild auswählen.')

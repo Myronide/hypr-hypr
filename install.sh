@@ -179,6 +179,13 @@ if [ -e "$AU/desktop-ui" ] || [ -e "$AU/start-desktop" ]; then
     put "$REPO/$f" "$AU/$f" 755
   done
 fi
+# Alter Aurora-Hintergrund-Renderer: beenden und entfernen (Wallpaper Engine läuft jetzt aus der Shell; der alte lag sonst
+# unter dem neuen Wallpaper und kam beim Abwählen wieder zum Vorschein)
+for p in $(pgrep -f '[a]urora/native/wallpaper/aurora-wallpaper' || true); do kill "$p" 2>/dev/null || true; done
+rm -f "$XDG_RUNTIME_DIR/aurora-wallpaper-pids.json"
+for d in "$AU/native/wallpaper" "$REPO/native/wallpaper"; do
+  [ -e "$d/aurora-wallpaper" ] && { rm -f "$d/aurora-wallpaper"; say "alten Hintergrund-Renderer entfernt ($d)"; }
+done
 if pgrep -x waybar >/dev/null; then
   say "waybar läuft noch – wird beendet (die Taskleiste kommt jetzt aus der Shell)"
   pkill -x waybar || true

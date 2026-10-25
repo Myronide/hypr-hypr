@@ -7,13 +7,9 @@ __pycache__/
 
 # Compiled binaries from native/ build scripts
 native/preview/window-preview
-native/wallpaper/aurora-wallpaper
 aurora-native-next.so
 
 # CMake build output
-native/wallpaper/build/
-native/wallpaper/CMakeCache.txt
-native/wallpaper/CMakeFiles/
 
 # Editor and OS junk
 *.swp
