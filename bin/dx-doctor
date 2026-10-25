@@ -17,6 +17,19 @@ n_ic=0; n_br=0
 for p in $(pgrep -x python3 2>/dev/null); do c=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null); case "$c" in *dx-x11-iconify*) n_ic=$((n_ic+1));; *dx-ui-bridge*) n_br=$((n_br+1));; esac; done
 echo "dx-x11-iconify: $n_ic (soll 1)   dx-ui-bridge: $n_br (soll 1)"
 command -v xdotool >/dev/null && echo "xdotool: ja" || echo "xdotool: FEHLT (Minimieren von XWayland-Apps braucht es)"
+sec "Wallpaper Engine"
+P="$HOME/.local/opt/linux-wallpaperengine"
+[ -x "$P/linux-wallpaperengine" ] && echo "Engine gebaut: ja ($(stat -c %y "$P/linux-wallpaperengine" | cut -d. -f1))" || echo "Engine gebaut: NEIN ($P)"
+echo "Gewählt (settings.json): $(jq -c .weWallpapers "$HOME/.local/state/draconyx/settings.json" 2>/dev/null)"
+echo "Läuft: $(pgrep -ax linux-wallpaper | cut -c1-400)"
+echo "Aurora-Renderer (alt): $(pgrep -f 'aurora/native/wallpaper/aurora-wallpaper' | tr '\n' ' ')"
+echo "Andere Hintergrund-Programme: $(for n in hyprpaper swww-daemon swaybg mpvpaper wpaperd; do pgrep -x $n >/dev/null && printf '%s ' $n; done)"
+echo "we-assets-Datei: $(head -1 "$HOME/.config/draconyx/we-assets" 2>/dev/null)"
+echo "Assets in Aurora-Einstellung: $(jq -r .engine_assets "$H/aurora/preferences.json" 2>/dev/null)"
+echo "Steam-Bibliotheken:"; grep -h '"path"' "$HOME/.local/share/Steam/steamapps/libraryfolders.vdf" "$HOME/.steam/steam/steamapps/libraryfolders.vdf" 2>/dev/null | sort -u
+echo "Durchsuchte Workshop-Ordner:"; "$HOME/.local/bin/dx-we-list" --roots 2>&1 | head -12
+echo "GPU/OpenGL: $(lspci 2>/dev/null | grep -iE 'vga|3d' | cut -d: -f3 | tr '\n' ';')"
+echo "--- Engine-Log (letzte 25 Zeilen) ---"; tail -25 "${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.log" 2>/dev/null | cut -c1-200
 sec "Hyprland: Konfigurationsfehler / Plugins / Monitore"
 hyprctl configerrors 2>&1 | head -12
 hyprctl plugin list 2>&1 | grep -E '^Plugin' | head
