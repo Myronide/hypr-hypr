@@ -22,6 +22,6 @@ open("CHANGELOG.md", "w", encoding="utf-8").write(t[:i] + "\n## %s\n- %s\n" % (n
 PY
 git add VERSION CHANGELOG.md
 git commit -qm "Version $new: $msg"
-git tag "v$new"
+git tag -a "v$new" -m "Version $new: $msg"
 echo "Version $cur -> $new  (Commit + Tag v$new)"
 echo "Zum Veröffentlichen:  git push --follow-tags"
