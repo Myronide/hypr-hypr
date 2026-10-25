@@ -21,6 +21,13 @@ for id in "${IDS[@]}"; do
   { echo "$MARK"; sed -E 's|^(Exec=[^ ]+)|\1 --ozone-platform=x11|' "$src"; } > "$dst.tmp"
   if [ -f "$dst" ] && cmp -s "$dst.tmp" "$dst"; then rm -f "$dst.tmp"; else mv "$dst.tmp" "$dst"; echo "angelegt: $dst"; n=$((n+1)); fi
 done
+# Chromium-Browser: dieselbe Option über die jeweilige Flags-Datei (nur anlegen, wenn es sie nicht gibt)
+for pair in "chromium:chromium-flags.conf" "google-chrome-stable:chrome-flags.conf" "vivaldi-stable:vivaldi-flags.conf" "microsoft-edge-stable:microsoft-edge-stable-flags.conf" "opera:opera-flags.conf"; do
+  bin="${pair%%:*}"; fl="$HOME/.config/${pair#*:}"
+  command -v "$bin" >/dev/null 2>&1 || continue
+  [ -e "$fl" ] && continue
+  printf '%s\n%s\n' "$MARK" '--ozone-platform=x11' > "$fl"; echo "angelegt: $fl"; n=$((n+1))
+done
 command -v update-desktop-database >/dev/null && update-desktop-database "$USER_APPS" 2>/dev/null
 [ "$n" -gt 0 ] && echo "Hinweis: laufende Apps einmal beenden und neu starten, damit sie über XWayland laufen."
 exit 0

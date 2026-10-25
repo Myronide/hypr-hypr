@@ -72,6 +72,13 @@ hl.env("HYPRCURSOR_SIZE", "24")
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 hl.env("QT_QPA_PLATFORMTHEME", "kde")      -- KDE-Farbschema (dunkel) auch unter Hyprland, z. B. für Dolphin
 hl.env("GTK_THEME", "adw-gtk3-dark")
+-- Electron-Apps (Discord, Vesktop, Slack, VS Code, Obsidian …) laufen über XWayland: Hyprland ignoriert das Minimieren-Symbol nativer
+-- Wayland-Fenster, bei XWayland-Fenstern fängt die Shell es ab. Über diese Umgebungsvariable gilt das für JEDEN Start (Autostart, Terminal,
+-- Startmenü) – nicht nur für Starter, die wir angelegt haben. Aus: Datei ~/.config/draconyx/electron-native anlegen.
+do
+    local f = io.open((os.getenv("HOME") or "") .. "/.config/draconyx/electron-native", "r")
+    if f then f:close() else hl.env("ELECTRON_OZONE_PLATFORM_HINT", "x11") end
+end
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("MOZ_ENABLE_WAYLAND", "1")

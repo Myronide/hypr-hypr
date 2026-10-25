@@ -162,7 +162,20 @@ say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
 for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
 # csd-apps ist deine Liste (Einstellungen → Fenster → eigene Titelleisten): nur anlegen, wenn es sie noch nicht gibt
-[ -e "$CONF/hypr/csd-apps" ] || { cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1)); }
+if [ ! -e "$CONF/hypr/csd-apps" ]; then
+  cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1))
+else
+  # Nur NEUE Standard-Apps (seit dem letzten Lauf) an deine Liste anhängen; was du entfernt hast, bleibt entfernt
+  seen="$CONF/draconyx/csd-defaults-seen"; mkdir -p "$CONF/draconyx"; touch "$seen"
+  added=0
+  while IFS= read -r app; do
+    [ -n "$app" ] || continue
+    grep -qxF "$app" "$seen" && continue
+    grep -qxF "$app" "$CONF/hypr/csd-apps" || { echo "$app" >> "$CONF/hypr/csd-apps"; added=$((added+1)); }
+  done < "$HERE/hypr/csd-apps"
+  [ "$added" -gt 0 ] && { echo "    $added Apps mit eigener Titelleiste zur Liste hinzugefügt"; CHANGED=$((CHANGED+1)); }
+fi
+cp "$HERE/hypr/csd-apps" "$CONF/draconyx/csd-defaults-seen"
 # Monitore: die Vorlage ist nur ein neutrales Beispiel. Die echte monitors_local.lua entsteht aus den erkannten Bildschirmen (siehe unten); eine vorhandene bleibt unangetastet.
 put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
 # hyprland.lua: nie eine Datei überschreiben, die du selbst geändert hast. Wir merken uns die Prüfsumme der zuletzt von uns installierten

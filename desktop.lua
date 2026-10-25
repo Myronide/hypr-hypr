@@ -43,8 +43,8 @@ if bars_ready then
         for class in csd:lines() do
             if class ~= '' then
                 n = n + 1
-                local pattern = class:gsub('([%W])', '\\%1')
-                hl.window_rule({ name = 'aurora-csd-' .. n, match = { class = '^' .. pattern .. '$' }, ['hyprbars:no_bar'] = true })
+                local pattern = class:gsub('([%W])', '\\%1'):gsub('\\%*', '.*')   -- * = beliebig viele Zeichen (z. B. org.gnome.*)
+                hl.window_rule({ name = 'aurora-csd-' .. n, match = { class = '(?i)^' .. pattern .. '$' }, ['hyprbars:no_bar'] = true })
             end
         end
         csd:close()
