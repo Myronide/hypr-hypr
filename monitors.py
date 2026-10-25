@@ -164,3 +164,28 @@ def init_config(path=CONF):
     normalize(mons)
     write_config(mons, path)
     return len(mons)
+
+
+def sync_missing(path=CONF):
+    """Vor jedem Neuladen der Hyprland-Konfiguration: Bildschirme, die in monitors_local.lua NICHT ausdrücklich stehen, mit ihrem
+    aktuellen Zustand eintragen. Sonst fällt ein Bildschirm, den man von Hand (z. B. per hyprctl oder einem anderen Programm)
+    angeordnet hat, nach jedem Neuladen/Update wieder auf die automatische Anordnung zurück. Ausdrücklich eingetragene Bildschirme
+    bleiben unverändert (die Datei ist die Wahrheit). Gibt die Zahl der ergänzten Bildschirme zurück."""
+    path = Path(path)
+    if not path.exists():
+        return init_config(path)
+    have = parse_config(path)
+    mons = [m for m in live() if not m["disabled"] and m["name"] not in have]
+    if not mons:
+        return 0
+    text = path.read_text(encoding="utf-8")
+    shutil.copy2(path, str(path) + ".vor-" + time.strftime("%Y%m%d-%H%M%S"))
+    new = "\n".join(lua_block(m) for m in mons) + "\n"
+    i = re.search(r'^\s*hl\.monitor\s*\(\s*\{\s*output\s*=\s*""', text, re.M)
+    text = text[:i.start()] + new + text[i.start():] if i else text.rstrip("\n") + "\n\n" + new
+    path.write_text(text, encoding="utf-8")
+    return len(mons)
+
+
+def active_count():
+    return len([m for m in live() if not m["disabled"]])

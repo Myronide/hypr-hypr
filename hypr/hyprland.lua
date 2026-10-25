@@ -320,6 +320,8 @@ DXZones = require("dx_zones")
 DXTiling = require("dx_tiling")
 DXSnap = require("dx_snap")
 DXSnap.setup(DXTiling, { minimize = minimizeWindow })
+DXSizes = require("dx_sizes")   -- Fenstergröße beim Schließen merken, beim Öffnen wiederherstellen
+DXSizes.setup(DXSnap)
 
 B("snap_up", "Fenster nach oben (Snap/Maximieren)", mainMod .. " + Up",    function() DXSnap.arrow("up") end)
 B("snap_down", "Fenster nach unten (Snap/Wiederherstellen)", mainMod .. " + Down",  function() DXSnap.arrow("down") end)

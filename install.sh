@@ -164,7 +164,7 @@ if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55
 fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
-for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
+for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua dx_sizes.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
 # csd-apps ist deine Liste (Einstellungen → Fenster → eigene Titelleisten): nur anlegen, wenn es sie noch nicht gibt
 if [ ! -e "$CONF/hypr/csd-apps" ]; then
   cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1))
@@ -360,8 +360,21 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
     done
   fi
   if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    # Vor dem Neuladen: Bildschirme sichern, die nicht ausdrücklich in monitors_local.lua stehen (sonst springen von Hand angeordnete
+    # Bildschirme nach jedem Update zurück). Danach prüfen, dass noch ein Bildschirm an ist – sonst die Sicherung zurückspielen.
+    if [ -e "$CONF/hypr/monitors_local.lua" ]; then
+      r="$(python3 -I "$HERE/bin/dx-monitors" sync 2>&1 || true)"; echo "    $r"
+    fi
     say "Hyprland-Konfiguration neu laden"
     hyprctl reload >/dev/null 2>&1 || warn "hyprctl reload fehlgeschlagen"
+    sleep 1
+    if [ "$(python3 -I "$HERE/bin/dx-monitors" active 2>/dev/null || echo 1)" = "0" ]; then
+      bak="$(ls -t "$CONF/hypr"/monitors_local.lua.vor-* 2>/dev/null | head -1)"
+      if [ -n "$bak" ]; then
+        warn "Nach dem Neuladen war kein Bildschirm an – stelle monitors_local.lua aus der Sicherung wieder her"
+        cp "$bak" "$CONF/hypr/monitors_local.lua"; hyprctl reload >/dev/null 2>&1 || true
+      fi
+    fi
     sleep 1; err="$(hyprctl configerrors 2>/dev/null | head -3)"; [ -n "$err" ] && warn "Konfigurationsfehler: $err"
     if command -v qs >/dev/null; then
       say "Shell neu starten"

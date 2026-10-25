@@ -79,6 +79,13 @@ local function nearArea(w)
     return math.abs(w.size.x - aw) < 12 and math.abs(w.size.y - ah) < 12
 end
 
+-- Größe vor dem Maximieren (für die Fenstergrößen-Erinnerung dx_sizes), sonst nil
+function M.maxedOrig(w)
+    local o = w ~= nil and userMax[w.address] or nil
+    if o ~= nil then return o.w, o.h end
+    return nil
+end
+
 function M.isMaxed(w)
     return w ~= nil and userMax[w.address] ~= nil and nearArea(w)
 end

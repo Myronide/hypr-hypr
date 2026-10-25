@@ -880,10 +880,10 @@ Singleton {
 
     // ---------- Anordnung der Taskleiste: jeder Teil sitzt links, mittig oder rechts ----------
     readonly property var barItemIds: ["start", "search", "taskview", "code", "wallpaper", "mode", "desktops", "apps",
-                                       "tray", "system", "notifications", "clock", "settings", "showDesktop"]
+                                       "tray", "system", "notifications", "clock", "settings", "showDesktop", "update"]
     function defaultLayout(style) {
         const tools = ["start", "search", "taskview", "code", "wallpaper", "mode", "desktops"];
-        const sys = ["tray", "system", "notifications", "clock", "settings", "showDesktop"];
+        const sys = ["update", "tray", "system", "notifications", "clock", "settings", "showDesktop"];
         if (style === "dock") return { left: [], center: tools.concat(["apps"]), right: sys };
         return { left: tools, center: ["apps"], right: sys };
     }

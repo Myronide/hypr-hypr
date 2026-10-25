@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # Draconyx: Bildschirme.   dx-monitors show     erkannte Bildschirme anzeigen
 #                          dx-monitors init     monitors_local.lua aus dem laufenden Zustand anlegen, falls es sie noch nicht gibt
+#                          dx-monitors sync     nicht eingetragene Bildschirme mit ihrem jetzigen Zustand ergänzen (vor jedem Neuladen)
+#                          dx-monitors active   Zahl der eingeschalteten Bildschirme
 import sys
 from pathlib import Path
 for d in (Path.home() / ".config/hypr/aurora", Path(__file__).resolve().parent.parent):
@@ -15,5 +17,10 @@ if cmd == "show":
 elif cmd == "init":
     n = M.init_config()
     print("monitors_local.lua angelegt (%d Bildschirme)" % n if n else "monitors_local.lua vorhanden oder keine Bildschirme erkannt – nichts geändert")
+elif cmd == "sync":
+    n = M.sync_missing()
+    print("%d Bildschirm(e) in monitors_local.lua ergänzt" % n if n else "monitors_local.lua ist vollständig")
+elif cmd == "active":
+    print(M.active_count())
 else:
     print(__doc__); sys.exit(2)

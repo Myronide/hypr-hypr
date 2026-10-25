@@ -22,6 +22,21 @@ def vkey(v):
 def git(repo, *args, timeout=40):
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout)
 
+
+def changelog(text, installed, latest):
+    """Abschnitte "## x.y.z" aus dem CHANGELOG, die neuer als die installierte Version sind (bis zur neuesten): [{version, items[]}]"""
+    out, cur = [], None
+    for line in text.splitlines():
+        m = re.match(r"##\s+(\d+\.\d+\.\d+)", line)
+        if m:
+            cur = {"version": m.group(1), "items": []}
+            out.append(cur)
+        elif cur is not None and line.strip().startswith("-"):
+            cur["items"].append(line.strip().lstrip("-").strip())
+        elif cur is not None and line.startswith("  ") and cur["items"]:
+            cur["items"][-1] += " " + line.strip()                      # fortgesetzte Zeile
+    return [c for c in out if vkey(installed) < vkey(c["version"]) <= vkey(latest)]
+
 def check():
     info = read_json(INSTALL, {})
     repo = Path(info.get("repo", ""))
@@ -40,6 +55,7 @@ def check():
                 out["available"] = vkey(latest) > vkey(out["installed"])
                 log = git(repo, "log", "--format=%s", "-n", "8", "HEAD.." + up).stdout.strip().splitlines()
                 out["notes"] = log
+                out["changelog"] = changelog(git(repo, "show", up + ":CHANGELOG.md").stdout, out["installed"], latest)
         except (subprocess.TimeoutExpired, OSError) as e:
             out["error"] = str(e)
     STATE.parent.mkdir(parents=True, exist_ok=True)

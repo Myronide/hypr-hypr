@@ -160,6 +160,17 @@ class Settings(Gtk.Application):
   self.toggle(b,'Fokus folgt der Maus','focus_follows_mouse','Ausgeschaltet bleibt der Tastaturfokus beim zuletzt angeklickten Fenster.')
  def windows(self):
   b=self.page('Fenster','Größe und Erscheinung der Titelleisten, Fensterkanten und Effekte.')
+  flag=Path.home()/'.config/draconyx/window-size-memory'
+  def mem_on():
+   try:return flag.read_text().strip()!='off'
+   except OSError:return True
+  msw=Gtk.Switch(active=mem_on());msw.set_valign(Gtk.Align.CENTER)
+  def mem_set(w,_):
+   flag.parent.mkdir(parents=True,exist_ok=True);flag.write_text('on\n' if w.get_active() else 'off\n')
+  msw.connect('notify::active',mem_set);self.row(b,'Fenstergröße merken',msw,'Beim Schließen merkt sich Draconyx die Größe eines schwebenden Fensters und stellt sie beim nächsten Öffnen derselben App wieder her (Dialoge, Vollbild und Spiele bleiben unberührt).')
+  def mem_reset(*_):
+   (Path.home()/'.config/draconyx/window-sizes.tsv').unlink(missing_ok=True);self.message('Gemerkte Fenstergrößen gelöscht.')
+  self.button(b,'Gemerkte Größen','Alle vergessen',mem_reset)
   self.sw(b,'Alt+Tab mit der Maus bedienen','altTabMouse',True,'Aus: Die Alt+Tab-Übersicht reagiert nur auf die Tastatur (Tab, Pfeile, Alt loslassen). Antippen springt sofort zum vorigen Fenster, Alt halten und Tab weiter drücken schaltet durch.')
   self.spin(b,'Titelleistenhöhe','titlebar_height',22,48);self.spin(b,'Titelschrift','titlebar_font',8,16)
   self.spin(b,'Abgerundete Ecken','rounding',0,40);self.spin(b,'Rahmenbreite','border_size',0,6)
@@ -541,9 +552,9 @@ class Settings(Gtk.Application):
  # ---- Anordnung der Taskleisten-Teile: jeder Teil links, mittig oder rechts, Reihenfolge per Pfeile ----
  BAR_ITEMS=[('start','Startknopf'),('search','Suche'),('taskview','Fensterübersicht'),('code','Coding Space'),('wallpaper','Wallpaper Engine'),
             ('mode','Fenstermodus-Knopf'),('desktops','Desktop-Punkte'),('apps','App-Symbole'),('tray','Tray'),('system','Netzwerk und Lautstärke'),
-            ('notifications','Benachrichtigungen'),('clock','Uhr'),('settings','Einstellungen'),('showDesktop','Desktop-anzeigen-Streifen')]
+            ('notifications','Benachrichtigungen'),('clock','Uhr'),('settings','Einstellungen'),('showDesktop','Desktop-anzeigen-Streifen'),('update','Update-Anzeige')]
  def default_layout(self,style):
-  tools=['start','search','taskview','code','wallpaper','mode','desktops'];sysi=['tray','system','notifications','clock','settings','showDesktop']
+  tools=['start','search','taskview','code','wallpaper','mode','desktops'];sysi=['update','tray','system','notifications','clock','settings','showDesktop']
   return {'left':[],'center':tools+['apps'],'right':sysi} if style=='dock' else {'left':tools,'center':['apps'],'right':sysi}
  def current_layout(self,style):
   saved=(shell_get('barLayouts',{}) or {}).get(style);default=self.default_layout(style)
@@ -611,7 +622,7 @@ class Settings(Gtk.Application):
   head=Gtk.Label(label='Bestandteile',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
   for key,title,default,desc in [('start','Startknopf',True,'Rechtsklick auf den Knopf: Symbol wählen (Draconyx, Arch, eigenes Bild).'),('search','Suche',True,''),('taskview','Fensterübersicht',True,''),
     ('code','Coding Space',True,''),('wallpaper','Wallpaper Engine',True,''),('mode','Fenstermodus-Knopf (Schweben / Kacheln)',True,''),('desktops','Desktop-Punkte',True,''),('apps','App-Symbole',True,''),
-    ('tray','Tray',True,''),('system','Netzwerk und Lautstärke',True,''),('notifications','Benachrichtigungen',True,''),('clock','Uhr',True,''),('settings','Einstellungen (Aurora)',True,''),('showDesktop','Streifen „Desktop anzeigen“',True,'')]:
+    ('tray','Tray',True,''),('system','Netzwerk und Lautstärke',True,''),('notifications','Benachrichtigungen',True,''),('clock','Uhr',True,''),('settings','Einstellungen (Aurora)',True,''),('showDesktop','Streifen „Desktop anzeigen“',True,''),('update','Update-Anzeige (nur bei neuer Version sichtbar)',True,'Zeigt in der Taskleiste, was in einem Update steckt, und aktualisiert per Klick.')]:
    self.sw(b,title,key,default,desc,items=True)
   self.sw(b,'Datum unter der Uhr','showDate',True);self.sw(b,'Sekunden anzeigen','showSeconds',False)
  def codespace(self):
