@@ -19,6 +19,8 @@ Singleton {
     property bool taskViewOpen: false
     property bool codeOpen: false
     property bool weOpen: false
+    property bool searchOpen: false
+    property string searchTest: ""           // nur für Tests: Text von außen in die Schnellsuche setzen
     property bool gitOpen: false
     property string gitRepo: ""
     property bool taskMenuOpen: false          // Rechtsklick-Menü / angeheftete Vorschau einer Taskleisten-App
@@ -36,7 +38,7 @@ Singleton {
         return (big && popupScreen === mon) || (taskPopupOpen && taskPopupScreen === mon);
     }
     function sysPopupOn(mon) { return (controlOpen || calendarOpen) && popupScreen === mon; }
-    function closeAll() { gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
+    function closeAll() { searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
     function focusedScreenName() { return Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; }
     function _toggle(prop, screenName) {
         const open = !root[prop];
@@ -50,6 +52,7 @@ Singleton {
     function toggleTaskView(s) { _toggle("taskViewOpen", s); }
     function toggleCode(s)     { _toggle("codeOpen", s); }
     function toggleWe(s)       { _toggle("weOpen", s); }
+    function toggleSearchBox(s) { _toggle("searchOpen", s); }
     // Hängt am Coding Space (bleibt offen); ohne ihn öffnet das Git-Feld allein am Fokus-Monitor
     function openGit(path) { if (!codeOpen) { closeAll(); popupScreen = focusedScreenName(); } gitRepo = path; gitOpen = true; }
     function screenAt(x, y) {
@@ -88,7 +91,7 @@ Singleton {
     property alias startLogo:     settings.startLogo
     property alias barStyle:      settings.barStyle
     property alias barPartHide:   settings.barPartHide
-    property alias hideOnFullscreen: settings.hideOnFullscreen
+    property alias fullscreenBar: settings.fullscreenBar
     property alias barItems:      settings.barItems
     property alias showDate:      settings.showDate
     property alias settingsCmd:   settings.settingsCmd
@@ -128,7 +131,7 @@ Singleton {
             property var barItems: ({})            // { start, search, taskview, code, wallpaper, desktops, apps, tray, system, notifications, clock, showDesktop, mode, settings } an/aus
             property bool showDate: true            // Datum unter der Uhrzeit
             property string settingsCmd: ""         // Befehl der Einstellungs-App (leer = automatisch)
-            property bool hideOnFullscreen: false   // Taskleiste bei Vollbild-Fenstern (Spiele, Videos) ausblenden; aus = bleibt sichtbar
+            property string fullscreenBar: "hover"   // Taskleiste bei Vollbild: "hover" = weg, am Rand einblendbar · "hide" = ganz weg · "show" = bleibt sichtbar
             property bool barPartHide: false        // Dock mit Auto-Hide: nur die Kapsel unter der Maus fährt hoch
             property string barStyle: "bar"     // "bar" = durchgehende Leiste, "dock" = schwebendes Dock (wie Aurora)
             property string startLogo: ""        // "" = Draconyx, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild

@@ -17,10 +17,13 @@ PanelWindow {
     readonly property string mon: modelData.name
     readonly property var hyprMonitor: Hyprland.monitorFor(modelData)
     readonly property bool enabledHere: Global.monitorSetting(mon, "enabled", true)
-    readonly property bool autohideHere: Global.monitorSetting(mon, "autohide", Global.autohide)
+    readonly property bool autohideSetting: Global.monitorSetting(mon, "autohide", Global.autohide)
     // Vollbild (Spiele, Videos) auf diesem Monitor: Leiste ganz weg, auch kein Hover-Streifen
     readonly property bool fullscreenHere: hyprMonitor && hyprMonitor.activeWorkspace
                                            ? hyprMonitor.activeWorkspace.hasFullscreen : false
+    // Bei Vollbild-Fenstern verhält sich auch eine feste Leiste wie eine Auto-Hide-Leiste (am Rand einblendbar) – einstellbar
+    readonly property bool fsActive: fullscreenHere && Global.fullscreenBar !== "show"
+    readonly property bool autohideHere: autohideSetting || fsActive
     readonly property bool keepOpen: !autohideHere || Global.popupOpenOn(mon) || hover.hovered
     property bool shown: true
     // Dock + Auto-Hide + "Teile einzeln": jede Kapsel fährt nur hoch, wenn die Maus bei ihr ist
@@ -34,14 +37,14 @@ PanelWindow {
     readonly property bool dock: Global.barStyle === "dock"
     readonly property int gap: Global.barMargin        // Abstand zum Bildschirmrand
 
-    visible: enabledHere && (!fullscreenHere || !Global.hideOnFullscreen)
+    visible: enabledHere && !(fullscreenHere && Global.fullscreenBar === "hide")
     anchors { left: true; right: true; top: Global.barTop; bottom: !Global.barTop }
     implicitHeight: Global.barHeight + gap * 2 + 6
     color: "transparent"
     exclusiveZone: autohideHere ? 0 : Global.barHeight + gap * 2
     WlrLayershell.namespace: "draconyx-bar"
     // Vollbild-Fenster liegen über der Top-Ebene: soll die Leiste bleiben, rückt sie in die Overlay-Ebene
-    WlrLayershell.layer: fullscreenHere && !Global.hideOnFullscreen ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.layer: fullscreenHere && Global.fullscreenBar !== "hide" ? WlrLayer.Overlay : WlrLayer.Top
 
     onKeepOpenChanged: {
         if (keepOpen) { hideTimer.stop(); shown = true; }

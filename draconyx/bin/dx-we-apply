@@ -49,7 +49,7 @@ assets=""
 [ -z "$assets" ] && [ -f "$PREFS" ] && assets="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1])).get("engine_assets",""))' "$PREFS" 2>/dev/null)"
 if [ -z "$assets" ] || [ ! -d "$assets" ]; then
   assets=""
-  for vdf in "$HOME/.local/share/Steam/steamapps/libraryfolders.vdf" "$HOME/.steam/steam/steamapps/libraryfolders.vdf"; do
+  for vdf in "$HOME/.local/share/Steam/steamapps/libraryfolders.vdf" "$HOME/.steam/steam/steamapps/libraryfolders.vdf" "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/libraryfolders.vdf"; do
     [ -f "$vdf" ] || continue
     while IFS= read -r lib; do
       [ -d "$lib/steamapps/common/wallpaper_engine/assets" ] && { assets="$lib/steamapps/common/wallpaper_engine/assets"; break 2; }

@@ -34,5 +34,11 @@ Aurora-Einstellungen → Tastenkombinationen → **Haupttaste** (Datei `~/.confi
 `super` (Standard) · `both` (Super und Strg+Alt) · `ctrl-alt` (Super aus, Strg+Alt ersetzt sie) · `caps` (Feststelltaste wird Super).
 Strg+Leertaste öffnet die Suche nur auf dem leeren Desktop, in Apps bleibt die Taste unberührt.
 
+
+## Neu: Schnellsuche, frei bindbare Tasten, Diagnose
+- **Strg+Leertaste** öffnet auf dem leeren Desktop ein eigenes Suchfeld mittig mit Ergebnissen darunter (Apps, Rechner, Einstellungen, Dateien, Web); Rechtsklick auf ein Ergebnis: an Taskleiste/Start anheften, Datei öffnen, Ordner zeigen, Pfad kopieren. In Apps bleibt die Taste unberührt.
+- **Alle Tastenkombinationen** sind in den Aurora-Einstellungen → Tastenkombinationen umbindbar (inkl. Maus wie Alt+Linksklick), gespeichert in `~/.config/draconyx/binds.conf`. Die Liste entsteht aus der geladenen Hyprland-Config (`dx_binds.lua`).
+- **`dx-doctor`** schreibt einen Zustandsbericht nach `~/dx-doctor.txt` (laufende Prozesse, Config-Fehler, Dateien, Shell-Log); `dx-doctor --fix` beendet Doppelstarts (waybar, altes Aurora-Dock).
+
 ## Bewusst NICHT drin
 - Auroras Plugins (hyprbars, `aurora-native`): Sie lagen in einem Test im Weg und haben beim Laden in eine laufende Sitzung Hyprland zum Absturz gebracht. Nicht per Live-Reload laden. Wer sie nutzt, lädt sie nur beim Login.

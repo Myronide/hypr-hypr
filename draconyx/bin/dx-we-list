@@ -34,18 +34,32 @@ try:
     add(json.loads(read(home + "/.config/hypr/aurora/preferences.json") or "{}").get("workshop", ""))
 except ValueError:
     pass
-for vdf in (home + "/.local/share/Steam/steamapps/libraryfolders.vdf", home + "/.steam/steam/steamapps/libraryfolders.vdf"):
+STEAM_HOMES = (home + "/.local/share/Steam", home + "/.steam/steam", home + "/.steam/root", home + "/.var/app/com.valvesoftware.Steam/.local/share/Steam",
+               home + "/snap/steam/common/.local/share/Steam")   # normale Installation, Symlinks, Flatpak, Snap
+for vdf in [h + "/steamapps/libraryfolders.vdf" for h in STEAM_HOMES]:
     for m in re.finditer(r'"path"\s+"([^"]+)"', read(vdf)):
         add(m.group(1))
-add(home + "/.local/share/Steam")
+for h in STEAM_HOMES:
+    add(h)
 for pat in ("/run/media/*/*/SteamLibrary", "/run/media/*/*/steamapps", "/mnt/*/SteamLibrary", "/mnt/*/Steam*", "/mnt/SteamLibrary",
             "/media/*/SteamLibrary", "/media/*/*/SteamLibrary", "/media/*/steamapps", "/mnt/*", "/media/*"):
     for p in glob.glob(pat):
         add(p)
 diag = "--roots" in sys.argv
+if diag:
+    try:
+        pref = json.loads(read(home + "/.config/hypr/aurora/preferences.json") or "{}").get("workshop", "")
+    except ValueError:
+        pref = "(preferences.json nicht lesbar)"
+    print("Aurora-Einstellung \"Workshop-Ordner\"\t" + (pref or "(leer)"))
 seen = set()
 for root in roots:
     found = 0
+    if diag and not os.path.isdir(root):
+        # nur die wahrscheinlichen Kandidaten melden (Einstellung, Steam-Bibliotheken), nicht jede Raterei
+        if root.endswith("/" + APP) or "/Steam" in root or "SteamLibrary" in root:
+            print(root + "\t(Ordner existiert nicht)")
+        continue
     try:
         names = sorted(os.listdir(root)) if os.path.isdir(root) else []
     except OSError as e:

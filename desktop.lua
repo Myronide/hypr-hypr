@@ -1,5 +1,8 @@
 -- Aurora desktop for Hyprland 0.56.2.
 local base = os.getenv('HOME') .. '/.config/hypr/aurora/'
+-- Alle Tastenkombinationen laufen über B(): in den Aurora-Einstellungen frei umbindbar (dx_binds.lua)
+local DXB = require('dx_binds')
+local B = DXB.bind
 -- Haupttaste für alle Aurora-Kombinationen (Aurora-Einstellungen -> Tastenkombinationen):
 --   super (Standard) | both (Super und Strg+Alt) | ctrl-alt (Super aus, Strg+Alt ersetzt sie) | caps (Feststelltaste wird Super)
 local modmode = 'super'
@@ -59,10 +62,10 @@ end)
 hl.layer_rule({ name = 'aurora-glass', match = { namespace = '^(aurora|aurora-apps|waybar|rofi)$' }, blur = true, ignore_alpha = 0.2 })
 hl.config({ general = { border_size = 0, gaps_in = 0, gaps_out = 0, resize_on_border = true, extend_border_grab_area = 8 }, decoration = { rounding = 12, blur = { enabled = true, size = 6, passes = 3 } } })
 _G.aurora_bindings = {}
-_G.aurora_bindings.launcher = hl.bind(MOD .. ' + A', hl.dsp.exec_cmd(base .. 'launcher'))
-_G.aurora_bindings.mode = hl.bind(MOD .. ' + SHIFT + F', hl.dsp.exec_cmd(base .. 'mode --toggle'))
-hl.bind('ALT + Tab', hl.dsp.exec_cmd(base .. 'desktop-ui switcher'))
-hl.bind('ALT + SHIFT + Tab', hl.dsp.exec_cmd(base .. 'desktop-ui switcher --reverse'))
+_G.aurora_bindings.launcher = B("aurora_launcher", "Launcher öffnen", MOD .. ' + A', hl.dsp.exec_cmd(base .. 'launcher'))
+_G.aurora_bindings.mode = B("aurora_mode", "Fenstermodus wechseln (Schweben / Kacheln)", MOD .. ' + SHIFT + F', hl.dsp.exec_cmd(base .. 'mode --toggle'))
+B("aurora_switcher", "Alt+Tab: nächstes Fenster", 'ALT + Tab', hl.dsp.exec_cmd(base .. 'desktop-ui switcher'))
+B("aurora_switcher_prev", "Alt+Tab: voriges Fenster", 'ALT + SHIFT + Tab', hl.dsp.exec_cmd(base .. 'desktop-ui switcher --reverse'))
 -- Track Alt before the asynchronous keybinding command starts.
 local altkeys = {}
 hl.on('input.keyboard.key', function(code, _, state)
@@ -72,46 +75,46 @@ hl.on('input.keyboard.key', function(code, _, state)
         if out then out:write((altkeys[64] or altkeys[108]) and 'down' or 'up'); out:close() end
     end
 end)
-_G.aurora_bindings.desktop = hl.bind(MOD .. ' + D', hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
-_G.aurora_bindings.minimize = hl.bind(MOD .. ' + H', hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
-_G.aurora_bindings.clipboard = hl.bind(MOD .. ' + V', hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
+_G.aurora_bindings.desktop = B("aurora_desktop", "Schreibtisch zeigen", MOD .. ' + D', hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
+_G.aurora_bindings.minimize = B("aurora_minimize", "Aktives Fenster minimieren", MOD .. ' + H', hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
+_G.aurora_bindings.clipboard = B("aurora_clipboard", "Zwischenablage-Verlauf", MOD .. ' + V', hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
 hl.on('hyprland.start', function() hl.exec_cmd(base .. 'start-desktop') end)
 
-hl.bind(MOD .. ' + J', hl.dsp.exec_cmd(base .. 'desktop-ui layout-cycle'))
-hl.bind(MOD .. ' + RETURN', hl.dsp.exec_cmd(base .. 'desktop-ui make-master'))
-hl.bind(MOD2 .. ' + left', hl.dsp.exec_cmd(base .. 'desktop-ui ratio -0.05'))
-hl.bind(MOD2 .. ' + right', hl.dsp.exec_cmd(base .. 'desktop-ui ratio 0.05'))
-hl.bind(MOD .. ' + SHIFT + V', hl.dsp.exec_cmd(base .. 'desktop-ui detach'))
+B("aurora_layout_cycle", "Layout wechseln", MOD .. ' + J', hl.dsp.exec_cmd(base .. 'desktop-ui layout-cycle'))
+B("aurora_make_master", "Fenster zum Hauptfenster machen", MOD .. ' + RETURN', hl.dsp.exec_cmd(base .. 'desktop-ui make-master'))
+B("aurora_ratio_minus", "Hauptfenster schmaler", MOD2 .. ' + left', hl.dsp.exec_cmd(base .. 'desktop-ui ratio -0.05'))
+B("aurora_ratio_plus", "Hauptfenster breiter", MOD2 .. ' + right', hl.dsp.exec_cmd(base .. 'desktop-ui ratio 0.05'))
+B("aurora_detach", "Fenster abtrennen", MOD .. ' + SHIFT + V', hl.dsp.exec_cmd(base .. 'desktop-ui detach'))
 
 -- Desktop icons stay above both static and animated wallpaper surfaces.
 hl.layer_rule({name='aurora-desktop-order',match={namespace='^aurora-desktop$'},order=10})
 hl.layer_rule({name='aurora-wallpaper-order',match={namespace='^(aurora-wallpaper|hyprpaper)$'},order=-10})
 hl.config({input={follow_mouse=0}})
 hl.config({cursor={no_warps=true}})   -- Maus springt beim Fokuswechsel (z. B. Klick in der Taskleiste) nicht in die Fenstermitte
-_G.aurora_bindings.settings = hl.bind(MOD .. ' + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
+_G.aurora_bindings.settings = B("aurora_settings", "Einstellungen öffnen", MOD .. ' + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
 local prefs = io.open(base .. 'preferences.lua', 'r')
 if prefs then prefs:close(); dofile(base .. 'preferences.lua') end
 
-hl.bind(MOD .. ' + SHIFT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
+B("aurora_controls", "Kontrollzentrum", MOD .. ' + SHIFT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
 
 -- Zusätzlich zu Super auch Strg+Alt (Modus "both"); im Modus "ctrl-alt" tragen die Haupttaste-Binds oben schon Strg+Alt
 if modmode == 'both' then
-hl.bind('CTRL + ALT + space',hl.dsp.exec_cmd(base .. 'launcher'))
-hl.bind('CTRL + ALT + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
-hl.bind('CTRL + ALT + D',hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
-hl.bind('CTRL + ALT + H',hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
-hl.bind('CTRL + ALT + V',hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
-hl.bind('CTRL + ALT + F',hl.dsp.exec_cmd(base .. 'mode --toggle'))
-hl.bind('CTRL + ALT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
+B("aurora_alt_launcher", "Launcher (Strg+Alt)", 'CTRL + ALT + space',hl.dsp.exec_cmd(base .. 'launcher'))
+B("aurora_alt_settings", "Einstellungen (Strg+Alt)", 'CTRL + ALT + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
+B("aurora_alt_desktop", "Schreibtisch zeigen (Strg+Alt)", 'CTRL + ALT + D',hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
+B("aurora_alt_minimize", "Minimieren (Strg+Alt)", 'CTRL + ALT + H',hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
+B("aurora_alt_clipboard", "Zwischenablage (Strg+Alt)", 'CTRL + ALT + V',hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
+B("aurora_alt_mode", "Fenstermodus (Strg+Alt)", 'CTRL + ALT + F',hl.dsp.exec_cmd(base .. 'mode --toggle'))
+B("aurora_alt_controls", "Kontrollzentrum (Strg+Alt)", 'CTRL + ALT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
 end
 if modmode == 'ctrl-alt' then hl.bind('CTRL + ALT + space',hl.dsp.exec_cmd(base .. 'launcher')) end   -- Strg+Alt+Leertaste öffnet wie bisher den Launcher
 -- Strg+Space öffnet die Suche nur auf dem leeren Desktop; in Apps bleibt die Taste unberührt (non_consuming)
-hl.bind('CTRL + space',function()
+B("desktop_search", "Suche (nur auf dem leeren Desktop)", 'CTRL + space',function()
     local w = hl.get_active_window()
     if w == nil or w.workspace == nil or w.mapped == false or w.hidden == true then hl.exec_cmd(base .. 'launcher') end
 end,{non_consuming=true})
 
-hl.bind(MOD .. ' + Escape',function() if hl.plugin.aurora_native then hl.plugin.aurora_native.repair_focus() end end)
+B("aurora_repair_focus", "Tastaturfokus reparieren", MOD .. ' + Escape',function() if hl.plugin.aurora_native then hl.plugin.aurora_native.repair_focus() end end)
 
 -- Dark Qt/KDE controls and application color-scheme hints.
 hl.env('QT_QPA_PLATFORMTHEME','kde')
@@ -154,3 +157,5 @@ hl.layer_rule({name='aurora-dock-panel-order',match={namespace='^aurora$'},order
 hl.layer_rule({name='aurora-dock-icons-order',match={namespace='^aurora-apps$'},order=30})
 hl.layer_rule({name='aurora-dock-menus-order',match={namespace='^(aurora-window-previews|aurora-control-center)$'},order=40})
 hl.layer_rule({name='aurora-popup-order',match={namespace='^aurora-popup$'},order=50})
+
+DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App

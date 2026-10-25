@@ -11,6 +11,7 @@ Rectangle {
     property bool highlighted: false
     property bool closable: false
     signal triggered()
+    signal rightClicked(real x, real y)       // Rechtsklick (Fensterkoordinaten der Zeile)
     signal closeRequested()
 
     readonly property bool hasIcon: iconName !== "" || iconSource !== ""
@@ -62,7 +63,8 @@ Rectangle {
         id: area
         anchors.fill: parent
         hoverEnabled: true
-        onClicked: row.triggered()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: mouse => { if (mouse.button === Qt.RightButton) { const p = area.mapToItem(null, mouse.x, mouse.y); row.rightClicked(p.x, p.y); } else row.triggered(); }
     }
 
     Rectangle {

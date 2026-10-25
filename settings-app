@@ -151,7 +151,7 @@ class Settings(Gtk.Application):
   except Exception as e:self.message(str(e))
  def stop_background(self):stop_engine();self.p['engine_active']=False;save_preferences(self.p);self.message('Animierter Hintergrund gestoppt.')
  def shortcuts(self):
-  b=self.page('Tastenkombinationen','Eigene Tasten für die wichtigsten Desktop-Funktionen. Beispiel: SUPER + V')
+  b=self.page('Tastenkombinationen','Haupttaste wählen und jede Tastenkombination des Desktops frei umbinden – auch Maus-Kombinationen wie „Alt + Linksklick“ zum Verschieben.')
   mods=[('super','Super (Windows-Taste)'),('both','Super und Strg + Alt'),('ctrl-alt','Super aus: Strg + Alt ersetzt sie'),('caps','Feststelltaste wird zu Super')]
   w=Gtk.ComboBoxText()
   for k,v in mods:w.append(k,v)
@@ -161,9 +161,102 @@ class Settings(Gtk.Application):
    if mode:set_modifier_mode(mode);subprocess.run(['hyprctl','reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);self.message('Haupttaste gewechselt: '+dict(mods)[mode])
   w.connect('changed',mod_changed)
   self.row(b,'Haupttaste',w,'Defekte oder fehlende Super-Taste? „Super aus“ nutzt überall Strg + Alt statt Super, „Feststelltaste“ macht sie zur Super-Taste. Wirkt sofort.')
-  defaults={'launcher':('App-Launcher','SUPER + A'),'clipboard':('Zwischenablage','SUPER + V'),'settings':('Einstellungen','SUPER + comma'),'desktop':('Schreibtisch zeigen','SUPER + D'),'mode':('Desktop / Anordnung','SUPER + SHIFT + F'),'minimize':('Minimieren','SUPER + H')}
-  for key,(title,default) in defaults.items():
-   w=Gtk.Entry(text=self.p['shortcuts'].get(key,default));w.set_width_chars(24);w.connect('changed',lambda w,key=key:self.p['shortcuts'].__setitem__(key,w.get_text()));self.row(b,title,w)
+  self.bind_editor(b)
+ # ---- alle Tastenkombinationen frei umbindbar (Liste kommt aus der laufenden Hyprland-Config: dx_binds.lua) ----
+ KEYMAP={'Page_Up':'Prior','Page_Down':'Next','ISO_Left_Tab':'Tab','Return':'Return','KP_Enter':'KP_Enter','Escape':'Escape','BackSpace':'BackSpace'}
+ def combo_from_key(self,event):
+  from gi.repository import Gdk as _G
+  name=_G.keyval_name(_G.keyval_to_lower(event.keyval)) or ''
+  if name in ('Control_L','Control_R','Alt_L','Alt_R','Shift_L','Shift_R','Super_L','Super_R','Meta_L','Meta_R','ISO_Level3_Shift','Caps_Lock'):return None
+  mods=[]
+  st=event.state
+  if st&_G.ModifierType.CONTROL_MASK:mods.append('CTRL')
+  if st&_G.ModifierType.MOD1_MASK:mods.append('ALT')
+  if st&_G.ModifierType.SHIFT_MASK:mods.append('SHIFT')
+  if st&(_G.ModifierType.SUPER_MASK|_G.ModifierType.MOD4_MASK):mods.append('SUPER')
+  key=self.KEYMAP.get(_G.keyval_name(event.keyval) or name,name)
+  if len(key)==1:key=key.upper()
+  return ' + '.join(mods+[key])
+ def combo_from_button(self,event):
+  from gi.repository import Gdk as _G
+  mods=[]
+  st=event.state
+  if st&_G.ModifierType.CONTROL_MASK:mods.append('CTRL')
+  if st&_G.ModifierType.MOD1_MASK:mods.append('ALT')
+  if st&_G.ModifierType.SHIFT_MASK:mods.append('SHIFT')
+  if st&(_G.ModifierType.SUPER_MASK|_G.ModifierType.MOD4_MASK):mods.append('SUPER')
+  code={1:272,3:273,2:274,8:275,9:276}.get(event.button)
+  return None if code is None else ' + '.join(mods+['mouse:%d'%code])
+ def capture_combo(self,title,done):
+  dlg=Gtk.Dialog(title='Kombination aufnehmen',transient_for=self.window,modal=True)
+  box=dlg.get_content_area();box.set_spacing(10);box.set_border_width(24)
+  l=Gtk.Label(label=title+'\n\nJetzt die Tastenkombination drücken (auch mit Maustaste möglich).\nEsc = abbrechen · Rücktaste = ausschalten');l.set_justify(Gtk.Justification.CENTER);box.pack_start(l,True,True,0)
+  dlg.add_events(Gdk.EventMask.BUTTON_PRESS_MASK|Gdk.EventMask.KEY_PRESS_MASK)
+  result={'v':None}
+  def on_key(w,ev):
+   name=Gdk.keyval_name(ev.keyval) or ''
+   if name=='Escape' and not ev.state&(Gdk.ModifierType.CONTROL_MASK|Gdk.ModifierType.MOD1_MASK):dlg.response(Gtk.ResponseType.CANCEL);return True
+   if name=='BackSpace' and not ev.state&(Gdk.ModifierType.CONTROL_MASK|Gdk.ModifierType.MOD1_MASK|Gdk.ModifierType.SHIFT_MASK):result['v']='';dlg.response(Gtk.ResponseType.OK);return True
+   c=self.combo_from_key(ev)
+   if c is None:return True
+   result['v']=c;dlg.response(Gtk.ResponseType.OK);return True
+  def on_btn(w,ev):
+   c=self.combo_from_button(ev)
+   if c and '+' in c:result['v']=c;dlg.response(Gtk.ResponseType.OK)   # reine Mausklicks ohne Modifikator sind nicht erlaubt (Klicks bleiben in Apps)
+   return True
+  dlg.connect('key-press-event',on_key);dlg.connect('button-press-event',on_btn)
+  dlg.show_all();r=dlg.run();dlg.destroy()
+  if r==Gtk.ResponseType.OK and result['v'] is not None:done(result['v'])
+ def bind_editor(self,b):
+  reg=Path.home()/'.config/draconyx/binds-registry.tsv';conf=Path.home()/'.config/draconyx/binds.conf'
+  rows=[]
+  try:
+   for line in reg.read_text().splitlines():
+    p=line.split('\t')
+    if len(p)>=3:rows.append((p[0],p[1],p[2],p[3] if len(p)>3 else p[2]))
+  except OSError:pass
+  over={}
+  try:
+   for line in conf.read_text().splitlines():
+    if '=' in line:k,v=line.split('=',1);over[k.strip()]=v.strip()
+  except OSError:pass
+  head=Gtk.Label(label='Alle Tastenkombinationen',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
+  if not rows:
+   hint=Gtk.Label(label='Die Liste entsteht, sobald Hyprland die Konfiguration geladen hat (hyprctl reload oder neu anmelden).',xalign=0);hint.set_line_wrap(True);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,0);return
+  search=Gtk.SearchEntry();search.set_placeholder_text('Aktion suchen …');b.pack_start(search,False,False,4)
+  timer={'id':0};entries={}
+  def save():
+   conf.parent.mkdir(parents=True,exist_ok=True)
+   conf.write_text(''.join('%s=%s\n'%(k,v) for k,v in over.items()))
+   if timer['id']:GLib.source_remove(timer['id'])
+   timer['id']=GLib.timeout_add(700,lambda:(subprocess.run(['hyprctl','reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),timer.__setitem__('id',0),False)[2])
+  def duplicate(aid,combo):
+   if not combo:return None
+   for rid,lab,dflt,_ in rows:
+    if rid!=aid and over.get(rid,dflt)==combo:return lab
+   return None
+  def set_combo(aid,combo,default):
+   dup=duplicate(aid,combo)
+   if combo==default:over.pop(aid,None)
+   else:over[aid]=combo
+   entries[aid].set_text(combo)
+   save()
+   self.message(('Doppelt belegt mit „%s“ – bitte prüfen.'%dup) if dup else ('Gespeichert: '+(combo or 'ausgeschaltet')))
+  widgets=[]
+  for aid,label,default,effective in rows:
+   current=over.get(aid,default)
+   row=Gtk.Box(spacing=8);row.get_style_context().add_class('setting-row')
+   lab=Gtk.Label(label=label,xalign=0);lab.set_line_wrap(True);lab.set_max_width_chars(46);row.pack_start(lab,True,True,0)
+   e=Gtk.Entry(text=current);e.set_width_chars(26);e.set_editable(False);entries[aid]=e
+   rec=Gtk.Button(label='Aufnehmen');rec.connect('clicked',lambda w,aid=aid,label=label,default=default:self.capture_combo(label,lambda c:set_combo(aid,c,default)))
+   off=Gtk.Button(label='Aus');off.connect('clicked',lambda w,aid=aid,default=default:set_combo(aid,'',default))
+   rst=Gtk.Button(label='↺');rst.set_tooltip_text('Standard: '+default);rst.connect('clicked',lambda w,aid=aid,default=default:set_combo(aid,default,default))
+   for x in (e,rec,off,rst):row.pack_end(x,False,False,0)
+   b.pack_start(row,False,False,0);widgets.append((label.lower()+' '+current.lower(),row))
+  def filt(_):
+   q=search.get_text().lower().strip()
+   for text,row in widgets:row.set_visible(q in text)
+  search.connect('search-changed',filt)
  # ---- Draconyx-Shell: Taskleiste und Fenstermodus (wirkt sofort, ohne "Übernehmen") ----
  def sw(self,box,title,key,default,description='',items=False):
   w=Gtk.Switch(active=bool((shell_get('barItems',{}) or {}).get(key,default)) if items else bool(shell_get(key,default)));w.set_valign(Gtk.Align.CENTER)
@@ -183,6 +276,14 @@ class Settings(Gtk.Application):
   b=self.page('Taskleiste','Alles, was in der Taskleiste der Shell erscheint. Änderungen gelten sofort.')
   self.shell_combo(b,'Stil','barStyle',[('bar','Durchgehende Leiste'),('dock','Schwebendes Dock')],'bar')
   self.sw(b,'Oben statt unten','barTop',False)
+  self.shell_combo(b,'Bei Vollbild (Spiele, Videos)','fullscreenBar',[('hover','Ausblenden, am Rand einblendbar'),('hide','Ganz ausblenden'),('show','Sichtbar lassen')],'hover','Gilt auch für eine feste Leiste (ohne Auto-Hide): im Vollbild verschwindet sie und erscheint, wenn die Maus den Bildschirmrand berührt.')
+  # Taskleiste je Bildschirm an/aus
+  head0=Gtk.Label(label='Bildschirme',xalign=0);head0.get_style_context().add_class('page-title');b.pack_start(head0,False,False,6)
+  for name in self.monitor_names:
+   w=Gtk.Switch(active=bool(((shell_get('monitors',{}) or {}).get(name,{}) or {}).get('enabled',True)));w.set_valign(Gtk.Align.CENTER)
+   def mon_changed(w,_,name=name):
+    m=dict(shell_get('monitors',{}) or {});entry=dict(m.get(name,{}) or {});entry['enabled']=w.get_active();m[name]=entry;shell_set('monitors',m)
+   w.connect('notify::active',mon_changed);self.row(b,'Taskleiste auf '+name,w)
   self.sw(b,'Dock: nur die Kapsel unter der Maus ausfahren','barPartHide',False,'Gilt für „Schwebendes Dock“ mit „Automatisch ausblenden“: Apps-Kapsel und System-Kapsel fahren einzeln hoch.')
   self.sw(b,'Apps mittig','barCenter',True,'Aus: die Apps folgen direkt hinter den Knöpfen links.')
   self.sw(b,'Automatisch ausblenden','autohide',False,'Die Leiste fährt ein, wenn sie nicht benutzt wird.')

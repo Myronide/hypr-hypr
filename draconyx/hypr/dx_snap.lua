@@ -289,6 +289,28 @@ local function tick()
         if c ~= nil then pcall(tiling.liveSwap, w, c.x, c.y) end
         return
     end
+    -- angedocktes Fenster wird gezogen: ein anderes angedocktes Fenster unter dem Zeiger gleitet live auf dessen alten Platz
+    if press.snaps ~= nil and press.snaps[w.address] ~= nil and os.clock() - (press.lastSwap or 0) > 0.25 then
+        local c = hl.get_cursor_pos()
+        if c ~= nil then
+            for _, o in ipairs(hl.get_windows()) do
+                local oz = press.snaps[o.address]
+                if o.address ~= w.address and oz ~= nil and o.mapped and o.floating and o.workspace ~= nil and w.workspace ~= nil
+                   and o.workspace.id == w.workspace.id and o.monitor ~= nil and w.monitor ~= nil and o.monitor.name == w.monitor.name
+                   and c.x >= o.at.x and c.x <= o.at.x + o.size.x and c.y >= o.at.y and c.y <= o.at.y + o.size.y then
+                    local wz = press.snaps[w.address]
+                    local x, y, ww, wh = M.rectFor(o.monitor, wz)
+                    local oa = "address:" .. o.address
+                    hl.dispatch(hl.dsp.window.resize({ window = oa, x = ww, y = wh, relative = false }))
+                    hl.dispatch(hl.dsp.window.move({ window = oa, x = x, y = y, relative = false }))
+                    press.snaps[o.address], press.snaps[w.address] = wz, oz     -- o sitzt jetzt in w's Zone, w "gehört" zu o's alter Zone
+                    zoneOf[o.address] = wz
+                    press.lastSwap = os.clock()
+                    break
+                end
+            end
+        end
+    end
     local zone, m = zoneNow()
     if zone == nil then writePreview("none"); return end
     local rz = (zone == "max") and "max" or zone
@@ -301,7 +323,19 @@ local function onPress()
     for _, w in ipairs(hl.get_windows()) do
         if w.mapped and w.floating then pos[w.address] = { x = w.at.x, y = w.at.y, ws = w.workspace and w.workspace.id } end
     end
-    press = { pos = pos }
+    press = { pos = pos, snaps = {}, lastSwap = 0 }
+    -- Fenster, die gerade genau in ihrer Andock-Zone sitzen (Halbbild, Viertel …): dürfen beim Ziehen live tauschen
+    for _, w in ipairs(hl.get_windows()) do
+        local z = zoneOf[w.address]
+        if z ~= nil and z ~= "max" and w.mapped and w.floating and w.workspace ~= nil and w.monitor ~= nil then
+            local ok, x, y, ww, wh = pcall(function()
+                local a, b, c, d = M.rectFor(w.monitor, z); return a, b, c, d
+            end)
+            if ok and x ~= nil and math.abs(w.at.x - x) + math.abs(w.at.y - y) + math.abs(w.size.x - ww) + math.abs(w.size.y - wh) < 16 then
+                press.snaps[w.address] = z
+            end
+        end
+    end
     if timer == nil then
         timer = hl.timer(tick, { timeout = 70, type = "repeat" })
     else
@@ -344,10 +378,20 @@ local function onRelease()
     hl.timer(finish, { timeout = 40, type = "oneshot" })
 end
 
--- Klick-Bindings ohne Modifikator (Titelleisten) sowie mit Super/Alt (Fenster-Ziehen)
-for _, mod in ipairs({ "", "ALT + ", "CTRL + ALT + " }) do
-    hl.bind(mod .. "mouse:272", onPress, { non_consuming = true })
-    hl.bind(mod .. "mouse:272", onRelease, { release = true, non_consuming = true })
+-- Klick-Hooks (nicht verbrauchend) für das Ziehen: ohne Modifikator (Titelleisten) und mit den Modifikatoren der
+-- Maus-Kombinationen "window_drag"/"window_drag_alt" (umbindbar in den Aurora-Einstellungen). Ohne Registry: Alt und Strg+Alt.
+function M.bindMouse(DXB)
+    local mods, seen = { "" }, { [""] = true }
+    local function add(pre) if pre ~= nil and not seen[pre] then seen[pre] = true; table.insert(mods, pre) end end
+    if DXB ~= nil then
+        add(DXB.mousePrefix("window_drag")); add(DXB.mousePrefix("window_drag_alt"))
+    else
+        add("ALT + "); add("CTRL + ALT + ")
+    end
+    for _, mod in ipairs(mods) do
+        hl.bind(mod .. "mouse:272", onPress, { non_consuming = true })
+        hl.bind(mod .. "mouse:272", onRelease, { release = true, non_consuming = true })
+    end
 end
 
 return M

@@ -52,7 +52,7 @@ case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "~/.local/bin ist nicht im 
 
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
-for f in dx_snap.lua dx_tiling.lua dx_zones.lua csd-apps; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
+for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
 [ -e "$CONF/hypr/monitors_local.lua" ] || { cp "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua"; warn "monitors_local.lua ist eine Vorlage von SyntaxJason – bitte an deine Monitore anpassen (hyprctl monitors)."; }
 if [ -e "$CONF/hypr/hyprland.lua" ] && cmp -s "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; then
   :   # schon unsere hyprland.lua

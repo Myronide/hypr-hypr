@@ -5,6 +5,10 @@
 ------------------
 ---- MONITORE ----
 ------------------
+-- Anordnung wie in COSMIC: links DP-1, Mitte DP-2, rechts HDMI-A-2 (alle oben bündig)
+-- HDR: cm = "hdr". Helligkeit normaler (SDR) Fenster = 80 nits × sdrbrightness (KDE hatte 200 bzw. 300 nits).
+-- Zu hell? Wert senken, zu dunkel? erhöhen. Mit `hyprctl reload` sofort sichtbar.
+
 -- Monitore stehen pro Rechner in ~/.config/hypr/monitors_local.lua (Vorlage: monitors_local.lua.example)
 local okMon = pcall(require, "monitors_local")
 if not okMon then hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 }) end
@@ -158,37 +162,40 @@ hl.config({
 ---- TASTENKÜRZEL ---
 ---------------------
 local mainMod = "CTRL + ALT"   -- Strg+Alt ist der Hauptmodifikator für ALLE Kombis (Super-Taste wird nicht benutzt)
+-- Alle Tastenkombinationen laufen über B(): in den Aurora-Einstellungen frei umbindbar (dx_binds.lua)
+local DXB = require("dx_binds")
+local B = DXB.bind
 
 -- Windows-Taste allein = Startmenü
-hl.bind(mainMod .. " + space", hl.dsp.exec_cmd(startMenu))                 -- Startmenü
+B("start_menu", "Startmenü", mainMod .. " + space", hl.dsp.exec_cmd(startMenu))                 -- Startmenü
 -- Strg+Space öffnet die Suche NUR auf dem Desktop (kein Fenster im Fokus). Die Taste bleibt nicht verbraucht (non_consuming),
 -- Apps bekommen sie also weiter (z. B. Autovervollständigung im Editor).
-hl.bind("CTRL + space", function()
+B("desktop_search", "Suche (nur auf dem leeren Desktop)", "CTRL + space", function()
     local w = hl.get_active_window()
     local onDesktop = (w == nil) or (w.workspace == nil) or (w.mapped == false) or (w.hidden == true)
-    if onDesktop then hl.exec_cmd(startMenu) end
+    if onDesktop then hl.exec_cmd("qs -c draconyx ipc call shell toggleSearchBox") end
 end, { non_consuming = true })
 
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))                 -- Explorer
-hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(runMenu))                     -- Ausführen
-hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(terminal))
-hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(browser))
-hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))                  -- Sperren
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"))
-hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("swaync-client -t -sw"))      -- Benachrichtigungen
-hl.bind("ALT + space", function()   -- Fenstermenü wie unter Windows (für Apps ohne Titelleiste, z. B. Dolphin)
+B("file_manager", "Dateimanager", mainMod .. " + E", hl.dsp.exec_cmd(fileManager))                 -- Explorer
+B("run_menu", "Ausführen", mainMod .. " + R", hl.dsp.exec_cmd(runMenu))                     -- Ausführen
+B("terminal", "Terminal", mainMod .. " + T", hl.dsp.exec_cmd(terminal))
+B("browser", "Browser", mainMod .. " + B", hl.dsp.exec_cmd(browser))
+B("lock", "Bildschirm sperren", mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))                  -- Sperren
+B("clipboard_history", "Zwischenablage-Verlauf", mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"))
+B("notifications", "Benachrichtigungen", mainMod .. " + N", hl.dsp.exec_cmd("swaync-client -t -sw"))      -- Benachrichtigungen
+B("window_menu", "Fenstermenü (für Apps ohne Titelleiste)", "ALT + space", function()   -- Fenstermenü wie unter Windows (für Apps ohne Titelleiste, z. B. Dolphin)
     local w = hl.get_active_window()
     if w ~= nil then
         hl.exec_cmd(string.format("sh -c 'qs -c draconyx ipc call shell windowMenu %s %d %d'", w.address, math.floor(w.at.x), math.floor(w.at.y)))
     end
 end)
-hl.bind(mainMod .. " + K", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell toggleCode'"))   -- Coding Space
-hl.bind(mainMod .. " + Tab", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell toggleTaskView'"))   -- Task View
-hl.bind(mainMod .. " + A", hl.dsp.exec_cmd(quickPanel))                  -- Schnelleinstellungen
-hl.bind(mainMod .. " + S", hl.dsp.exec_cmd(startMenu))                   -- Suche (Startmenü)
-hl.bind(mainMod .. " + SHIFT + Q", hl.dsp.exit())                 -- Notausgang: Hyprland beenden
-hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region --clipboard-only"))
-hl.bind("Print", hl.dsp.exec_cmd("hyprshot -m output --clipboard-only"))
+B("coding_space", "Coding Space", mainMod .. " + K", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell toggleCode'"))   -- Coding Space
+B("task_view", "Fensterübersicht (Task View)", mainMod .. " + Tab", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell toggleTaskView'"))   -- Task View
+B("quick_settings", "Schnelleinstellungen", mainMod .. " + A", hl.dsp.exec_cmd(quickPanel))                  -- Schnelleinstellungen
+B("search", "Suche (Startmenü)", mainMod .. " + S", hl.dsp.exec_cmd(startMenu))                   -- Suche (Startmenü)
+B("exit_hyprland", "Notausgang: Hyprland beenden", mainMod .. " + SHIFT + Q", hl.dsp.exit())                 -- Notausgang: Hyprland beenden
+B("screenshot_region", "Screenshot (Bereich)", mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region --clipboard-only"))
+B("screenshot_screen", "Screenshot (Bildschirm)", "Print", hl.dsp.exec_cmd("hyprshot -m output --clipboard-only"))
 
 -- Fenster-Snapping wie unter Windows: links/rechts halbe Seite, oben ganzer Bildschirm,
 -- unten zurück auf normale Größe mittig. Lässt den Platz der Taskleiste (reserved) frei.
@@ -223,8 +230,8 @@ local function snap(where)
 end
 
 -- Fenster
-hl.bind("ALT + F4",         hl.dsp.window.kill())    -- sofort beenden (SIGKILL), ohne Nachfrage
-hl.bind(mainMod .. " + Q",  hl.dsp.window.close())   -- normal schließen
+B("window_kill", "Fenster sofort beenden (kill)", "ALT + F4",         hl.dsp.window.kill())    -- sofort beenden (SIGKILL), ohne Nachfrage
+B("window_close", "Fenster schließen", mainMod .. " + Q",  hl.dsp.window.close())   -- normal schließen
 -- Maximieren = echtes Hyprland-Maximieren (gleich wie der Maximieren-Knopf der Apps)
 local function toggleMax()
     hl.dispatch(hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }))
@@ -280,33 +287,33 @@ local function restoreOrShrink()
         minimizeWindow(w)
     end
 end
-hl.bind(mainMod .. " + M",         function() minimizeWindow(hl.get_active_window()) end)
-hl.bind(mainMod .. " + SHIFT + M", function() restoreWindow(lastMinimized()) end)
+B("window_minimize", "Fenster minimieren", mainMod .. " + M",         function() minimizeWindow(hl.get_active_window()) end)
+B("window_restore", "Minimiertes Fenster zurückholen", mainMod .. " + SHIFT + M", function() restoreWindow(lastMinimized()) end)
 -- Draconyx Tiling (eigener Kachel-Modus) + Snap (Andocken an Ränder/Ecken, Windows-Ketten)
 DXZones = require("dx_zones")
 DXTiling = require("dx_tiling")
 DXSnap = require("dx_snap")
 DXSnap.setup(DXTiling, { minimize = minimizeWindow })
 
-hl.bind(mainMod .. " + Up",    function() DXSnap.arrow("up") end)
-hl.bind(mainMod .. " + Down",  function() DXSnap.arrow("down") end)
-hl.bind(mainMod .. " + Left",  function() DXSnap.arrow("left") end)
-hl.bind(mainMod .. " + Right", function() DXSnap.arrow("right") end)
+B("snap_up", "Fenster nach oben (Snap/Maximieren)", mainMod .. " + Up",    function() DXSnap.arrow("up") end)
+B("snap_down", "Fenster nach unten (Snap/Wiederherstellen)", mainMod .. " + Down",  function() DXSnap.arrow("down") end)
+B("snap_left", "Fenster nach links (Snap)", mainMod .. " + Left",  function() DXSnap.arrow("left") end)
+B("snap_right", "Fenster nach rechts (Snap)", mainMod .. " + Right", function() DXSnap.arrow("right") end)
 
 -- Kachel-Modus: Fenster bleiben normal frei schwebend; diese Tasten ordnen sie in einem Raster an
 local function zonesShell(fn) return "sh -c 'qs -c draconyx ipc call shell " .. fn .. "'" end
-hl.bind(mainMod .. " + G",              function() DXTiling.toggle(); hl.exec_cmd(zonesShell("flashZones")) end)   -- aktives Fenster ins Raster / heraus
-hl.bind(mainMod .. " + SHIFT + G",      function() DXTiling.toggleWorkspace(); hl.exec_cmd(zonesShell("flashZones")) end)  -- ganzer Desktop kacheln an/aus
-hl.bind(mainMod .. " + BackSpace", function() DXTiling.releaseAll(); hl.exec_cmd("sh -c 'qs -c draconyx ipc call shell closeAll; qs -c draconyx ipc call shell closeGrid'") end)   -- NOTAUSGANG: alles aus dem Raster, Overlays zu
-hl.bind(mainMod .. " + H",              function() hl.exec_cmd(zonesShell("cycleZones")) end)      -- Raster-Vorlage wechseln
-hl.bind(mainMod .. " + J",              function() DXTiling.cycleMode() end)        -- Auto-Layout: Zonen / Raster / Spalten / Zeilen / Master
-hl.bind(mainMod .. " + Z",              function() hl.exec_cmd(zonesShell("editZones")) end)       -- Raster-Editor
-hl.bind(mainMod .. " + X",              function() if DXZones.rememberActive() then hl.exec_cmd(zonesShell("pickZone")) end end)  -- Zone für aktives Fenster wählen        -- Raster / Spalten / Zeilen / Master
-hl.bind(mainMod .. " + comma",          function() DXTiling.shift(-1) end)          -- Platz im Raster tauschen
-hl.bind(mainMod .. " + period",         function() DXTiling.shift(1) end)
-hl.bind(mainMod .. " + F",  hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }))
-hl.bind("F11",              hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }))
-hl.bind(mainMod .. " + C",  hl.dsp.window.center())
+B("grid_toggle", "Aktives Fenster ins Raster / heraus", mainMod .. " + G",              function() DXTiling.toggle(); hl.exec_cmd(zonesShell("flashZones")) end)   -- aktives Fenster ins Raster / heraus
+B("grid_toggle_workspace", "Ganzen Desktop kacheln an/aus", mainMod .. " + SHIFT + G",      function() DXTiling.toggleWorkspace(); hl.exec_cmd(zonesShell("flashZones")) end)  -- ganzer Desktop kacheln an/aus
+B("grid_panic", "NOTAUSGANG: alles aus dem Raster, Overlays zu", mainMod .. " + BackSpace", function() DXTiling.releaseAll(); hl.exec_cmd("sh -c 'qs -c draconyx ipc call shell closeAll; qs -c draconyx ipc call shell closeGrid'") end)   -- NOTAUSGANG: alles aus dem Raster, Overlays zu
+B("zones_cycle", "Raster-Vorlage wechseln", mainMod .. " + H",              function() hl.exec_cmd(zonesShell("cycleZones")) end)      -- Raster-Vorlage wechseln
+B("grid_mode", "Auto-Layout wechseln (Zonen/Raster/Spalten/Zeilen/Master)", mainMod .. " + J",              function() DXTiling.cycleMode() end)        -- Auto-Layout: Zonen / Raster / Spalten / Zeilen / Master
+B("zones_edit", "Raster-Editor", mainMod .. " + Z",              function() hl.exec_cmd(zonesShell("editZones")) end)       -- Raster-Editor
+B("zones_pick", "Zone für aktives Fenster wählen", mainMod .. " + X",              function() if DXZones.rememberActive() then hl.exec_cmd(zonesShell("pickZone")) end end)  -- Zone für aktives Fenster wählen        -- Raster / Spalten / Zeilen / Master
+B("grid_shift_prev", "Platz im Raster tauschen (zurück)", mainMod .. " + comma",          function() DXTiling.shift(-1) end)          -- Platz im Raster tauschen
+B("grid_shift_next", "Platz im Raster tauschen (vor)", mainMod .. " + period",         function() DXTiling.shift(1) end)
+B("fullscreen", "Vollbild", mainMod .. " + F",  hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }))
+B("fullscreen_f11", "Vollbild (F11)", "F11",              hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }))
+B("window_center", "Fenster zentrieren", mainMod .. " + C",  hl.dsp.window.center())
 
 
 -- Maus befreien: Fokus + Zeiger auf einen anderen Monitor. Ein Fenster (z. B. Spiel),
@@ -322,7 +329,7 @@ local function freeMouse()
     hl.dispatch(hl.dsp.cursor.move({ x = target.x + math.floor(target.width / 2),
                                      y = target.y + math.floor(target.height / 2) }))
 end
-hl.bind(mainMod .. " + Escape", freeMouse, { locked = true })
+B("free_mouse", "Maus aus Spielen/Fenstern befreien", mainMod .. " + Escape", freeMouse, { locked = true })
 
 -- Alt+Tab wie Windows: Umschalter der Draconyx Shell mit allen Fenstern (zuletzt benutzt zuerst).
 -- Alt halten + Tab = weiter, Shift+Tab = zurück, Alt loslassen = wechseln.
@@ -331,39 +338,40 @@ local function switcher(action)
     return hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call switcher " .. action
         .. " 2>/dev/null || { [ " .. action .. " = next ] && hyprctl dispatch \"hl.dsp.focus({ last = true })\"; }'")
 end
-hl.bind("ALT + Tab",            switcher("next"))
-hl.bind("ALT + SHIFT + Tab",    switcher("prev"))
-hl.bind("ALT + Alt_L",          switcher("commit"), { release = true, transparent = true })
-hl.bind("ALT + SHIFT + Alt_L",  switcher("commit"), { release = true, transparent = true })
-hl.bind("ALT + Escape",         switcher("cancel"))
+B("switcher_next", "Alt+Tab: nächstes Fenster", "ALT + Tab",            switcher("next"))
+B("switcher_prev", "Alt+Tab: voriges Fenster", "ALT + SHIFT + Tab",    switcher("prev"))
+B("switcher_commit", "Alt+Tab bestätigen (Alt loslassen)", "ALT + Alt_L",          switcher("commit"), { release = true, transparent = true })
+B("switcher_commit_shift", "Alt+Tab bestätigen (mit Shift)", "ALT + SHIFT + Alt_L",  switcher("commit"), { release = true, transparent = true })
+B("switcher_cancel", "Alt+Tab abbrechen", "ALT + Escape",         switcher("cancel"))
 
 -- Wie Windows: Win + Shift + Pfeil = Fenster auf anderen Bildschirm
-hl.bind(mainMod .. " + SHIFT + Left",  hl.dsp.window.move({ monitor = "l", follow = true }))
-hl.bind(mainMod .. " + SHIFT + Right", hl.dsp.window.move({ monitor = "r", follow = true }))
+B("window_to_left_monitor", "Fenster auf linken Monitor", mainMod .. " + SHIFT + Left",  hl.dsp.window.move({ monitor = "l", follow = true }))
+B("window_to_right_monitor", "Fenster auf rechten Monitor", mainMod .. " + SHIFT + Right", hl.dsp.window.move({ monitor = "r", follow = true }))
 
 -- Virtuelle Desktops
-hl.bind(mainMod .. " + Prior", hl.dsp.focus({ workspace = "e-1" }))     -- Bild hoch
-hl.bind(mainMod .. " + Next",  hl.dsp.focus({ workspace = "e+1" }))     -- Bild runter
+B("desktop_prev", "Vorheriger Desktop", mainMod .. " + Prior", hl.dsp.focus({ workspace = "e-1" }))     -- Bild hoch
+B("desktop_next", "Nächster Desktop", mainMod .. " + Next",  hl.dsp.focus({ workspace = "e+1" }))     -- Bild runter
 for i = 1, 9 do
-    hl.bind(mainMod .. " + " .. i,         hl.dsp.focus({ workspace = i }))
-    hl.bind(mainMod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
+    B("ws_focus_" .. i, "Zu Desktop n", mainMod .. " + " .. i,         hl.dsp.focus({ workspace = i }))
+    B("ws_move_" .. i, "Fenster auf Desktop n", mainMod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
 end
 
 -- Mit Super + Maus verschieben / Größe ändern
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+B("window_drag", "Fenster verschieben (Maus)", mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+B("window_resize", "Fenstergröße ändern (Maus)", mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 -- Alt + Maus geht auch (für Fenster ohne Titelleiste)
-hl.bind("ALT + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind("ALT + mouse:273", hl.dsp.window.resize(), { mouse = true })
+B("window_drag_alt", "Fenster verschieben (Maus, zweite Kombination)", "ALT + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+B("window_resize_alt", "Fenstergröße ändern (Maus, zweite Kombination)", "ALT + mouse:273", hl.dsp.window.resize(), { mouse = true })
+DXSnap.bindMouse(DXB)   -- Ziehen-Erkennung (Vorschau/Einrasten) folgt den gewählten Maus-Kombinationen
 
 -- Lautstärke / Medien
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
-hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true })
-hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
-hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+B("volume_up", "Lauter", "XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
+B("volume_down", "Leiser", "XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
+B("volume_mute", "Stumm", "XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true })
+B("media_next", "Medien: nächster Titel", "XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
+B("media_pause", "Medien: Pause", "XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+B("media_play", "Medien: Wiedergabe", "XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+B("media_prev", "Medien: voriger Titel", "XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
 
 
 --------------------------------
@@ -405,3 +413,5 @@ hl.layer_rule({ match = { namespace = "nwg-drawer" },                   blur = t
 hl.layer_rule({ match = { namespace = "launcher" },                     blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "swaync-control-center" },        blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "swaync-notification-window" },   blur = true, ignore_alpha = 0.3 })
+
+DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App schreiben

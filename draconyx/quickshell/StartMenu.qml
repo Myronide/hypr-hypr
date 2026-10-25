@@ -527,6 +527,11 @@ PanelWindow {
                                 : modelData.kind === "calc" ? "add"
                                 : modelData.kind === "web" ? "search" : ""
                         onTriggered: menu.activateResult(modelData)
+                        onRightClicked: (x, y) => {
+                            const p = menuRoot.mapFromItem(null, x, y);
+                            if (modelData.kind === "app") menu.ctx = { x: p.x, y: p.y, entry: modelData.entry };
+                            else if (modelData.kind === "file") menu.ctx = { x: p.x, y: p.y, file: modelData.path };
+                        }
                     }
                 }
             }
@@ -647,6 +652,7 @@ PanelWindow {
             y: menu.ctx ? Math.max(8, Math.min(menu.ctx.y, menuRoot.height - height - 8)) : 0
 
             readonly property var entry: menu.ctx && menu.ctx.entry ? menu.ctx.entry : null
+            readonly property string filePath: menu.ctx && menu.ctx.file ? menu.ctx.file : ""
             readonly property string folderName: menu.ctx && menu.ctx.folder ? menu.ctx.folder : ""
 
             Column {
@@ -701,6 +707,29 @@ PanelWindow {
                     iconName: "close"
                     label: "Aus Ordner entfernen"
                     onTriggered: { Global.folderRemoveApp(ctxMenu.entry.id); menu.ctx = null; }
+                }
+
+                // --- Datei (aus der Suche) ---
+                MenuRow {
+                    visible: ctxMenu.filePath !== ""
+                    width: ctxCol.width
+                    iconName: "folder-open"
+                    label: "Öffnen"
+                    onTriggered: { const f = ctxMenu.filePath; menu.ctx = null; menu.openPath(f); }
+                }
+                MenuRow {
+                    visible: ctxMenu.filePath !== ""
+                    width: ctxCol.width
+                    iconName: "folder"
+                    label: "Ordner anzeigen"
+                    onTriggered: { const f = ctxMenu.filePath; menu.ctx = null; Global.startOpen = false; Quickshell.execDetached(["dolphin", "--select", f]); }
+                }
+                MenuRow {
+                    visible: ctxMenu.filePath !== ""
+                    width: ctxCol.width
+                    iconName: "clipboard"
+                    label: "Pfad kopieren"
+                    onTriggered: { Quickshell.execDetached(["wl-copy", ctxMenu.filePath]); menu.ctx = null; }
                 }
 
                 // --- Ordner ---

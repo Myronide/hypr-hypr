@@ -40,7 +40,7 @@ PanelWindow {
     Process {
         id: rootsProc
         command: [Theme.home + "/.local/bin/dx-we-list", "--roots"]
-        stdout: StdioCollector { onStreamFinished: wp.rootsText = text.trim().split("\n").filter(l => l.indexOf("\t") > 0).slice(0, 8).map(l => l.split("\t").join("  →  ")).join("\n"); }
+        stdout: StdioCollector { onStreamFinished: wp.rootsText = text.trim().split("\n").filter(l => l.indexOf("\t") > 0).slice(0, 10).map(l => l.split("\t").join("  →  ")).join("\n"); }
     }
     Process {
         id: load
