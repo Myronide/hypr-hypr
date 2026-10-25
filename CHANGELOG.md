@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.2.2
+- Update in den Einstellungen: Version, Stand und Aktualisieren-Knopf in einer Zeile (Knopf nur bei neuer Version), automatische Prüfung im Hintergrund
+
 ## 1.2.1
 - Fortschrittsanzeige beim Update (oben rechts); Alt+Tab: Antippen springt sofort, Halten + Tab schaltet durch, Maus abschaltbar
 
