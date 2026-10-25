@@ -12,10 +12,11 @@ Ziel des Nutzers: ein **Windows-11-artiger, aber modernerer und „geilerer" Des
 - Plasma (KDE) und COSMIC sind weiter installiert und im Login-Screen wählbar (Fallback)
 - Deutsche Tastatur, Fish als Shell
 
-### Monitore (in `hyprland.lua`, links → rechts, oben bündig)
+### Monitore
 
-| Port | Monitor | Modus | Position | HDR |
-|---|---|---|---|---|
+Die Bildschirme stehen pro Rechner in `~/.config/hypr/monitors_local.lua` (nicht im Repo). Der Installer erkennt sie selbst; anordnen, Auflösung und Skalierung ändern: Aurora-Einstellungen → Bildschirme. HDR-Zeilen (`cm`, `bitdepth`, `sdrbrightness`, `vrr`) bleiben beim Speichern erhalten.
+
+---|---|---|---|---|
 | DP-1 | Acer VG270U E | 2560x1440@59.95 | 0x0 | `cm="hdr"`, 10 bit, `sdrbrightness=3.75` (≈300 nits) |
 | DP-2 | Acer XV271U M3 (Hauptmonitor, Gaming) | 2560x1440@179.88 | 2560x0 | `cm="hdr"`, 10 bit, `sdrbrightness=2.5` (≈200 nits), VRR an |
 | HDMI-A-2 | 236 FHD | 1920x1080@60 | 5120x0 | nein (sRGB) |
