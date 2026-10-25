@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 
 // Basis-Kachel mit Hover/Press-Zustand. Optional ziehbar (Drag-and-drop zum Sortieren).
 Rectangle {
@@ -13,6 +14,35 @@ Rectangle {
     readonly property bool pressed: area.pressed
     property real dragOffset: 0                  // Verschiebung während des Ziehens
     property bool dragging: false
+    property string tip: ""                      // Quickinfo (Erklärung beim Überfahren)
+    property bool tipOn: false
+
+    // ---------- Quickinfo ----------
+    Timer { id: tipTimer; interval: 550; running: btn.hovered && btn.tip !== "" && Global.tooltips && !btn.dragging && !btn.pressed; onTriggered: btn.tipOn = true }
+    onHoveredChanged: if (!hovered) tipOn = false
+    onPressedChanged: if (pressed) tipOn = false
+    Loader {
+        active: btn.tipOn
+        sourceComponent: PopupWindow {
+            anchor.item: btn
+            anchor.edges: Global.barTop ? Edges.Bottom : Edges.Top
+            anchor.gravity: Global.barTop ? Edges.Bottom : Edges.Top
+            anchor.margins.top: Global.barTop ? 10 : 0
+            anchor.margins.bottom: Global.barTop ? 0 : 10
+            implicitWidth: tipText.implicitWidth + 24
+            implicitHeight: tipText.implicitHeight + 14
+            color: "transparent"
+            visible: true
+            mask: Region {}                       // Mausereignisse gehen durch (sonst flackert die Quickinfo)
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.rS
+                color: Theme.panelStrong
+                border.color: Theme.border
+                Text { id: tipText; anchors.centerIn: parent; text: btn.tip; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsS }
+            }
+        }
+    }
 
     signal clicked(var mouse)
     signal scrolled(var wheel)

@@ -380,6 +380,7 @@ class Settings(Gtk.Application):
   self.sw(b,'Dock: nur die Kapsel unter der Maus ausfahren','barPartHide',False,'Gilt für „Schwebendes Dock“ mit „Automatisch ausblenden“: Apps-Kapsel und System-Kapsel fahren einzeln hoch.')
   self.sw(b,'Apps mittig','barCenter',True,'Aus: die Apps folgen direkt hinter den Knöpfen links.')
   self.sw(b,'Automatisch ausblenden','autohide',False,'Die Leiste fährt ein, wenn sie nicht benutzt wird.')
+  self.sw(b,'Quickinfos zu den Knöpfen','tooltips',True,'Beim Überfahren eines Knopfs in der Taskleiste erscheint eine kurze Erklärung.')
   self.sw(b,'Fenster einer App gruppieren','groupApps',True)
   self.shell_spin(b,'Höhe','barHeight',40,90,1,58);self.shell_spin(b,'Symbolgröße','iconSize',20,48,1,34);self.shell_spin(b,'Deckkraft','barOpacity',0.4,1.0,0.05,0.9)
   self.layout_editor(b)

@@ -78,6 +78,7 @@ Singleton {
     property alias appFolders:    settings.appFolders
     property alias recentApps:    settings.recentApps
     property alias autohide:      settings.autohide
+    property alias tooltips:      settings.tooltips
     property alias barHeight:     settings.barHeight
     property alias barOpacity:    settings.barOpacity
     property alias barTop:        settings.barTop
@@ -124,6 +125,7 @@ Singleton {
             property var appFolders: []          // [{ name: "Spiele", apps: ["steam", ...] }]
             property var recentApps: []
             property bool autohide: true
+            property bool tooltips: true            // Quickinfos beim Überfahren der Taskleistenknöpfe
             property int barHeight: 48
             property real barOpacity: 0.90
             property bool barTop: false

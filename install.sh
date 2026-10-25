@@ -5,6 +5,7 @@
 #   ./install.sh --ask      vor Paketinstallationen nachfragen (Standard: alles automatisch)
 #   ./install.sh --restart  Shell und Hyprland-Konfiguration auch ohne Änderungen neu laden
 #   ./install.sh --keymap=de|us   Tastaturbelegung vorgeben (de = QWERTZ, us = QWERTY); sonst wirst du einmal gefragt
+#   ./install.sh --keep-config    bestehende hyprland.lua NICHT ersetzen (sonst wird sie gesichert und ersetzt)
 #   ./install.sh --no-packages   keine Pakete installieren
 #   ./install.sh --force    Wallpaper Engine auch ohne Änderung neu bauen
 # Mehrfach ausführen ist ungefährlich: es wird nur angewendet, was neu oder geändert ist.
@@ -32,8 +33,8 @@ if [ "${DX_VIA_SUDO:-0}" != 1 ]; then
 fi
 REPO="$HERE"
 CONF="$HOME/.config"
-KEYMAP_ARG=""; DO_WE=1; ASSUME_YES=1; DO_PKGS=1; FORCE=0; CHANGED=0; RESTART=0
-for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) ASSUME_YES=1;; --ask) ASSUME_YES=0;; --restart) RESTART=1;; --no-packages) DO_PKGS=0;; --keymap=*) KEYMAP_ARG="${a#--keymap=}";; esac; done
+KEYMAP_ARG=""; KEEP_CONFIG=0; DO_WE=1; ASSUME_YES=1; DO_PKGS=1; FORCE=0; CHANGED=0; RESTART=0
+for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) ASSUME_YES=1;; --ask) ASSUME_YES=0;; --restart) RESTART=1;; --no-packages) DO_PKGS=0;; --keep-config) KEEP_CONFIG=1;; --keymap=*) KEYMAP_ARG="${a#--keymap=}";; esac; done
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*"; }
@@ -79,7 +80,7 @@ done
 # ---------------------------------------------------------------- 1. Pakete
 # Jeder Eintrag: "Name" oder "Name|Alternative|…" (je nach Distribution heißt ein Paket anders, z. B. ttf-inter / inter-font).
 # Es wird das erste Paket genommen, das es in den Paketquellen gibt; ein fehlendes Paket stoppt die anderen nicht mehr.
-PKGS=(hyprland quickshell jq python python-gobject python-pillow gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
+PKGS=(hyprland quickshell fuzzel jq python python-gobject python-pillow gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
       "inter-font|ttf-inter" papirus-icon-theme adw-gtk-theme fontconfig noto-fonts noto-fonts-emoji
       qt6-wayland qt6-svg qt6-5compat qt6-imageformats qt6-multimedia
       pipewire pipewire-pulse wireplumber playerctl networkmanager nm-connection-editor bluez bluez-utils blueman pavucontrol
@@ -164,10 +165,10 @@ for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$
 put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
 if [ -e "$CONF/hypr/hyprland.lua" ] && cmp -s "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; then
   :   # schon unsere hyprland.lua
-elif [ -e "$CONF/hypr/hyprland.lua" ] && ! grep -qE 'aurora|draconyx|dx_binds' "$CONF/hypr/hyprland.lua"; then
-  # Reine Hyprland-Standardkonfiguration (nichts von Aurora/Draconyx darin): ohne unsere Datei würde sich gar nichts ändern.
-  # Deshalb ersetzen wir sie – die alte Datei wird vorher gesichert, und ihre Monitor-Einstellungen übernehmen wir.
-  say "Reine Hyprland-Konfiguration gefunden – Draconyx wird eingerichtet (Sicherung der alten: $BACKUP)"
+elif [ -e "$CONF/hypr/hyprland.lua" ] && [ "$KEEP_CONFIG" != 1 ]; then
+  # Die Draconyx-hyprland.lua wird IMMER eingesetzt (sonst bliebe die Installation halb wirkungslos). Die alte Datei wird vorher
+  # gesichert, ihre Monitor-Einstellungen und die Tastaturbelegung übernehmen wir. Wer das nicht will: --keep-config
+  say "Bestehende hyprland.lua wird durch die Draconyx-Konfiguration ersetzt (Sicherung der alten: $BACKUP)"
   backup_file "$CONF/hypr/hyprland.lua"
   if [ ! -e "$CONF/hypr/monitors_local.lua" ]; then
     python3 -I - "$CONF/hypr/hyprland.lua" "$CONF/hypr/monitors_local.lua" <<'PY' || true
@@ -234,6 +235,11 @@ if hyprctl plugin list 2>/dev/null | grep -q aurora-native; then
   if head -1 "$HOME/.config/brave-flags.conf" 2>/dev/null | grep -q '^# Draconyx'; then rm -f "$HOME/.config/brave-flags.conf"; echo "    brave-flags.conf entfernt (natives Plugin vorhanden)"; fi
 else
   [ -e "$HOME/.config/brave-flags.conf" ] || printf '%s\n%s\n' '# Draconyx: Brave über XWayland starten, damit das Minimieren-Symbol funktioniert (ohne natives Aurora-Plugin).' '--ozone-platform=x11' > "$HOME/.config/brave-flags.conf"
+fi
+
+# Electron-Apps (Discord, Vesktop …) über XWayland starten, damit ihr Minimieren-Symbol bei Hyprland ankommt (ohne natives Plugin)
+if ! hyprctl plugin list 2>/dev/null | grep -q aurora-native; then
+  "$HOME/.local/bin/dx-electron-x11" | sed 's/^/    /'
 fi
 
 # ---------------------------------------------------------------- 4. Wallpaper Engine (repariert)

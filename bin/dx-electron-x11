@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Draconyx: Electron-Apps (Discord & Co.) über XWayland starten. Hyprland ignoriert das Minimieren-Symbol nativer Wayland-Apps;
+# bei XWayland-Fenstern fängt die Shell es ab (dx-x11-iconify). Es werden eigene Starter in ~/.local/share/applications angelegt,
+# die den Start mit --ozone-platform=x11 erzwingen. Bestehende eigene Starter bleiben unangetastet.
+#   dx-electron-x11          anlegen / erneuern
+#   dx-electron-x11 --undo   unsere Starter wieder entfernen
+USER_APPS="$HOME/.local/share/applications"; MARK="# Draconyx: Electron über XWayland"
+IDS=(discord discord-ptb discord-canary vesktop webcord legcord armcord slack signal-desktop element-desktop teams-for-linux)
+if [ "$1" = "--undo" ]; then
+  for id in "${IDS[@]}"; do f="$USER_APPS/$id.desktop"; [ -f "$f" ] && grep -q "$MARK" "$f" && rm -f "$f" && echo "entfernt: $f"; done; exit 0
+fi
+n=0
+for id in "${IDS[@]}"; do
+  src=""; for d in /usr/share/applications /var/lib/flatpak/exports/share/applications; do [ -f "$d/$id.desktop" ] && { src="$d/$id.desktop"; break; }; done
+  [ -n "$src" ] || continue
+  dst="$USER_APPS/$id.desktop"
+  [ -e "$dst" ] && ! grep -q "$MARK" "$dst" && continue          # eigener Starter des Nutzers: nicht anfassen
+  mkdir -p "$USER_APPS"
+  # nach dem Programm in jeder Exec-Zeile die Option einfügen (Flatpak-Starter ausgenommen)
+  grep -q '^Exec=.*flatpak' "$src" && continue
+  { echo "$MARK"; sed -E 's|^(Exec=[^ ]+)|\1 --ozone-platform=x11|' "$src"; } > "$dst.tmp"
+  if [ -f "$dst" ] && cmp -s "$dst.tmp" "$dst"; then rm -f "$dst.tmp"; else mv "$dst.tmp" "$dst"; echo "angelegt: $dst"; n=$((n+1)); fi
+done
+command -v update-desktop-database >/dev/null && update-desktop-database "$USER_APPS" 2>/dev/null
+[ "$n" -gt 0 ] && echo "Hinweis: laufende Apps einmal beenden und neu starten, damit sie über XWayland laufen."
+exit 0

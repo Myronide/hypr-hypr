@@ -30,31 +30,45 @@ local quickPanel  = "sh -c 'qs -c draconyx ipc call shell toggleControl 2>/dev/n
 ---------------------
 ---- AUTOSTART ------
 ---------------------
+-- Startet ein Programm nur, wenn es installiert ist (kein Fehler auf Rechnern ohne es)
+local function ifInstalled(bin, cmd)
+    return "sh -c 'command -v " .. bin .. " >/dev/null 2>&1 && exec " .. (cmd or bin) .. "'"
+end
+local function fileExists(path) local f = io.open(path, "r"); if f then f:close(); return true end; return false end
+
+-- Mauszeiger: der Windows-Zeiger, wenn er installiert ist, sonst Adwaita (sonst fehlt der Zeiger ganz)
+local HOME_ = os.getenv("HOME") or ""
+local CURSOR = "Adwaita"
+for _, dir in ipairs({ HOME_ .. "/.icons", HOME_ .. "/.local/share/icons", "/usr/share/icons" }) do
+    if fileExists(dir .. "/Windows10Light/index.theme") then CURSOR = "Windows10Light"; break end
+end
+
 hl.on("hyprland.start", function()
-    hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
+    -- Polkit-Agent (Passwortabfragen): der erste vorhandene
+    hl.exec_cmd("sh -c 'for p in /usr/lib/hyprpolkitagent/hyprpolkitagent /usr/lib/polkit-kde-authentication-agent-1 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 /usr/lib/mate-polkit/polkit-mate-authentication-agent-1; do [ -x \"$p\" ] && exec \"$p\"; done'")
     hl.exec_cmd("sh -c 'command -v qs >/dev/null || exec pcmanfm-qt --desktop'")  -- Desktop: Draconyx Shell, Fallback pcmanfm-qt
     hl.exec_cmd(shellBar)                              -- Taskleiste (Draconyx Shell)
-    hl.exec_cmd("swaync")                              -- Benachrichtigungen
-    hl.exec_cmd("hypridle")
-    hl.exec_cmd("nm-applet --indicator")
-    hl.exec_cmd("blueman-applet")
-    hl.exec_cmd("wl-paste --watch cliphist store")    -- Zwischenablage-Verlauf (Win+V)
-    hl.exec_cmd("hyprctl setcursor Windows10Light 24")
-    hl.exec_cmd("gsettings set org.gnome.desktop.interface cursor-theme Windows10Light")
+    hl.exec_cmd(ifInstalled("swaync"))                 -- Benachrichtigungen
+    hl.exec_cmd(ifInstalled("hypridle"))
+    hl.exec_cmd(ifInstalled("nm-applet", "nm-applet --indicator"))
+    hl.exec_cmd(ifInstalled("blueman-applet"))
+    hl.exec_cmd(ifInstalled("cliphist", "wl-paste --watch cliphist store"))    -- Zwischenablage-Verlauf (Win+V)
+    hl.exec_cmd("hyprctl setcursor " .. CURSOR .. " 24")
+    hl.exec_cmd("gsettings set org.gnome.desktop.interface cursor-theme " .. CURSOR)
     hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")
     hl.exec_cmd("gsettings set org.gnome.desktop.interface icon-theme Papirus-Dark")
-    -- deine bisherigen Autostarts
-    hl.exec_cmd("easyeffects --hide-window --service-mode")
-    hl.exec_cmd("jamesdsp")
-    hl.exec_cmd(os.getenv("HOME") .. "/Jetbrains_Toolbox/jetbrains-toolbox --minimize")
+    -- optionale Zusatzprogramme: nur wenn vorhanden
+    hl.exec_cmd(ifInstalled("easyeffects", "easyeffects --hide-window --service-mode"))
+    hl.exec_cmd(ifInstalled("jamesdsp"))
+    if fileExists(HOME_ .. "/Jetbrains_Toolbox/jetbrains-toolbox") then hl.exec_cmd(HOME_ .. "/Jetbrains_Toolbox/jetbrains-toolbox --minimize") end
 end)
 
 
 -------------------------------
 ---- UMGEBUNGSVARIABLEN -------
 -------------------------------
-hl.env("XCURSOR_THEME", "Windows10Light")      -- klassischer Windows-Mauszeiger
-hl.env("HYPRCURSOR_THEME", "Windows10Light")
+hl.env("XCURSOR_THEME", CURSOR)      -- klassischer Windows-Mauszeiger (falls vorhanden)
+hl.env("HYPRCURSOR_THEME", CURSOR)
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
