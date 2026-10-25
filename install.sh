@@ -212,7 +212,16 @@ fi
 
 say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css"
 A="$CONF/hypr/aurora"; mkdir -p "$A"
-for f in settings-app preferences.py settings.css; do [ -e "$A/$f" ] || ln -s "$REPO/$f" "$A/$f"; done
+# Echte Kopien statt Verknüpfungen ins Repo: Wer das Repo neu klont oder verschiebt, behielt sonst eine Verknüpfung auf den alten Stand
+# (alte Einstellungen-App, obwohl frisch installiert). Alte Verknüpfungen werden hier ersetzt.
+for f in settings-app preferences.py settings.css; do
+  [ -L "$A/$f" ] && { rm -f "$A/$f"; echo "    Verknüpfung durch Kopie ersetzt: $f"; CHANGED=$((CHANGED+1)); }
+  put "$REPO/$f" "$A/$f" $([ "$f" = settings-app ] && echo 755 || echo 644)
+done
+# Läuft noch eine alte Einstellungen-App, würde ein neuer Start nur zu ihr zurückspringen: beenden
+for p in $(pgrep -x python3 || true); do
+  tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'aurora/settings-app' && kill "$p" 2>/dev/null || true
+done
 
 # ---------------------------------------------------------------- 3. Standardwerte
 [ -e "$CONF/draconyx/terminal" ] || { for t in ghostty kitty foot alacritty konsole; do command -v "$t" >/dev/null && { echo "$t" > "$CONF/draconyx/terminal"; break; }; done; }
