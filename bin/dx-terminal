@@ -15,7 +15,7 @@ if [ -z "$term" ] && [ -f "$HOME/.config/hypr/aurora/preferences.json" ]; then
   term="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1])).get("terminal",""))' "$HOME/.config/hypr/aurora/preferences.json" 2>/dev/null)"
 fi
 if [ -z "$term" ] || ! command -v "$term" >/dev/null 2>&1; then
-  for t in ghostty kitty foot alacritty wezterm konsole; do command -v "$t" >/dev/null 2>&1 && term="$t" && break; done
+  for t in ghostty kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm; do command -v "$t" >/dev/null 2>&1 && term="$t" && break; done
 fi
 [ -n "$dir" ] && cd "$dir" 2>/dev/null
 case "$term" in
@@ -25,5 +25,9 @@ case "$term" in
   alacritty) exec alacritty ${dir:+--working-directory "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
   wezterm)   exec wezterm start ${dir:+--cwd "$dir"} ${cmd[@]:+-- "${cmd[@]}"};;
   konsole)   exec konsole ${dir:+--workdir "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
+  gnome-terminal) exec gnome-terminal ${dir:+--working-directory="$dir"} ${cmd[@]:+-- "${cmd[@]}"};;
+  xfce4-terminal) exec xfce4-terminal ${dir:+--working-directory="$dir"} ${cmd[@]:+-x "${cmd[@]}"};;
+  tilix)     exec tilix ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "${cmd[*]}"};;
+  xterm)     exec xterm ${cmd[@]:+-e "${cmd[@]}"};;
   *) echo "Kein Terminal gefunden" >&2; exit 127;;
 esac

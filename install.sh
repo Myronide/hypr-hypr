@@ -85,7 +85,7 @@ PKGS=(hyprland quickshell fuzzel jq python python-gobject python-pillow gtk3 gtk
       qt6-wayland qt6-svg qt6-5compat qt6-imageformats qt6-multimedia
       pipewire pipewire-pulse wireplumber playerctl networkmanager nm-connection-editor bluez bluez-utils blueman pavucontrol
       power-profiles-daemon libnotify glib2 xdg-utils xdg-user-dirs xdg-desktop-portal-hyprland polkit procps-ng pciutils
-      kitty ghostty dolphin swaync hypridle hyprlock cliphist plocate)
+      dolphin swaync hypridle hyprlock cliphist plocate)
 WE_PKGS=(base-devel cmake make gcc pkgconf glm sdl2 wayland wayland-protocols libxkbcommon ffmpeg mpv glfw glew freeglut lz4 zlib
          libpulse libcups at-spi2-core nss libxcomposite libxdamage nspr libxrandr libxss libxi libxcursor libxinerama libglvnd mesa)
 
@@ -99,6 +99,10 @@ resolve_pkg() {
   aur+=("${alts[0]}")                                                                    # nicht in den Paketquellen
 }
 for p in "${PKGS[@]}" $([ "$DO_WE" = 1 ] && echo "${WE_PKGS[@]}"); do resolve_pkg "$p"; done
+# Terminal: nur wenn KEIN einziges installiert ist, wird Ghostty erzwungen. Sonst bleibt dein Terminal, und du kannst Ghostty/Kitty
+# jederzeit deinstallieren (der Installer bringt sie nicht zurück). dx-terminal-ensure wacht danach, dass immer eins da ist.
+have_term=0; for t in ghostty kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm; do command -v "$t" >/dev/null 2>&1 && have_term=1; done
+if [ "$have_term" = 0 ]; then say "Kein Terminal gefunden – Ghostty wird installiert"; resolve_pkg ghostty; fi
 FAILED_PKGS=()
 if [ "$DO_PKGS" = 1 ] && { [ "${#want[@]}" -gt 0 ] || [ "${#aur[@]}" -gt 0 ]; }; then
   [ "${#want[@]}" -gt 0 ] && say "Fehlende Pakete: ${want[*]}"
@@ -389,6 +393,9 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
     warn "Keine laufende Hyprland-Sitzung gefunden – Shell und Konfiguration werden beim nächsten Anmelden geladen."
   fi
 fi
+
+# Es muss immer ein Terminal da sein; zeigt die Einstellung auf ein fehlendes, wird sie umgestellt
+[ -x "$HOME/.local/bin/dx-terminal-ensure" ] && "$HOME/.local/bin/dx-terminal-ensure" --quiet || true
 
 # Installierte Version und Repo-Pfad merken (für die Update-Prüfung der Shell: dx-update)
 mkdir -p "$CONF/draconyx"

@@ -986,6 +986,13 @@ Singleton {
     Timer { interval: 6 * 3600 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
     Timer { interval: 120000; running: true; onTriggered: root.checkUpdate(false) }      // zwei Minuten nach dem Start
 
+    // ---------- Terminal-Wächter ----------
+    // Es soll immer mindestens ein Terminal installiert sein (auch wenn Ghostty/Kitty deinstalliert wurden). dx-terminal-ensure
+    // stellt die Einstellung auf ein vorhandenes um und installiert nur dann Ghostty, wenn gar keins mehr da ist.
+    Process { id: termEnsure; command: [Theme.home + "/.local/bin/dx-terminal-ensure", "--quiet"] }
+    Timer { interval: 3 * 3600 * 1000; running: true; repeat: true; onTriggered: { termEnsure.running = false; termEnsure.running = true; } }
+    Timer { interval: 45000; running: true; onTriggered: { termEnsure.running = false; termEnsure.running = true; } }
+
     // ---------- Snip-Werkzeug ----------
     // snip("region"): alle Bildschirme einfrieren, Bereich aufziehen. snip("screen"): ganzen Bildschirm unter dem Fokus direkt kopieren+speichern.
     Process {

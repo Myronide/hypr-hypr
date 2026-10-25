@@ -152,7 +152,7 @@ class Settings(Gtk.Application):
   self.button(b,'Schreibtisch anzeigen','Zeigen / Zurück',lambda:send_ui('show-desktop'))
   self.button(b,'Zwischenablage','Verlauf öffnen',lambda:send_ui('clipboard'))
   import shutil
-  terminals=[(t,t.capitalize()) for t in ('kitty','ghostty','foot','alacritty','wezterm','konsole') if shutil.which(t)] or [('kitty','Kitty')]
+  terminals=[(t,t.replace('-',' ').title()) for t in ('ghostty','kitty','foot','alacritty','wezterm','konsole','gnome-terminal','xfce4-terminal','tilix','xterm') if shutil.which(t)] or [('kitty','Kitty')]
   self.p.setdefault('terminal',terminals[0][0])
   self.combo(b,'Terminal','terminal',terminals)
   self.p['keymap']=current_keymap()
