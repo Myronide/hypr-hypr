@@ -13,6 +13,10 @@ sec "Laufende Prozesse (relevante)"
 for n in qs waybar swaync hypridle linux-wallpaper; do printf '%-16s %s\n' "$n" "$(pgrep -x "$n" | tr '\n' ' ')"; done
 for p in $(pgrep -x python3 2>/dev/null); do c=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null); case "$c" in *desktop-ui*|*dx-ui-bridge*|*dx-x11-iconify*|*settings-app*) echo "python3 $p: $c";; esac; done
 echo "qs-Prozesse: $(pgrep -xc qs)  (mehr als 1 = doppelt gestartet)"
+n_ic=0; n_br=0
+for p in $(pgrep -x python3 2>/dev/null); do c=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null); case "$c" in *dx-x11-iconify*) n_ic=$((n_ic+1));; *dx-ui-bridge*) n_br=$((n_br+1));; esac; done
+echo "dx-x11-iconify: $n_ic (soll 1)   dx-ui-bridge: $n_br (soll 1)"
+command -v xdotool >/dev/null && echo "xdotool: ja" || echo "xdotool: FEHLT (Minimieren von XWayland-Apps braucht es)"
 sec "Hyprland: Konfigurationsfehler / Plugins / Monitore"
 hyprctl configerrors 2>&1 | head -12
 hyprctl plugin list 2>&1 | grep -E '^Plugin' | head
@@ -20,7 +24,7 @@ hyprctl monitors -j 2>/dev/null | jq -r '.[]|"\(.name) \(.width)x\(.height)@\(.r
 sec "Was lädt deine hyprland.lua?"
 grep -nE 'require|dofile|source|desktop\.lua|aurora|draconyx|exec_cmd\(.*(waybar|qs|desktop-ui|start-)' "$H/hyprland.lua" 2>/dev/null | head -30
 sec "Dateien"
-for f in "$H/hyprland.lua" "$H/desktop.lua" "$H/monitors_local.lua" "$H/dx_binds.lua" "$H/aurora/preferences.json" "$H/aurora/preferences.lua" "$H/aurora/desktop-ui" "$H/aurora/start-desktop" "$H/aurora/start-dock" "$HOME/.config/quickshell/draconyx/shell.qml" "$HOME/.config/draconyx/modifier" "$HOME/.config/draconyx/terminal" "$HOME/.config/draconyx/colors.json" "$HOME/.config/draconyx/binds.conf" "$HOME/.local/state/draconyx/settings.json" "$HOME/.local/opt/linux-wallpaperengine/linux-wallpaperengine"; do
+for f in "$H/hyprland.lua" "$H/aurora/desktop.lua" "$H/monitors_local.lua" "$H/dx_binds.lua" "$H/aurora/preferences.json" "$H/aurora/preferences.lua" "$H/aurora/desktop-ui" "$H/aurora/start-desktop" "$H/aurora/start-dock" "$HOME/.config/quickshell/draconyx/shell.qml" "$HOME/.config/draconyx/modifier" "$HOME/.config/draconyx/terminal" "$HOME/.config/draconyx/colors.json" "$HOME/.config/draconyx/binds.conf" "$HOME/.local/state/draconyx/settings.json" "$HOME/.local/opt/linux-wallpaperengine/linux-wallpaperengine"; do
   if [ -e "$f" ]; then printf '%-70s %s\n' "${f/#$HOME/~}" "$(stat -c '%y' "$f" | cut -c1-16)"; else printf '%-70s fehlt\n' "${f/#$HOME/~}"; fi
 done
 sec "Aurora-Einstellungen (Auszug)"
@@ -38,6 +42,8 @@ if [ "$FIX" = 1 ]; then
   echo "== Aufräumen ==" | tee -a "$OUT"
   pgrep -x waybar >/dev/null && { pkill -x waybar; echo "waybar beendet" | tee -a "$OUT"; }
   for p in $(pgrep -x python3); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'desktop-ui daemon' && { kill "$p"; echo "altes Aurora-Dock beendet ($p)" | tee -a "$OUT"; }; done
+  # doppelte Wächter: nur den neuesten behalten
+  for n in dx-x11-iconify dx-ui-bridge; do ids=$(for p in $(pgrep -x python3); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "$n" && echo $p; done | sort -n); keep=$(echo "$ids" | tail -1); for p in $ids; do [ "$p" != "$keep" ] && { kill "$p"; echo "doppelten $n beendet ($p)" | tee -a "$OUT"; }; done; done
   rm -f "${XDG_RUNTIME_DIR:-/tmp}"/aurora-dock.lock "${XDG_RUNTIME_DIR:-/tmp}"/aurora-waybar.pid 2>/dev/null
 fi
 cat "$OUT"; echo; echo ">>> Bericht gespeichert: $OUT"

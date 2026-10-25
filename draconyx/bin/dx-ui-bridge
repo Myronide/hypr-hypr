@@ -2,6 +2,31 @@
 """Nimmt die Meldungen des nativen Aurora-Plugins entgegen ($XDG_RUNTIME_DIR/aurora-ui.sock) und gibt sie an die Shell weiter.
   ["minimize","0xADRESSE"]  -> Minimieren-Knopf einer App (z. B. Brave/Discord) -> Shell minimiert/holt zurück."""
 import json, os, socket, subprocess, sys
+
+# Nur eine Instanz: ein neuer Wächter übernimmt und beendet den alten (sonst melden mehrere Wächter jedes Ereignis mehrfach,
+# und Minimieren/Wiederherstellen schaukelt sich auf). Stirbt die Shell, stirbt auch der Wächter (PDEATHSIG).
+import os as _os, signal as _signal, ctypes as _ct
+def _single_instance(name):
+    pidf = _os.path.join(_os.environ.get("XDG_RUNTIME_DIR", "/tmp"), name + ".pid")
+    try:
+        old = int(open(pidf).read().strip())
+    except (OSError, ValueError):
+        old = 0
+    if old and old != _os.getpid():
+        try:
+            if name.encode() in open("/proc/%d/cmdline" % old, "rb").read():
+                _os.kill(old, _signal.SIGTERM)
+        except OSError:
+            pass
+    try:
+        open(pidf, "w").write(str(_os.getpid()))
+    except OSError:
+        pass
+    try:
+        _ct.CDLL("libc.so.6").prctl(1, int(_signal.SIGTERM))      # PR_SET_PDEATHSIG
+    except OSError:
+        pass
+_single_instance("dx-ui-bridge")
 from pathlib import Path
 rt = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
 path = Path(rt) / "aurora-ui.sock"

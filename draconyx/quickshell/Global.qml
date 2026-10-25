@@ -91,6 +91,7 @@ Singleton {
     property alias startLogo:     settings.startLogo
     property alias barStyle:      settings.barStyle
     property alias barPartHide:   settings.barPartHide
+    property alias barLayouts:    settings.barLayouts
     property alias fullscreenBar: settings.fullscreenBar
     property alias barItems:      settings.barItems
     property alias showDate:      settings.showDate
@@ -132,6 +133,7 @@ Singleton {
             property bool showDate: true            // Datum unter der Uhrzeit
             property string settingsCmd: ""         // Befehl der Einstellungs-App (leer = automatisch)
             property string fullscreenBar: "hover"   // Taskleiste bei Vollbild: "hover" = weg, am Rand einblendbar · "hide" = ganz weg · "show" = bleibt sichtbar
+            property var barLayouts: ({})           // { bar: { left: [...], center: [...], right: [...] }, dock: {...} } Anordnung der Taskleisten-Teile
             property bool barPartHide: false        // Dock mit Auto-Hide: nur die Kapsel unter der Maus fährt hoch
             property string barStyle: "bar"     // "bar" = durchgehende Leiste, "dock" = schwebendes Dock (wie Aurora)
             property string startLogo: ""        // "" = Draconyx, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild
@@ -680,6 +682,9 @@ Singleton {
     }
 
     // XWayland-Apps (z. B. Steam) minimieren über eine X-Nachricht, die Hyprland ignoriert: Wächter-Skript liest sie mit
+    // Brücke für die Minimieren-Knöpfe des nativen Aurora-Plugins (aurora-ui.sock -> Shell); läuft nur mit der Shell
+    Process { running: true; command: [Theme.home + "/.local/bin/dx-ui-bridge"] }
+
     property string lastIconify: ""
     property double lastIconifyAt: 0
     Process {
@@ -847,6 +852,31 @@ Singleton {
         for (const mv of moves) if (mons.indexOf(pos[mv.name].m) < 0) { mons.push(pos[mv.name].m); add = true; }
         if (add) desktopMonitors = mons;
     }
+
+    // ---------- Anordnung der Taskleiste: jeder Teil sitzt links, mittig oder rechts ----------
+    readonly property var barItemIds: ["start", "search", "taskview", "code", "wallpaper", "mode", "desktops", "apps",
+                                       "tray", "system", "notifications", "clock", "settings", "showDesktop"]
+    function defaultLayout(style) {
+        const tools = ["start", "search", "taskview", "code", "wallpaper", "mode", "desktops"];
+        const sys = ["tray", "system", "notifications", "clock", "settings", "showDesktop"];
+        if (style === "dock") return { left: [], center: tools.concat(["apps"]), right: sys };
+        return { left: tools, center: ["apps"], right: sys };
+    }
+    // gespeicherte Anordnung bereinigen: unbekannte/doppelte Teile raus, fehlende an ihre Standard-Stelle
+    function layoutSections(style) {
+        const def = defaultLayout(style);
+        const saved = (barLayouts || {})[style];
+        if (!saved) return def;
+        const seen = {}; const out = { left: [], center: [], right: [] };
+        for (const sec of ["left", "center", "right"])
+            for (const id of (saved[sec] || [])) if (barItemIds.indexOf(id) >= 0 && !seen[id]) { seen[id] = true; out[sec].push(id); }
+        for (const sec of ["left", "center", "right"])
+            for (const id of def[sec]) if (!seen[id]) { seen[id] = true; out[sec].push(id); }
+        return out;
+    }
+    function sectionItems(style, section) { return layoutSections(style)[section].filter(id => item(id)); }
+    function setBarLayout(style, sections) { const m = Object.assign({}, barLayouts); m[style] = sections; barLayouts = m; }
+    function resetBarLayout(style) { const m = Object.assign({}, barLayouts); delete m[style]; barLayouts = m; }
 
     // Bestandteile der Taskleiste an/aus (Standard: an, außer "power")
     function item(key) { const v = (barItems || {})[key]; return v === undefined ? key !== "power" : v === true; }

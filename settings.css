@@ -41,6 +41,9 @@ spinbutton { padding:0; }
 spinbutton entry { border:0; background:transparent; box-shadow:none; min-width:46px; }
 spinbutton button { background:transparent; border:0; border-radius:8px; min-width:28px; padding:0; margin:3px 1px; }
 spinbutton button:hover { background:alpha(@shell_accent,0.28); }
+flowbox { background:transparent; }
+flowboxchild { padding:0; background:transparent; }
+button:checked { background:alpha(@shell_accent,0.30); border-color:@shell_accent; color:@shell_text; font-weight:700; }
 combobox button { background:@shell_hover; border-radius:10px; padding:7px 14px; min-width:150px; }
 combobox arrow { color:@shell_muted; }
 switch { background:alpha(white,0.14); border:0; border-radius:99px; min-width:48px; min-height:26px; transition:all 160ms ease; }

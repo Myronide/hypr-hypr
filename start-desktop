@@ -2,8 +2,6 @@
 mkdir -p "$HOME/.cache/aurora"
 "$HOME/.config/hypr/aurora/start-dock" &
 "$HOME/.config/hypr/aurora/desktop-ui" daemon >> "$HOME/.cache/aurora/ui.log" 2>&1 &
-# Draconyx-Shell: Brücke für die Minimieren-Knöpfe des nativen Plugins (aurora-ui.sock -> Shell)
-[ -f "$HOME/.config/quickshell/draconyx/shell.qml" ] && command -v dx-ui-bridge >/dev/null && flock -n "$XDG_RUNTIME_DIR/dx-ui-bridge.lock" dx-ui-bridge >> "$HOME/.cache/aurora/bridge.log" 2>&1 &
 flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-text.lock" wl-paste --type text --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store text >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
 flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-image.lock" wl-paste --type image/png --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store image/png >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
 "$HOME/.config/hypr/aurora/background-restore" >> "$HOME/.cache/aurora/wallpaper.log" 2>&1 &

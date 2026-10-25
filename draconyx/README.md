@@ -4,8 +4,8 @@ Ordner für den Stand von SyntaxJason ("Draconyx"), zusammengeführt mit Myronid
 
 ## Einrichten
 ```sh
-./draconyx/install.sh              # Pakete (fragt vorher), Shell, Skripte, Wallpaper Engine bauen
-./draconyx/install.sh --no-we      # ohne Wallpaper Engine
+sudo ./draconyx/install.sh         # nur mit sudo-Freigabe; richtet alles ein, lädt Hyprland neu und startet die Shell neu
+sudo ./draconyx/install.sh --no-we # ohne Wallpaper Engine
 ```
 Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).
 `~/.config/hypr/monitors_local.lua` ist eine Vorlage von SyntaxJason und muss an die eigenen Monitore angepasst werden (`hyprctl monitors`).
@@ -39,6 +39,13 @@ Strg+Leertaste öffnet die Suche nur auf dem leeren Desktop, in Apps bleibt die 
 - **Strg+Leertaste** öffnet auf dem leeren Desktop ein eigenes Suchfeld mittig mit Ergebnissen darunter (Apps, Rechner, Einstellungen, Dateien, Web); Rechtsklick auf ein Ergebnis: an Taskleiste/Start anheften, Datei öffnen, Ordner zeigen, Pfad kopieren. In Apps bleibt die Taste unberührt.
 - **Alle Tastenkombinationen** sind in den Aurora-Einstellungen → Tastenkombinationen umbindbar (inkl. Maus wie Alt+Linksklick), gespeichert in `~/.config/draconyx/binds.conf`. Die Liste entsteht aus der geladenen Hyprland-Config (`dx_binds.lua`).
 - **`dx-doctor`** schreibt einen Zustandsbericht nach `~/dx-doctor.txt` (laufende Prozesse, Config-Fehler, Dateien, Shell-Log); `dx-doctor --fix` beendet Doppelstarts (waybar, altes Aurora-Dock).
+
+
+## Taskleiste: Anordnung
+Jeder Teil der Taskleiste (Start, Suche, Apps, Tray, Uhr …) lässt sich in den Aurora-Einstellungen → Taskleiste → **Anordnung** auf *Links*, *Mitte* oder *Rechts* setzen, Reihenfolge mit den Pfeilen. Im Dock-Stil wird jeder Bereich zu einer eigenen schwebenden Insel (leere Bereiche verschwinden), im Leistenstil sind es drei Bereiche einer durchgehenden Leiste.
+
+## Installer
+`sudo ./draconyx/install.sh` (oder ohne sudo: er verlangt dann zuerst die sudo-Freigabe). Er repariert Besitzer und Rechte, wendet nur Neues an und lädt anschließend Hyprland neu und startet die Shell neu. `--ask` fragt vor Paketen, `--restart` lädt auch ohne Änderung neu.
 
 ## Bewusst NICHT drin
 - Auroras Plugins (hyprbars, `aurora-native`): Sie lagen in einem Test im Weg und haben beim Laden in eine laufende Sitzung Hyprland zum Absturz gebracht. Nicht per Live-Reload laden. Wer sie nutzt, lädt sie nur beim Login.

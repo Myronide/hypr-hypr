@@ -2,8 +2,32 @@
 import gi,json,subprocess,os,threading
 from pathlib import Path
 gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
-from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango
+from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango,GObject
 from preferences import BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
+
+class Choice(Gtk.FlowBox):
+ """Auswahl als Knopfreihe statt Aufklappliste: GTK-Auswahllisten werden unter XWayland/Hyprland mittig im Fenster und fehlerhaft
+ geöffnet. Gleiche Bedienung wie ComboBoxText (append, set_active_id, get_active_id, Signal 'changed')."""
+ __gsignals__={'changed':(GObject.SignalFlags.RUN_FIRST,None,())}
+ def __init__(self):
+  super().__init__(selection_mode=Gtk.SelectionMode.NONE,max_children_per_line=3,column_spacing=6,row_spacing=6,homogeneous=False)
+  self.set_valign(Gtk.Align.CENTER);self.buttons={};self.active=None;self._lock=False
+ def append(self,i,label):
+  b=Gtk.ToggleButton(label=label);b.connect('toggled',self._toggled,i);self.buttons[i]=b;self.insert(b,-1);b.show()
+ def _toggled(self,b,i):
+  if self._lock:return
+  if b.get_active():self.set_active_id(i,True)
+  elif self.active==i:
+   self._lock=True;b.set_active(True);self._lock=False      # die gewählte Option bleibt gewählt
+ def set_active_id(self,i,emit=False):
+  self._lock=True
+  for k,b in self.buttons.items():b.set_active(k==i)
+  self._lock=False
+  if i!=self.active and i in self.buttons:
+   self.active=i
+   if emit:self.emit('changed')
+ def get_active_id(self):return self.active
+
 SHELL_SETTINGS=Path.home()/'.local/state/draconyx/settings.json'
 def shell_get(key,default=None):
  try:return json.loads(SHELL_SETTINGS.read_text()).get(key,default)
@@ -43,7 +67,7 @@ class Settings(Gtk.Application):
  def spin(self,box,title,key,minimum,maximum,step=1,description=''):
   w=Gtk.SpinButton.new_with_range(minimum,maximum,step);w.set_value(float(self.p.get(key,minimum)));w.connect('value-changed',lambda w:self.p.__setitem__(key,w.get_value() if step<1 else w.get_value_as_int()));return self.row(box,title,w,description)
  def combo(self,box,title,key,choices):
-  w=Gtk.ComboBoxText()
+  w=Choice()
   for value,text in choices:w.append(value,text)
   w.set_active_id(str(self.p.get(key,choices[0][0])));w.connect('changed',lambda w:self.p.__setitem__(key,w.get_active_id()));return self.row(box,title,w)
  def button(self,box,title,text,action,description=''):
@@ -153,7 +177,7 @@ class Settings(Gtk.Application):
  def shortcuts(self):
   b=self.page('Tastenkombinationen','Haupttaste wählen und jede Tastenkombination des Desktops frei umbinden – auch Maus-Kombinationen wie „Alt + Linksklick“ zum Verschieben.')
   mods=[('super','Super (Windows-Taste)'),('both','Super und Strg + Alt'),('ctrl-alt','Super aus: Strg + Alt ersetzt sie'),('caps','Feststelltaste wird zu Super')]
-  w=Gtk.ComboBoxText()
+  w=Choice()
   for k,v in mods:w.append(k,v)
   w.set_active_id(modifier_mode() if modifier_mode() in dict(mods) else 'super')
   def mod_changed(w):
@@ -266,12 +290,62 @@ class Settings(Gtk.Application):
    else:shell_set(key,w.get_active())
   w.connect('notify::active',changed);return self.row(box,title,w,description)
  def shell_combo(self,box,title,key,choices,default,description=''):
-  w=Gtk.ComboBoxText()
+  w=Choice()
   for value,label in choices:w.append(value,label)
   w.set_active_id(str(shell_get(key,default)));w.connect('changed',lambda w:w.get_active_id() and shell_set(key,w.get_active_id()));return self.row(box,title,w,description)
  def shell_spin(self,box,title,key,lo,hi,step,default,description=''):
   w=Gtk.SpinButton.new_with_range(lo,hi,step);w.set_value(float(shell_get(key,default)))
   w.connect('value-changed',lambda w:shell_set(key,w.get_value() if step<1 else int(w.get_value())));return self.row(box,title,w,description)
+ # ---- Anordnung der Taskleisten-Teile: jeder Teil links, mittig oder rechts, Reihenfolge per Pfeile ----
+ BAR_ITEMS=[('start','Startknopf'),('search','Suche'),('taskview','Fensterübersicht'),('code','Coding Space'),('wallpaper','Wallpaper Engine'),
+            ('mode','Fenstermodus-Knopf'),('desktops','Desktop-Punkte'),('apps','App-Symbole'),('tray','Tray'),('system','Netzwerk und Lautstärke'),
+            ('notifications','Benachrichtigungen'),('clock','Uhr'),('settings','Einstellungen'),('showDesktop','Desktop-anzeigen-Streifen')]
+ def default_layout(self,style):
+  tools=['start','search','taskview','code','wallpaper','mode','desktops'];sysi=['tray','system','notifications','clock','settings','showDesktop']
+  return {'left':[],'center':tools+['apps'],'right':sysi} if style=='dock' else {'left':tools,'center':['apps'],'right':sysi}
+ def current_layout(self,style):
+  saved=(shell_get('barLayouts',{}) or {}).get(style);default=self.default_layout(style)
+  if not saved:return default
+  ids=[i for i,_ in self.BAR_ITEMS];seen=set();out={'left':[],'center':[],'right':[]}
+  for sec in out:
+   for i in saved.get(sec,[]):
+    if i in ids and i not in seen:seen.add(i);out[sec].append(i)
+  for sec in out:
+   for i in default[sec]:
+    if i not in seen:seen.add(i);out[sec].append(i)
+  return out
+ def layout_editor(self,b):
+  style=shell_get('barStyle','bar') or 'bar'
+  head=Gtk.Label(label='Anordnung ('+('Schwebendes Dock' if style=='dock' else 'Durchgehende Leiste')+')',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
+  hint=Gtk.Label(label='Jeder Teil sitzt links, mittig oder rechts. Beim Dock wird jeder Bereich zu einer eigenen schwebenden Insel; leere Bereiche verschwinden. Reihenfolge mit den Pfeilen. Bei Stilwechsel diese Seite neu öffnen.',xalign=0);hint.set_line_wrap(True);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,0)
+  box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4);b.pack_start(box,False,False,0)
+  names=dict(self.BAR_ITEMS);secnames={'left':'Links','center':'Mitte','right':'Rechts'}
+  def save(lay):
+   m=dict(shell_get('barLayouts',{}) or {});m[style]=lay;shell_set('barLayouts',m)
+  def build():
+   for c in box.get_children():box.remove(c)
+   lay=self.current_layout(style)
+   for sec in ('left','center','right'):
+    h=Gtk.Label(label=secnames[sec]+('' if lay[sec] else '  (leer)'),xalign=0);h.get_style_context().add_class('subtitle');box.pack_start(h,False,False,4)
+    for idx,i in enumerate(lay[sec]):
+     row=Gtk.Box(spacing=8);row.get_style_context().add_class('setting-row');l=Gtk.Label(label=names[i],xalign=0);row.pack_start(l,True,True,0)
+     def move(w,i=i,sec=sec,d=0,tosec=None):
+      L=self.current_layout(style)
+      if tosec:L[sec].remove(i);L[tosec].append(i)
+      else:
+       k=L[sec].index(i);j=k+d
+       if 0<=j<len(L[sec]):L[sec][k],L[sec][j]=L[sec][j],L[sec][k]
+      save(L);build()
+     for label,kw in (('▲',{'d':-1}),('▼',{'d':1})):
+      btn=Gtk.Button(label=label);btn.connect('clicked',lambda w,kw=kw,i=i,sec=sec:move(w,i,sec,**kw));row.pack_end(btn,False,False,0)
+     for tosec in ('right','center','left'):
+      if tosec!=sec:
+       btn=Gtk.Button(label=secnames[tosec]);btn.connect('clicked',lambda w,tosec=tosec,i=i,sec=sec:move(w,i,sec,0,tosec));row.pack_end(btn,False,False,0)
+     box.pack_start(row,False,False,0)
+   reset=Gtk.Button(label='Anordnung zurücksetzen');reset.connect('clicked',lambda *_:(shell_set('barLayouts',{k:v for k,v in (shell_get('barLayouts',{}) or {}).items() if k!=style}),build()))
+   box.pack_start(reset,False,False,6);box.show_all()
+  build()
+
  def taskbar(self):
   b=self.page('Taskleiste','Alles, was in der Taskleiste der Shell erscheint. Änderungen gelten sofort.')
   self.shell_combo(b,'Stil','barStyle',[('bar','Durchgehende Leiste'),('dock','Schwebendes Dock')],'bar')
@@ -289,6 +363,7 @@ class Settings(Gtk.Application):
   self.sw(b,'Automatisch ausblenden','autohide',False,'Die Leiste fährt ein, wenn sie nicht benutzt wird.')
   self.sw(b,'Fenster einer App gruppieren','groupApps',True)
   self.shell_spin(b,'Höhe','barHeight',40,90,1,58);self.shell_spin(b,'Symbolgröße','iconSize',20,48,1,34);self.shell_spin(b,'Deckkraft','barOpacity',0.4,1.0,0.05,0.9)
+  self.layout_editor(b)
   head=Gtk.Label(label='Bestandteile',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
   for key,title,default,desc in [('start','Startknopf',True,'Rechtsklick auf den Knopf: Symbol wählen (Draconyx, Arch, eigenes Bild).'),('search','Suche',True,''),('taskview','Fensterübersicht',True,''),
     ('code','Coding Space',True,''),('wallpaper','Wallpaper Engine',True,''),('mode','Fenstermodus-Knopf (Schweben / Kacheln)',True,''),('desktops','Desktop-Punkte',True,''),('apps','App-Symbole',True,''),
@@ -320,7 +395,7 @@ class Settings(Gtk.Application):
   path=Path.home()/'.config/draconyx/window-mode'
   try:current=path.read_text().strip()
   except OSError:current='floating'
-  w=Gtk.ComboBoxText();w.append('floating','Frei schwebend');w.append('tiling','Kacheln (eigene Zonen)');w.set_active_id(current if current in ('floating','tiling') else 'floating')
+  w=Choice();w.append('floating','Frei schwebend');w.append('tiling','Kacheln (eigene Zonen)');w.set_active_id(current if current in ('floating','tiling') else 'floating')
   def changed(w):
    mode=w.get_active_id()
    if mode:subprocess.run(['hyprctl','eval','DXTiling.setDefault("%s")'%mode],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);self.message('Standardmodus: '+('Kacheln' if mode=='tiling' else 'Frei schwebend'))
@@ -332,7 +407,7 @@ class Settings(Gtk.Application):
   tool=str(Path.home()/'.local/bin/dx-colors')
   try:current=json.loads(subprocess.check_output([tool,'show'],text=True))
   except Exception:current={'preset':'aurora','accent':'#4d8fe0'}
-  w=Gtk.ComboBoxText();w.append('aurora','Aurora (Grau-Blau)');w.append('draconyx','Draconyx (Violett)');w.set_active_id(current.get('preset') if current.get('preset') in ('aurora','draconyx') else None)
+  w=Choice();w.append('aurora','Aurora (Grau-Blau)');w.append('draconyx','Draconyx (Violett)');w.set_active_id(current.get('preset') if current.get('preset') in ('aurora','draconyx') else None)
   w.connect('changed',lambda w:(w.get_active_id() and subprocess.run([tool,'preset',w.get_active_id()]),self.message('Farbwelt gewechselt.')));self.row(b,'Voreinstellung',w)
   c=Gtk.ColorButton();rgba=Gdk.RGBA();rgba.parse(current.get('accent','#4d8fe0'));c.set_rgba(rgba)
   def picked(btn):

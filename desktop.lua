@@ -158,4 +158,18 @@ hl.layer_rule({name='aurora-dock-icons-order',match={namespace='^aurora-apps$'},
 hl.layer_rule({name='aurora-dock-menus-order',match={namespace='^(aurora-window-previews|aurora-control-center)$'},order=40})
 hl.layer_rule({name='aurora-popup-order',match={namespace='^aurora-popup$'},order=50})
 
+-- Kachel-Modus der Draconyx-Shell: ersetzt das Layout des alten Aurora-Daemons (Modus-Knopf, Raster, Zonen).
+-- DXTiling/DXZones sind global, damit die Shell sie per `hyprctl eval` ansprechen kann (Fenstermodus-Knopf in der Taskleiste).
+local okTiling, tilingModule = pcall(require, 'dx_tiling')
+if okTiling and tilingModule then
+    DXTiling = tilingModule
+    pcall(function() DXZones = require('dx_zones') end)
+    B('aurora_grid_window', 'Aktives Fenster ins Raster / heraus', MOD .. ' + G', function() DXTiling.toggle() end)
+    B('aurora_grid_workspace', 'Ganzen Desktop kacheln an/aus', MOD .. ' + SHIFT + G', function() DXTiling.toggleWorkspace() end)
+    B('aurora_grid_mode', 'Kachel-Layout wechseln (Zonen/Raster/Spalten/Zeilen/Master)', MOD .. ' + SHIFT + J', function() DXTiling.cycleMode() end)
+    B('aurora_grid_prev', 'Platz im Raster tauschen (zurück)', MOD .. ' + SHIFT + comma', function() DXTiling.shift(-1) end)
+    B('aurora_grid_next', 'Platz im Raster tauschen (vor)', MOD .. ' + SHIFT + period', function() DXTiling.shift(1) end)
+    B('aurora_grid_panic', 'NOTAUSGANG: alles aus dem Raster', MOD .. ' + BackSpace', function() DXTiling.releaseAll() end)
+end
+
 DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App
