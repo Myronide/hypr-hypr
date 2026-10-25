@@ -100,6 +100,10 @@ say "Hilfsskripte nach ~/.local/bin"
 for f in "$HERE"/bin/dx-*; do put "$f" "$HOME/.local/bin/$(basename "$f")" 755; done
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "~/.local/bin ist nicht im PATH.";; esac
 
+hv="$(hyprland --version 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+' | head -1 | tr -d v)"
+if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55" ]; then
+  warn "Deine Hyprland-Version ($hv) kennt noch keine Lua-Konfiguration (ab 0.55) – Draconyx braucht ein Update von Hyprland."
+fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
 for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
@@ -107,6 +111,29 @@ for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$
 put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
 if [ -e "$CONF/hypr/hyprland.lua" ] && cmp -s "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; then
   :   # schon unsere hyprland.lua
+elif [ -e "$CONF/hypr/hyprland.lua" ] && ! grep -qE 'aurora|draconyx|dx_binds' "$CONF/hypr/hyprland.lua"; then
+  # Reine Hyprland-Standardkonfiguration (nichts von Aurora/Draconyx darin): ohne unsere Datei würde sich gar nichts ändern.
+  # Deshalb ersetzen wir sie – die alte Datei wird vorher gesichert, und ihre Monitor-Einstellungen übernehmen wir.
+  say "Reine Hyprland-Konfiguration gefunden – Draconyx wird eingerichtet (Sicherung der alten: $BACKUP)"
+  backup_file "$CONF/hypr/hyprland.lua"
+  if [ ! -e "$CONF/hypr/monitors_local.lua" ]; then
+    python3 -I - "$CONF/hypr/hyprland.lua" "$CONF/hypr/monitors_local.lua" <<'PY' || true
+import re, sys
+src = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+out, i = [], 0
+while True:
+    m = re.search(r"hl\.monitor\s*\(", src[i:])
+    if not m: break
+    a = i + m.start(); j = i + m.end(); depth = 1
+    while j < len(src) and depth:
+        depth += {"(": 1, ")": -1}.get(src[j], 0); j += 1
+    out.append(src[a:j]); i = j
+if out:
+    open(sys.argv[2], "w").write("-- Monitore aus deiner vorherigen hyprland.lua übernommen\n" + "\n".join(out) + "\n")
+    print("    Monitor-Einstellungen übernommen:", len(out))
+PY
+  fi
+  cp "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; CHANGED=$((CHANGED+1))
 elif [ -e "$CONF/hypr/hyprland.lua" ]; then
   warn "Du hast schon eine hyprland.lua – ich lasse sie unverändert."
   warn "Meine liegt als $CONF/hypr/hyprland.draconyx.lua; Binds/Autostart bei Bedarf übernehmen."
