@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import Quickshell.Services.Pipewire
 
 // Zentraler Zustand und einzige Quelle der Wahrheit für alle Komponenten.
@@ -894,8 +895,17 @@ Singleton {
     function setWindowMode(m) { windowMode = m; hyprEval("DXTiling.setDefault(\"" + m + "\")"); }
     function toggleWindowMode() { setWindowMode(windowMode === "tiling" ? "floating" : "tiling"); }
     function openSettings() {
-        // über XWayland starten: nur so kommt das Minimieren-Symbol des Fensters bei Hyprland an (xdg-Minimieren wird dort ignoriert)
-        const c = settingsCmd !== "" ? settingsCmd : "GDK_BACKEND=x11 python3 \"$HOME/.config/hypr/aurora/settings-app\"";
+        // Läuft die Einstellungs-App schon (ggf. minimiert), nur nach vorn holen: GApplication würde sonst nur ein nicht
+        // sichtbares Wiedervorlegen anfordern, und Hyprland holt ein minimiertes Fenster dadurch nicht zurück.
+        for (const t of ToplevelManager.toplevels.values) {
+            if (/settings-app|aurora\.settings/i.test(t.appId || "") || t.title === "Aurora") { focusToplevel(t); return; }
+        }
+        // Mit dem nativen Aurora-Plugin (hyprbars + aurora-native) läuft die App als normales Wayland-Fenster: scharf auch bei
+        // gebrochener Skalierung, Minimieren kommt über das Plugin an. Ohne Plugin über XWayland starten, damit das
+        // Minimieren-Symbol des Fensters bei Hyprland ankommt (xdg-Minimieren wird dort sonst ignoriert).
+        const app = "python3 \"$HOME/.config/hypr/aurora/settings-app\"";
+        const c = settingsCmd !== "" ? settingsCmd
+                : "if hyprctl plugin list 2>/dev/null | grep -q aurora-native; then exec " + app + "; else exec env GDK_BACKEND=x11 " + app + "; fi";
         Quickshell.execDetached(["sh", "-c", c]);
     }
 

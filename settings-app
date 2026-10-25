@@ -39,7 +39,11 @@ def shell_set(key,value):
 class Settings(Gtk.Application):
  def __init__(self):super().__init__(application_id='local.aurora.Settings',flags=Gio.ApplicationFlags.FLAGS_NONE);self.window=None
  def do_activate(self):
-  if self.window:self.window.present();return
+  if self.window:
+   self.window.present()
+   # Mit der Shell: ein minimiertes Fenster liegt auf dem Versteck-Desktop – present() holt es nicht zurück, die Shell schon
+   if SHELL:subprocess.Popen(['qs','-c','draconyx','ipc','call','shell','focusTitle','Aurora'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+   return
   Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme',True)
   Gtk.Settings.get_default().set_property('gtk-icon-theme-name','Fluent-dark')
   self.p=load_preferences();self.p.setdefault('shortcuts',{});self.monitor_names=[m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]

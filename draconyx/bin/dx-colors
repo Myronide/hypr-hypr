@@ -36,13 +36,13 @@ def icons(c):
         for f in SRC.glob("*.svg"):
             (d / f.name).write_text(f.read_text().replace("@TEXT@", c["text"]).replace("@ACCENT@", c["accent"]))
     return key
-def write(c):
+def write(c, palette=True):
     for k in PRESETS["aurora"]:
         if not HEX.match(c.get(k, "")): raise SystemExit("Ungültige Farbe für " + k)
     c["iconKey"] = icons(c)
     CONF.parent.mkdir(parents=True, exist_ok=True)
     tmp = CONF.with_suffix(".tmp"); tmp.write_text(json.dumps(c, indent=2)); tmp.replace(CONF)
-    if AURORA.is_dir():
+    if palette and AURORA.is_dir():
         (AURORA / "palette.css").write_text(
           "@define-color shell_bg %(bg)s;\n@define-color shell_surface %(surface)s;\n@define-color shell_hover %(hover)s;\n"
           "@define-color shell_border %(border)s;\n@define-color shell_text %(text)s;\n@define-color shell_muted %(muted)s;\n"
@@ -50,7 +50,16 @@ def write(c):
 def main(a):
     if not a or a[0] == "show": print(json.dumps(load(), indent=2)); return
     c = load()
-    if a[0] == "ensure": write(c)
+    if a[0] == "ensure":
+        # vorhandene Farbdatei NIE neu schreiben: nur dafür sorgen, dass der passende Symbolsatz existiert
+        if CONF.exists():
+            try:
+                cc = json.loads(CONF.read_text())
+                if all(HEX.match(cc.get(k, "")) for k in PRESETS["aurora"]): icons(cc)
+            except (OSError, ValueError):
+                print("colors.json nicht lesbar – bleibt unverändert", file=sys.stderr)
+        else:
+            write(c, palette=False)
     elif a[0] == "preset" and a[1] in PRESETS: c = dict(PRESETS[a[1]], preset=a[1]); write(c)
     elif a[0] == "accent":
         h = a[1] if a[1].startswith("#") else "#" + a[1]

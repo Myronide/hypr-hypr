@@ -37,10 +37,17 @@ for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) A
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*"; }
 ask()  { [ "$ASSUME_YES" = 1 ] && return 0; read -r -p "$1 [j/N] " r; [[ "$r" =~ ^[jJyY] ]]; }
+# Eigene Einstellungen werden nie überschrieben. Zur Sicherheit wandert alles, was der Installer ersetzt, vorher hierhin:
+BACKUP="$HOME/.local/share/draconyx-backups/install-$(date +%Y%m%d-%H%M%S)"
+backup_file() {   # backup_file DATEI  (Pfad bleibt unter dem Sicherungsordner erhalten)
+  local f="$1"; [ -e "$f" ] || return 0
+  local rel="${f#$HOME/}"; mkdir -p "$BACKUP/$(dirname "$rel")" && cp -a "$f" "$BACKUP/$rel" 2>/dev/null || true
+}
 # put QUELLE ZIEL [MODUS]: kopiert nur, wenn die Datei neu oder anders ist
 put() {
   local src="$1" dst="$2" mode="${3:-644}"
   if [ -e "$dst" ] && cmp -s "$src" "$dst"; then chmod "$mode" "$dst" 2>/dev/null || true; return 0; fi   # Inhalt gleich: nur den Modus (ausführbar?) sicherstellen
+  backup_file "$dst"
   install -D -m"$mode" "$src" "$dst"; CHANGED=$((CHANGED+1)); echo "    aktualisiert: ${dst/#$HOME/~}"
 }
 
@@ -59,6 +66,14 @@ mkdir -p "$CONF/hypr" "$CONF/quickshell" "$CONF/draconyx" "$HOME/.local/bin" "$H
 for need in "$CONF/hypr" "$CONF/quickshell" "$HOME/.local/bin"; do
   [ -w "$need" ] || { echo "Kein Schreibzugriff auf $need – bitte prüfen." >&2; exit 1; }
 done
+
+# ---------------------------------------------------------------- 0c. Einstellungen sichern (nur kopieren, nichts wird verändert)
+for f in "$CONF/draconyx/terminal" "$CONF/draconyx/window-mode" "$CONF/draconyx/colors.json" "$CONF/draconyx/modifier" "$CONF/draconyx/binds.conf" \
+         "$HOME/.local/state/draconyx/settings.json" "$CONF/hypr/aurora/preferences.json" "$CONF/hypr/aurora/preferences.lua" \
+         "$CONF/hypr/aurora/palette.css" "$CONF/hypr/hyprland.lua" "$CONF/hypr/monitors_local.lua" "$HOME/.config/brave-flags.conf"; do
+  backup_file "$f"
+done
+[ -d "$BACKUP" ] && say "Einstellungen gesichert in ${BACKUP/#$HOME/~}"
 
 # ---------------------------------------------------------------- 1. Pakete
 PKGS=(quickshell jq python python-gobject gtk3 grim wl-clipboard zenity xdotool git rsync ttf-inter papirus-icon-theme
@@ -88,7 +103,8 @@ case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "~/.local/bin ist nicht im 
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
 for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua csd-apps; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
-[ -e "$CONF/hypr/monitors_local.lua" ] || { cp "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua"; warn "monitors_local.lua ist eine Vorlage von SyntaxJason – bitte an deine Monitore anpassen (hyprctl monitors)."; }
+# Monitore: NICHT automatisch aktiv schalten (die Vorlage stammt von SyntaxJasons Rechner). Eigene Datei bleibt unangetastet.
+put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
 if [ -e "$CONF/hypr/hyprland.lua" ] && cmp -s "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"; then
   :   # schon unsere hyprland.lua
 elif [ -e "$CONF/hypr/hyprland.lua" ]; then
@@ -98,9 +114,12 @@ elif [ -e "$CONF/hypr/hyprland.lua" ]; then
 else
   cp "$HERE/hypr/hyprland.lua" "$CONF/hypr/hyprland.lua"
 fi
-for f in hypridle.conf hyprlock.conf; do [ -e "$CONF/hypr/$f" ] || cp "$HERE/hypr/$f" "$CONF/hypr/$f"; done
+FRESH_LOCK=0
+for f in hypridle.conf hyprlock.conf; do
+  if [ ! -e "$CONF/hypr/$f" ]; then cp "$HERE/hypr/$f" "$CONF/hypr/$f"; [ "$f" = hyprlock.conf ] && FRESH_LOCK=1; fi
+done
 # persönliche Pfade im Sperrbildschirm neutralisieren (Bild muss der Nutzer selbst setzen)
-sed -i "s|/home/syntaxjason|$HOME|g" "$CONF/hypr/hyprlock.conf" 2>/dev/null || true
+[ "$FRESH_LOCK" = 1 ] && sed -i "s|/home/syntaxjason|$HOME|g" "$CONF/hypr/hyprlock.conf" 2>/dev/null || true
 
 say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css"
 A="$CONF/hypr/aurora"; mkdir -p "$A"
@@ -109,8 +128,15 @@ for f in settings-app preferences.py settings.css; do [ -e "$A/$f" ] || ln -s "$
 # ---------------------------------------------------------------- 3. Standardwerte
 [ -e "$CONF/draconyx/terminal" ] || { for t in ghostty kitty foot alacritty konsole; do command -v "$t" >/dev/null && { echo "$t" > "$CONF/draconyx/terminal"; break; }; done; }
 [ -e "$CONF/draconyx/window-mode" ] || echo floating > "$CONF/draconyx/window-mode"
-"$HOME/.local/bin/dx-colors" preset aurora
-[ -e "$HOME/.config/brave-flags.conf" ] || printf '%s\n' '--ozone-platform=x11' > "$HOME/.config/brave-flags.conf"
+# Farben: nur beim ersten Mal die Aurora-Voreinstellung setzen; vorhandene (auch angepasste) Farben bleiben
+if [ -e "$CONF/draconyx/colors.json" ]; then "$HOME/.local/bin/dx-colors" ensure; else "$HOME/.local/bin/dx-colors" preset aurora; fi
+# Brave über XWayland starten, damit sein Minimieren-Symbol bei Hyprland ankommt – nur nötig OHNE das native Aurora-Plugin
+# (mit Plugin läuft Brave sauber als Wayland-Fenster, XWayland wäre bei gebrochener Skalierung unscharf)
+if hyprctl plugin list 2>/dev/null | grep -q aurora-native; then
+  if head -1 "$HOME/.config/brave-flags.conf" 2>/dev/null | grep -q '^# Draconyx'; then rm -f "$HOME/.config/brave-flags.conf"; echo "    brave-flags.conf entfernt (natives Plugin vorhanden)"; fi
+else
+  [ -e "$HOME/.config/brave-flags.conf" ] || printf '%s\n%s\n' '# Draconyx: Brave über XWayland starten, damit das Minimieren-Symbol funktioniert (ohne natives Aurora-Plugin).' '--ozone-platform=x11' > "$HOME/.config/brave-flags.conf"
+fi
 
 # ---------------------------------------------------------------- 4. Wallpaper Engine (repariert)
 if [ "$DO_WE" = 1 ]; then
