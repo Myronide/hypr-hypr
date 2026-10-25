@@ -4,6 +4,7 @@
 #   ./install.sh --no-we    ohne Wallpaper Engine bauen
 #   ./install.sh --ask      vor Paketinstallationen nachfragen (Standard: alles automatisch)
 #   ./install.sh --restart  Shell und Hyprland-Konfiguration auch ohne Änderungen neu laden
+#   ./install.sh --keymap=de|us   Tastaturbelegung vorgeben (de = QWERTZ, us = QWERTY); sonst wirst du einmal gefragt
 #   ./install.sh --no-packages   keine Pakete installieren
 #   ./install.sh --force    Wallpaper Engine auch ohne Änderung neu bauen
 # Mehrfach ausführen ist ungefährlich: es wird nur angewendet, was neu oder geändert ist.
@@ -31,8 +32,8 @@ if [ "${DX_VIA_SUDO:-0}" != 1 ]; then
 fi
 REPO="$HERE"
 CONF="$HOME/.config"
-DO_WE=1; ASSUME_YES=1; DO_PKGS=1; FORCE=0; CHANGED=0; RESTART=0
-for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) ASSUME_YES=1;; --ask) ASSUME_YES=0;; --restart) RESTART=1;; --no-packages) DO_PKGS=0;; esac; done
+KEYMAP_ARG=""; DO_WE=1; ASSUME_YES=1; DO_PKGS=1; FORCE=0; CHANGED=0; RESTART=0
+for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) ASSUME_YES=1;; --ask) ASSUME_YES=0;; --restart) RESTART=1;; --no-packages) DO_PKGS=0;; --keymap=*) KEYMAP_ARG="${a#--keymap=}";; esac; done
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*"; }
@@ -130,6 +131,27 @@ cp -n "$HERE"/quickshell/logo-*.png "$HOME/.local/share/draconyx-hypr/" 2>/dev/n
 say "Hilfsskripte nach ~/.local/bin"
 for f in "$HERE"/bin/dx-*; do put "$f" "$HOME/.local/bin/$(basename "$f")" 755; done
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "~/.local/bin ist nicht im PATH.";; esac
+
+# Tastaturbelegung (QWERTZ = de, QWERTY = us): einmal wählen, gespeichert in ~/.config/draconyx/keymap, später in den Einstellungen änderbar
+KMF="$CONF/draconyx/keymap"
+case "$KEYMAP_ARG" in qwertz|QWERTZ|de) KEYMAP_ARG=de;; qwerty|QWERTY|us) KEYMAP_ARG=us;; "") ;; *) warn "Unbekannte Belegung '$KEYMAP_ARG' (de oder us) – ignoriert"; KEYMAP_ARG="";; esac
+if [ -n "$KEYMAP_ARG" ]; then
+  mkdir -p "$CONF/draconyx"; [ "$(cat "$KMF" 2>/dev/null)" = "$KEYMAP_ARG" ] || { echo "$KEYMAP_ARG" > "$KMF"; CHANGED=$((CHANGED+1)); }
+  say "Tastaturbelegung: $KEYMAP_ARG"
+elif [ ! -s "$KMF" ]; then
+  # Vorschlag: die Belegung aus der bisherigen Hyprland-Konfiguration, sonst Deutsch
+  det="$({ cat "$CONF/hypr/hyprland.lua" "$CONF/hypr/hyprland.conf" 2>/dev/null || true; } | sed -nE '/kb_layout/{s/.*kb_layout[^a-z]*([a-z]{2,3}).*/\1/p;q}')" || det=""
+  case "$det" in us|de) pick="$det";; *) pick=de;; esac
+  if [ -t 0 ]; then
+    echo; echo "Welche Tastaturbelegung hast du?"
+    echo "  1) QWERTZ (Deutsch)$([ "$pick" = de ] && echo '   [Vorschlag]')"
+    echo "  2) QWERTY (US)$([ "$pick" = us ] && echo '   [Vorschlag]')"
+    read -r -p "Nummer eingeben (Enter = Vorschlag): " ans || ans=""
+    case "$ans" in 1) pick=de;; 2) pick=us;; esac
+  fi
+  mkdir -p "$CONF/draconyx"; echo "$pick" > "$KMF"; CHANGED=$((CHANGED+1))
+  say "Tastaturbelegung: $pick (ändern: Aurora-Einstellungen → Tastaturbelegung oder ./install.sh --keymap=de|us)"
+fi
 
 hv="$(hyprland --version 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+' | head -1 | tr -d v)"
 if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55" ]; then

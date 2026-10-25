@@ -139,9 +139,15 @@ hl.config({
 ---------------
 ---- INPUT ----
 ---------------
+do   -- Tastaturbelegung aus ~/.config/draconyx/keymap ("de" oder "us"), Standard: de
+    local f = io.open((os.getenv("HOME") or "") .. "/.config/draconyx/keymap", "r")
+    local k = f and f:read("*l") or ""
+    if f then f:close() end
+    DX_KEYMAP = (k ~= "" and k:match("^[%a_,]+$")) and k or "de"
+end
 hl.config({
     input = {
-        kb_layout    = "de",          -- deutsche Tastatur
+        kb_layout    = DX_KEYMAP,     -- Tastaturbelegung: de (QWERTZ) oder us (QWERTY), Auswahl im Installer / in den Aurora-Einstellungen
         kb_variant   = "",
         kb_model     = "",
         kb_options   = "",

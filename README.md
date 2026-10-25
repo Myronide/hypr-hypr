@@ -5,6 +5,7 @@ Ordner für den Stand von SyntaxJason ("Draconyx"), zusammengeführt mit Myronid
 ## Einrichten
 ```sh
 sudo ./install.sh         # nur mit sudo-Freigabe; richtet alles ein, lädt Hyprland neu und startet die Shell neu
+sudo ./install.sh --keymap=us   # Tastaturbelegung vorgeben: de = QWERTZ, us = QWERTY (sonst fragt der Installer einmal)
 sudo ./install.sh --no-we # ohne Wallpaper Engine
 ```
 Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).

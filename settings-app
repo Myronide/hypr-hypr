@@ -3,7 +3,7 @@ import gi,json,subprocess,os,threading
 from pathlib import Path
 gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
 from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango,GObject
-from preferences import BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
+from preferences import current_keymap,BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
 
 class Choice(Gtk.FlowBox):
  """Auswahl als Knopfreihe statt Aufklappliste: GTK-Auswahllisten werden unter XWayland/Hyprland mittig im Fenster und fehlerhaft
@@ -90,6 +90,8 @@ class Settings(Gtk.Application):
   terminals=[(t,t.capitalize()) for t in ('kitty','ghostty','foot','alacritty','wezterm','konsole') if shutil.which(t)] or [('kitty','Kitty')]
   self.p.setdefault('terminal',terminals[0][0])
   self.combo(b,'Terminal','terminal',terminals)
+  self.p['keymap']=current_keymap()
+  self.combo(b,'Tastaturbelegung','keymap',[('de','QWERTZ (Deutsch)'),('us','QWERTY (US)')]+([(self.p['keymap'],self.p['keymap'])] if self.p['keymap'] not in ('de','us') else []))
   self.toggle(b,'Fokus folgt der Maus','focus_follows_mouse','Ausgeschaltet bleibt der Tastaturfokus beim zuletzt angeklickten Fenster.')
  def windows(self):
   b=self.page('Fenster','Größe und Erscheinung der Titelleisten, Fensterkanten und Effekte.')

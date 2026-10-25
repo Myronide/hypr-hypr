@@ -17,6 +17,11 @@ def modifier_mode():
  except OSError:return 'super'
 def set_modifier_mode(mode):
  d=Path.home()/'.config/draconyx';d.mkdir(parents=True,exist_ok=True);(d/'modifier').write_text(mode+'\n')
+KEYMAPS=('de','us')   # QWERTZ (Deutsch) / QWERTY (US)
+def current_keymap():
+ try:k=(Path.home()/'.config/draconyx/keymap').read_text().strip()
+ except OSError:k=''
+ return k or 'de'
 def save_preferences(p):
  (BASE/'preferences.json').write_text(json.dumps(p,ensure_ascii=False,indent=2))
  if p.get('terminal'):
@@ -25,6 +30,9 @@ def save_preferences(p):
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p['blur'] else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))
  source+='hl.config({input={follow_mouse=%d}})\n'%(1 if p.get('focus_follows_mouse',False) else 0)
+ if p.get('keymap') in KEYMAPS:
+  source+='hl.config({input={kb_layout="%s"}})\n'%p['keymap']   # Tastaturbelegung (gilt sofort nach dem Neuladen)
+  d=Path.home()/'.config/draconyx';d.mkdir(parents=True,exist_ok=True);(d/'keymap').write_text(p['keymap']+'\n')
  actions={'launcher':'launcher','clipboard':'desktop-ui clipboard','settings':'settings-app','desktop':'desktop-ui show-desktop','mode':'mode --toggle','minimize':'desktop-ui minimize'}
  for key,combo in p.get('shortcuts',{}).items():
   if key not in actions:continue
