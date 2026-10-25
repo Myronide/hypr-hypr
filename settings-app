@@ -45,8 +45,15 @@ class Settings(Gtk.Application):
    # Mit der Shell: ein minimiertes Fenster liegt auf dem Versteck-Desktop – present() holt es nicht zurück, die Shell schon
    if SHELL:subprocess.Popen(['qs','-c','draconyx','ipc','call','shell','focusTitle','Aurora'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
    return
-  Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme',True)
-  Gtk.Settings.get_default().set_property('gtk-icon-theme-name','Fluent-dark')
+  # Aussehen unabhängig vom System: dunkel, ein vorhandenes Thema, ein vorhandenes Symbolthema (sonst fehlen Symbole)
+  st=Gtk.Settings.get_default();st.set_property('gtk-application-prefer-dark-theme',True)
+  themes=[d.name for base in (Path('/usr/share/themes'),Path.home()/'.themes',Path.home()/'.local/share/themes') if base.is_dir() for d in base.iterdir()]
+  for t in ('adw-gtk3-dark','Adwaita-dark','Adwaita'):
+   if t in themes or t=='Adwaita':st.set_property('gtk-theme-name',t);break
+  icons=Gtk.IconTheme.get_default()
+  for t in ('Fluent-dark','Papirus-Dark','Tela-dark','Papirus','Adwaita'):
+   if any((Path(b)/t/'index.theme').exists() for b in ('/usr/share/icons',str(Path.home()/'.icons'),str(Path.home()/'.local/share/icons'))):st.set_property('gtk-icon-theme-name',t);break
+  if any('Inter' in l for l in subprocess.run(['fc-list',':family=Inter'],capture_output=True,text=True).stdout.splitlines()[:1]):st.set_property('gtk-font-name','Inter 10')
   self.p=load_preferences();self.p.setdefault('shortcuts',{});self.monitor_names=[m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
   self.window=Gtk.ApplicationWindow(application=self);self.window.set_default_size(1050,780);self.window.set_title('Aurora Einstellungen');self.window.set_icon_name('preferences-system')
   head=Gtk.HeaderBar(title='Aurora',subtitle='Desktop-Einstellungen',show_close_button=True);self.window.set_titlebar(head)

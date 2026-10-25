@@ -80,7 +80,7 @@ done
 # Jeder Eintrag: "Name" oder "Name|Alternative|…" (je nach Distribution heißt ein Paket anders, z. B. ttf-inter / inter-font).
 # Es wird das erste Paket genommen, das es in den Paketquellen gibt; ein fehlendes Paket stoppt die anderen nicht mehr.
 PKGS=(hyprland quickshell jq python python-gobject python-pillow gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
-      "inter-font|ttf-inter" papirus-icon-theme noto-fonts noto-fonts-emoji
+      "inter-font|ttf-inter" papirus-icon-theme adw-gtk-theme fontconfig noto-fonts noto-fonts-emoji
       qt6-wayland qt6-svg qt6-5compat qt6-imageformats qt6-multimedia
       pipewire pipewire-pulse wireplumber playerctl networkmanager nm-connection-editor bluez bluez-utils blueman pavucontrol
       power-profiles-daemon libnotify glib2 xdg-utils xdg-user-dirs xdg-desktop-portal-hyprland polkit procps-ng pciutils
@@ -200,6 +200,15 @@ for f in hypridle.conf hyprlock.conf; do
 done
 # persönliche Pfade im Sperrbildschirm neutralisieren (Bild muss der Nutzer selbst setzen)
 [ "$FRESH_LOCK" = 1 ] && sed -i "s|/home/syntaxjason|$HOME|g" "$CONF/hypr/hyprlock.conf" 2>/dev/null || true
+
+# GTK-Grundlage für Aurora/Dolphin & Co.: dunkel, Inter, Papirus – nur anlegen, wenn du noch nichts eingestellt hast (nichts wird überschrieben)
+mkdir -p "$CONF/gtk-3.0" "$CONF/gtk-4.0"
+for g in "$CONF/gtk-3.0/settings.ini" "$CONF/gtk-4.0/settings.ini"; do
+  [ -e "$g" ] || { printf '[Settings]\ngtk-application-prefer-dark-theme=true\ngtk-theme-name=adw-gtk3-dark\ngtk-icon-theme-name=Papirus-Dark\ngtk-font-name=Inter 10\ngtk-decoration-layout=icon:minimize,maximize,close\ngtk-enable-animations=true\n' > "$g"; echo "    angelegt: ${g/#$HOME/~}"; CHANGED=$((CHANGED+1)); }
+done
+if command -v gsettings >/dev/null && [ "$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)" != "'prefer-dark'" ]; then
+  gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
+fi
 
 say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css"
 A="$CONF/hypr/aurora"; mkdir -p "$A"
