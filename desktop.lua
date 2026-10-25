@@ -172,4 +172,10 @@ if okTiling and tilingModule then
     B('aurora_grid_panic', 'NOTAUSGANG: alles aus dem Raster', MOD .. ' + BackSpace', function() DXTiling.releaseAll() end)
 end
 
+-- Sicherheitsnetz: Shell zusätzlich zum Autostart über start-desktop prüfen und notfalls starten (mehrere Versuche, Protokoll in
+-- ~/.cache/draconyx/shell-start.log). Läuft sie schon, passiert nichts.
+hl.on('hyprland.start', function()
+    hl.exec_cmd("sh -c 'sleep 4; exec " .. os.getenv('HOME') .. "/.local/bin/dx-shell-ensure'")
+end)
+
 DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App

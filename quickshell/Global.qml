@@ -21,6 +21,10 @@ Singleton {
     property bool codeOpen: false
     property bool weOpen: false
     property bool searchOpen: false
+    property bool snipOpen: false
+    property bool editOpen: false            // Foto-Editor für Snips
+    property string editFile: ""
+    property var snipFiles: ({})              // Monitor -> eingefrorenes Foto
     property string searchTest: ""           // nur für Tests: Text von außen in die Schnellsuche setzen
     property bool gitOpen: false
     property string gitRepo: ""
@@ -39,7 +43,7 @@ Singleton {
         return (big && popupScreen === mon) || (taskPopupOpen && taskPopupScreen === mon);
     }
     function sysPopupOn(mon) { return (controlOpen || calendarOpen) && popupScreen === mon; }
-    function closeAll() { searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
+    function closeAll() { editOpen = false; snipOpen = false; searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
     function focusedScreenName() { return Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; }
     function _toggle(prop, screenName) {
         const open = !root[prop];
@@ -914,6 +918,50 @@ Singleton {
     function setDockGeom(mon, g) { const m = Object.assign({}, dockGeom); m[mon] = g; dockGeom = m; }
     function popupLeft() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(barMargin, g.x) : barMargin; }
     function popupRightMargin() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(8, g.screenW - (g.sx + g.sw)) : 14; }
+
+    // ---------- Snip-Werkzeug ----------
+    // snip("region"): alle Bildschirme einfrieren, Bereich aufziehen. snip("screen"): ganzen Bildschirm unter dem Fokus direkt kopieren+speichern.
+    Process {
+        id: snipCap
+        onExited: root.snipOpen = true
+    }
+    function snip(mode) {
+        if (snipOpen) { snipClose(0); return; }
+        if (mode === "screen") {
+            Quickshell.execDetached([Theme.home + "/.local/bin/dx-snip-crop", "--screen", focusedScreenName(), "both"]);
+            return;
+        }
+        const dir = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp";
+        const files = {};
+        let cmd = "";
+        for (const s of Quickshell.screens) {
+            const f = dir + "/draconyx-snip-" + s.name + ".png";
+            files[s.name] = f;
+            cmd += "grim -o '" + s.name + "' '" + f + "' & ";
+        }
+        snipFiles = files;
+        snipCap.command = ["sh", "-c", cmd + "wait"];
+        snipCap.running = false;
+        snipCap.running = true;
+    }
+    // Ausschnitt (Pixel des eingefrorenen Fotos) in den Editor übernehmen
+    Process {
+        id: editProc
+        stdout: StdioCollector {
+            onStreamFinished: { const p = text.trim(); if (p !== "") { root.editFile = p; root.snipOpen = false; root.editOpen = true; } }
+        }
+    }
+    function snipEdit(file, x, y, w, h, mon) {
+        popupScreen = mon;
+        editProc.command = [Theme.home + "/.local/bin/dx-snip-crop", file, String(x), String(y), String(w), String(h), "edit"];
+        editProc.running = false; editProc.running = true;
+    }
+    function snipClose(delay) {
+        if (delay > 0) { snipCloseTimer.interval = delay; snipCloseTimer.restart(); return; }
+        snipOpen = false;
+        Quickshell.execDetached(["sh", "-c", "sleep 2; rm -f \"${XDG_RUNTIME_DIR:-/tmp}\"/draconyx-snip-*.png"]);
+    }
+    Timer { id: snipCloseTimer; onTriggered: root.snipClose(0) }
 
     // Symbol des Startknopfs: Draconyx (Standard), Arch oder eigenes Bild
     readonly property string startLogoUrl: startLogo === "" ? Theme.logo

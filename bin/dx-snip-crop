@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Draconyx Snip: schneidet einen Bereich aus einem Bildschirmfoto aus und kopiert/speichert ihn.
+  dx-snip-crop BILD X Y B H copy|save|both     (Pixel des Bildes)
+  dx-snip-crop BILD X Y B H edit               (Ausschnitt als Datei für den Editor: gibt den Pfad aus)
+  dx-snip-crop --screen MONITOR copy|save|both  (ganzer Monitor direkt)
+  dx-snip-crop --deliver DATEI copy|save|both   (fertiges Bild aus dem Editor kopieren/speichern)"""
+import datetime, os, subprocess, sys
+from pathlib import Path
+from PIL import Image
+
+def pictures():
+    try:
+        p = subprocess.run(["xdg-user-dir", "PICTURES"], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        p = ""
+    return Path(p or Path.home() / "Bilder") / "Screenshots"
+
+def deliver(img, mode):
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = None
+    if mode in ("save", "both"):
+        d = pictures(); d.mkdir(parents=True, exist_ok=True)
+        path = d / ("Screenshot_%s.png" % stamp)
+        img.save(path)
+    if mode in ("copy", "both"):
+        tmp = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "draconyx-snip-out.png"
+        img.save(tmp)
+        with open(tmp, "rb") as f:
+            subprocess.run(["wl-copy", "-t", "image/png"], stdin=f)
+    text = {"copy": "In die Zwischenablage kopiert", "save": "Gespeichert", "both": "Kopiert und gespeichert"}[mode]
+    args = ["notify-send", "-a", "Draconyx", "-t", "3500", "Screenshot", text + (("\n" + str(path)) if path else "")]
+    if path: args[1:1] = ["-i", str(path)]
+    subprocess.Popen(args)
+
+def main(a):
+    if a and a[0] == "--deliver":
+        deliver(Image.open(a[1]).convert("RGBA"), a[2] if len(a) > 2 else "both")
+        return
+    if a and a[0] == "--screen":
+        out = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "draconyx-snip-screen.png"
+        subprocess.run(["grim", "-o", a[1], str(out)], check=True)
+        deliver(Image.open(out).convert("RGBA"), a[2] if len(a) > 2 else "both")
+        out.unlink(missing_ok=True)
+        return
+    src, x, y, w, h, mode = a[0], *map(int, a[1:5]), a[5]
+    img = Image.open(src)
+    x = max(0, min(x, img.width - 1)); y = max(0, min(y, img.height - 1))
+    w = max(1, min(w, img.width - x)); h = max(1, min(h, img.height - y))
+    cropped = img.crop((x, y, x + w, y + h))
+    if mode == "edit":
+        out = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "draconyx-snip-edit.png"
+        cropped.save(out)
+        print(out)
+        return
+    deliver(cropped, mode)
+
+main(sys.argv[1:])

@@ -194,8 +194,9 @@ B("task_view", "Fensterübersicht (Task View)", mainMod .. " + Tab", hl.dsp.exec
 B("quick_settings", "Schnelleinstellungen", mainMod .. " + A", hl.dsp.exec_cmd(quickPanel))                  -- Schnelleinstellungen
 B("search", "Suche (Startmenü)", mainMod .. " + S", hl.dsp.exec_cmd(startMenu))                   -- Suche (Startmenü)
 B("exit_hyprland", "Notausgang: Hyprland beenden", mainMod .. " + SHIFT + Q", hl.dsp.exit())                 -- Notausgang: Hyprland beenden
-B("screenshot_region", "Screenshot (Bereich)", mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region --clipboard-only"))
-B("screenshot_screen", "Screenshot (Bildschirm)", "Print", hl.dsp.exec_cmd("hyprshot -m output --clipboard-only"))
+B("screenshot_region", "Screenshot: Bereich wählen (Snip-Werkzeug)", mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("qs -c draconyx ipc call shell snip region"))
+B("screenshot_snip", "Screenshot: Bereich wählen (Druck)", "Print", hl.dsp.exec_cmd("qs -c draconyx ipc call shell snip region"))
+B("screenshot_screen", "Screenshot: ganzer Bildschirm (kopiert + speichert)", "SHIFT + Print", hl.dsp.exec_cmd("qs -c draconyx ipc call shell snip screen"))
 
 -- Fenster-Snapping wie unter Windows: links/rechts halbe Seite, oben ganzer Bildschirm,
 -- unten zurück auf normale Größe mittig. Lässt den Platz der Taskleiste (reserved) frei.

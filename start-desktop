@@ -5,4 +5,6 @@ mkdir -p "$HOME/.cache/aurora"
 flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-text.lock" wl-paste --type text --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store text >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
 flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-image.lock" wl-paste --type image/png --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store image/png >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
 "$HOME/.config/hypr/aurora/background-restore" >> "$HOME/.cache/aurora/wallpaper.log" 2>&1 &
+# Sicherheitsnetz: Shell starten, falls der daemon-Aufruf oben sie nicht gestartet hat
+[ -x "$HOME/.local/bin/dx-shell-ensure" ] && "$HOME/.local/bin/dx-shell-ensure" >/dev/null 2>&1 &
 wait

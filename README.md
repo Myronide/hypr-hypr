@@ -4,8 +4,8 @@ Ordner für den Stand von SyntaxJason ("Draconyx"), zusammengeführt mit Myronid
 
 ## Einrichten
 ```sh
-sudo ./draconyx/install.sh         # nur mit sudo-Freigabe; richtet alles ein, lädt Hyprland neu und startet die Shell neu
-sudo ./draconyx/install.sh --no-we # ohne Wallpaper Engine
+sudo ./install.sh         # nur mit sudo-Freigabe; richtet alles ein, lädt Hyprland neu und startet die Shell neu
+sudo ./install.sh --no-we # ohne Wallpaper Engine
 ```
 Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).
 `~/.config/hypr/monitors_local.lua` ist eine Vorlage von SyntaxJason und muss an die eigenen Monitore angepasst werden (`hyprctl monitors`).
@@ -45,7 +45,11 @@ Strg+Leertaste öffnet die Suche nur auf dem leeren Desktop, in Apps bleibt die 
 Jeder Teil der Taskleiste (Start, Suche, Apps, Tray, Uhr …) lässt sich in den Aurora-Einstellungen → Taskleiste → **Anordnung** auf *Links*, *Mitte* oder *Rechts* setzen, Reihenfolge mit den Pfeilen. Im Dock-Stil wird jeder Bereich zu einer eigenen schwebenden Insel (leere Bereiche verschwinden), im Leistenstil sind es drei Bereiche einer durchgehenden Leiste.
 
 ## Installer
-`sudo ./draconyx/install.sh` (oder ohne sudo: er verlangt dann zuerst die sudo-Freigabe). Er repariert Besitzer und Rechte, wendet nur Neues an und lädt anschließend Hyprland neu und startet die Shell neu. `--ask` fragt vor Paketen, `--restart` lädt auch ohne Änderung neu.
+`sudo ./install.sh` (oder ohne sudo: er verlangt dann zuerst die sudo-Freigabe). Er repariert Besitzer und Rechte, wendet nur Neues an und lädt anschließend Hyprland neu und startet die Shell neu. `--ask` fragt vor Paketen, `--restart` lädt auch ohne Änderung neu.
+
+
+## Snip-Werkzeug und Foto-Editor
+**Druck** (oder Strg+Alt+Umschalt+S) friert alle Bildschirme ein, dann Bereich aufziehen. **Übernehmen** (Enter) öffnet den Foto-Editor: Stift, Marker, Pfeil, Rechteck, Ellipse, Text, Verpixeln, Rückgängig (Strg+Z), dann Kopieren (Strg+C), Speichern (Strg+S) oder Beides. Strg+C / Strg+S direkt in der Auswahl kopieren/speichern ohne Editor. **Umschalt+Druck** kopiert und speichert den ganzen Bildschirm. Gespeichert wird in `~/Bilder/Screenshots/`.
 
 ## Bewusst NICHT drin
 - Auroras Plugins (hyprbars, `aurora-native`): Sie lagen in einem Test im Weg und haben beim Laden in eine laufende Sitzung Hyprland zum Absturz gebracht. Nicht per Live-Reload laden. Wer sie nutzt, lädt sie nur beim Login.

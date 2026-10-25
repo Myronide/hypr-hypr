@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Draconyx: sorgt dafür, dass die Shell läuft (Sicherheitsnetz zum Autostart). Mehrere Versuche, Protokoll:
+# ~/.cache/draconyx/shell-start.log. Kann beliebig oft aufgerufen werden – läuft die Shell schon, passiert nichts.
+LOG="$HOME/.cache/draconyx/shell-start.log"; mkdir -p "$(dirname "$LOG")"
+QS="$(command -v qs || echo /usr/bin/qs)"
+[ -f "$HOME/.config/quickshell/draconyx/shell.qml" ] || exit 0
+[ -x "$QS" ] || { echo "$(date +%T) qs nicht gefunden" >> "$LOG"; exit 1; }
+for i in 1 2 3 4 5 6; do
+  if "$QS" -c draconyx ipc show >/dev/null 2>&1; then
+    [ "$i" -gt 1 ] && echo "$(date +%T) Shell läuft (Versuch $i)" >> "$LOG"
+    exit 0
+  fi
+  if pgrep -x qs >/dev/null 2>&1; then sleep 2; continue; fi     # ein anderer Starter ist gerade dabei
+  echo "$(date +%T) Shell nicht aktiv – starte (Versuch $i)" >> "$LOG"
+  QS_ICON_THEME=Papirus-Dark setsid "$QS" -c draconyx >>"$LOG" 2>&1 &
+  sleep 6
+done
+echo "$(date +%T) Shell nach 6 Versuchen nicht gestartet" >> "$LOG"; exit 1

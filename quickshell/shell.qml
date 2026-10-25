@@ -40,6 +40,8 @@ ShellRoot {
     CodeSpace { extraGrab: gitClient }
     WallpaperPicker {}
     SearchOverlay {}
+    SnipTool {}
+    SnipEditor { id: snipEditor }
     GitClient { id: gitClient }
     WindowMenu {}
 
@@ -90,6 +92,10 @@ ShellRoot {
             if (t) Global.minimizeAddr("0x" + String(t.address).replace(/^0x/, ""));
         }
         function searchBox(text: string): void { Global.searchTest = text; }
+        function editImage(path: string): void { Global.editFile = path; Global.popupScreen = Global.focusedScreenName(); Global.editOpen = true; }
+        function editDemo(): void { snipEditor.demo(); }
+        function editDeliver(mode: string): void { snipEditor.deliver(mode); }
+        function snip(mode: string): void { Global.snip(mode); }
         function toggleSearchBox(): void { Global.toggleSearchBox(""); }
         function fullscreenBar(v: string): void { Global.fullscreenBar = v; }
         function barPartHide(v: bool): void { Global.barPartHide = v; }

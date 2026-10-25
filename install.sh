@@ -29,7 +29,7 @@ if [ "${DX_VIA_SUDO:-0}" != 1 ]; then
   printf '\033[1;33m!!\033[0m  Zur Sicherheit brauche ich die sudo-Freigabe (der Installer ändert deine Konfiguration).\n'
   sudo -v || { echo "Abgebrochen: keine sudo-Freigabe." >&2; exit 1; }
 fi
-REPO="$(dirname "$HERE")"
+REPO="$HERE"
 CONF="$HOME/.config"
 DO_WE=1; ASSUME_YES=1; DO_PKGS=1; FORCE=0; CHANGED=0; RESTART=0
 for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) ASSUME_YES=1;; --ask) ASSUME_YES=0;; --restart) RESTART=1;; --no-packages) DO_PKGS=0;; esac; done
@@ -76,7 +76,7 @@ done
 [ -d "$BACKUP" ] && say "Einstellungen gesichert in ${BACKUP/#$HOME/~}"
 
 # ---------------------------------------------------------------- 1. Pakete
-PKGS=(quickshell jq python python-gobject gtk3 grim wl-clipboard zenity xdotool git rsync ttf-inter papirus-icon-theme
+PKGS=(quickshell jq python python-gobject python-pillow gtk3 grim wl-clipboard zenity xdotool git rsync ttf-inter papirus-icon-theme
       kitty ghostty dolphin swaync hypridle hyprlock cliphist plocate)
 WE_PKGS=(base-devel cmake glm sdl2 wayland-protocols ffmpeg mpv glfw glew freeglut lz4 libpulse libcups at-spi2-core
          nss libxcomposite libxdamage nspr libxrandr)

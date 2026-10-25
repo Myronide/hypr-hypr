@@ -33,6 +33,10 @@ sec "Shell-Einstellungen (Auszug)"
 jq -c '{barStyle,barHeight,autohide,barPartHide,fullscreenBar,monitors,desktopMonitors,codeRoot}' "$HOME/.local/state/draconyx/settings.json" 2>/dev/null
 sec "Shell-Log: Fehler und Warnungen (letzte 25)"
 qs -c draconyx log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -aE 'ERROR|WARN scene|caused by' | grep -v 'PlatformMenu\|textinput' | tail -25
+sec "Shell-Start (Sicherheitsnetz dx-shell-ensure)"
+[ -x "$HOME/.local/bin/dx-shell-ensure" ] && echo "dx-shell-ensure: vorhanden" || echo "dx-shell-ensure: FEHLT"
+tail -8 "$HOME/.cache/draconyx/shell-start.log" 2>/dev/null || echo "(noch kein Eintrag – die Shell ist beim Start ohne Hilfe angesprungen oder das Netz lief nicht)"
+grep -n 'hyprland.start' "$H/aurora/desktop.lua" 2>/dev/null | head -3
 sec "Aurora-Logs (letzte Zeilen)"
 for l in "$HOME"/.cache/aurora/*.log; do [ -f "$l" ] && { echo "--- $l"; tail -4 "$l"; }; done 2>/dev/null
 sec "Wallpaper-Suche"
