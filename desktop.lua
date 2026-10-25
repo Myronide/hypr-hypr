@@ -1,5 +1,15 @@
 -- Aurora desktop for Hyprland 0.56.2.
 local base = os.getenv('HOME') .. '/.config/hypr/aurora/'
+-- Haupttaste für alle Aurora-Kombinationen (Aurora-Einstellungen -> Tastenkombinationen):
+--   super (Standard) | both (Super und Strg+Alt) | ctrl-alt (Super aus, Strg+Alt ersetzt sie) | caps (Feststelltaste wird Super)
+local modmode = 'super'
+do
+    local f = io.open(os.getenv('HOME') .. '/.config/draconyx/modifier', 'r')
+    if f then modmode = ((f:read('*l') or 'super'):gsub('%s', '')); f:close() end
+end
+local MOD  = (modmode == 'ctrl-alt') and 'CTRL + ALT' or 'SUPER'
+local MOD2 = (modmode == 'ctrl-alt') and 'CTRL + ALT + SHIFT' or 'SUPER + CTRL'   -- für Kombinationen, die selbst schon Strg enthalten
+if modmode == 'caps' then hl.config({ input = { kb_options = 'caps:super' } }) end
 -- Load only the plugin built for the running compositor; an upgrade must rebuild it.
 local compatible = false
 local version = io.open('/usr/include/hyprland/src/version.h', 'r')
@@ -49,8 +59,8 @@ end)
 hl.layer_rule({ name = 'aurora-glass', match = { namespace = '^(aurora|aurora-apps|waybar|rofi)$' }, blur = true, ignore_alpha = 0.2 })
 hl.config({ general = { border_size = 0, gaps_in = 0, gaps_out = 0, resize_on_border = true, extend_border_grab_area = 8 }, decoration = { rounding = 12, blur = { enabled = true, size = 6, passes = 3 } } })
 _G.aurora_bindings = {}
-_G.aurora_bindings.launcher = hl.bind('SUPER + A', hl.dsp.exec_cmd(base .. 'launcher'))
-_G.aurora_bindings.mode = hl.bind('SUPER + SHIFT + F', hl.dsp.exec_cmd(base .. 'mode --toggle'))
+_G.aurora_bindings.launcher = hl.bind(MOD .. ' + A', hl.dsp.exec_cmd(base .. 'launcher'))
+_G.aurora_bindings.mode = hl.bind(MOD .. ' + SHIFT + F', hl.dsp.exec_cmd(base .. 'mode --toggle'))
 hl.bind('ALT + Tab', hl.dsp.exec_cmd(base .. 'desktop-ui switcher'))
 hl.bind('ALT + SHIFT + Tab', hl.dsp.exec_cmd(base .. 'desktop-ui switcher --reverse'))
 -- Track Alt before the asynchronous keybinding command starts.
@@ -62,28 +72,46 @@ hl.on('input.keyboard.key', function(code, _, state)
         if out then out:write((altkeys[64] or altkeys[108]) and 'down' or 'up'); out:close() end
     end
 end)
-_G.aurora_bindings.desktop = hl.bind('SUPER + D', hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
-_G.aurora_bindings.minimize = hl.bind('SUPER + H', hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
-_G.aurora_bindings.clipboard = hl.bind('SUPER + V', hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
+_G.aurora_bindings.desktop = hl.bind(MOD .. ' + D', hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
+_G.aurora_bindings.minimize = hl.bind(MOD .. ' + H', hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
+_G.aurora_bindings.clipboard = hl.bind(MOD .. ' + V', hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
 hl.on('hyprland.start', function() hl.exec_cmd(base .. 'start-desktop') end)
 
-hl.bind('SUPER + J', hl.dsp.exec_cmd(base .. 'desktop-ui layout-cycle'))
-hl.bind('SUPER + RETURN', hl.dsp.exec_cmd(base .. 'desktop-ui make-master'))
-hl.bind('SUPER + CTRL + left', hl.dsp.exec_cmd(base .. 'desktop-ui ratio -0.05'))
-hl.bind('SUPER + CTRL + right', hl.dsp.exec_cmd(base .. 'desktop-ui ratio 0.05'))
-hl.bind('SUPER + SHIFT + V', hl.dsp.exec_cmd(base .. 'desktop-ui detach'))
+hl.bind(MOD .. ' + J', hl.dsp.exec_cmd(base .. 'desktop-ui layout-cycle'))
+hl.bind(MOD .. ' + RETURN', hl.dsp.exec_cmd(base .. 'desktop-ui make-master'))
+hl.bind(MOD2 .. ' + left', hl.dsp.exec_cmd(base .. 'desktop-ui ratio -0.05'))
+hl.bind(MOD2 .. ' + right', hl.dsp.exec_cmd(base .. 'desktop-ui ratio 0.05'))
+hl.bind(MOD .. ' + SHIFT + V', hl.dsp.exec_cmd(base .. 'desktop-ui detach'))
 
 -- Desktop icons stay above both static and animated wallpaper surfaces.
 hl.layer_rule({name='aurora-desktop-order',match={namespace='^aurora-desktop$'},order=10})
 hl.layer_rule({name='aurora-wallpaper-order',match={namespace='^(aurora-wallpaper|hyprpaper)$'},order=-10})
 hl.config({input={follow_mouse=0}})
-_G.aurora_bindings.settings = hl.bind('SUPER + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
+hl.config({cursor={no_warps=true}})   -- Maus springt beim Fokuswechsel (z. B. Klick in der Taskleiste) nicht in die Fenstermitte
+_G.aurora_bindings.settings = hl.bind(MOD .. ' + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
 local prefs = io.open(base .. 'preferences.lua', 'r')
 if prefs then prefs:close(); dofile(base .. 'preferences.lua') end
 
-hl.bind('SUPER + SHIFT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
+hl.bind(MOD .. ' + SHIFT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
 
-hl.bind('SUPER + Escape',function() if hl.plugin.aurora_native then hl.plugin.aurora_native.repair_focus() end end)
+-- Zusätzlich zu Super auch Strg+Alt (Modus "both"); im Modus "ctrl-alt" tragen die Haupttaste-Binds oben schon Strg+Alt
+if modmode == 'both' then
+hl.bind('CTRL + ALT + space',hl.dsp.exec_cmd(base .. 'launcher'))
+hl.bind('CTRL + ALT + comma',hl.dsp.exec_cmd(base .. 'settings-app'))
+hl.bind('CTRL + ALT + D',hl.dsp.exec_cmd(base .. 'desktop-ui show-desktop'))
+hl.bind('CTRL + ALT + H',hl.dsp.exec_cmd(base .. 'desktop-ui minimize'))
+hl.bind('CTRL + ALT + V',hl.dsp.exec_cmd(base .. 'desktop-ui clipboard'))
+hl.bind('CTRL + ALT + F',hl.dsp.exec_cmd(base .. 'mode --toggle'))
+hl.bind('CTRL + ALT + A',hl.dsp.exec_cmd(base .. 'desktop-ui controls'))
+end
+if modmode == 'ctrl-alt' then hl.bind('CTRL + ALT + space',hl.dsp.exec_cmd(base .. 'launcher')) end   -- Strg+Alt+Leertaste öffnet wie bisher den Launcher
+-- Strg+Space öffnet die Suche nur auf dem leeren Desktop; in Apps bleibt die Taste unberührt (non_consuming)
+hl.bind('CTRL + space',function()
+    local w = hl.get_active_window()
+    if w == nil or w.workspace == nil or w.mapped == false or w.hidden == true then hl.exec_cmd(base .. 'launcher') end
+end,{non_consuming=true})
+
+hl.bind(MOD .. ' + Escape',function() if hl.plugin.aurora_native then hl.plugin.aurora_native.repair_focus() end end)
 
 -- Dark Qt/KDE controls and application color-scheme hints.
 hl.env('QT_QPA_PLATFORMTHEME','kde')
@@ -91,13 +119,24 @@ hl.env('QT_STYLE_OVERRIDE','kvantum')
 hl.env('QT_QUICK_CONTROLS_MATERIAL_THEME','Dark')
 hl.env('QT_QUICK_CONTROLS_UNIVERSAL_THEME','Dark')
 
--- A bare Super tap opens the launcher; Super chords never do.
+-- A bare, short Super tap opens the launcher; Super chords and long presses never do.
 local superkeys = {}
 local super_chord = false
+local super_hold_token = 0
+local SUPER_HOLD_MS = 350   -- länger gehalten = kein Launcher
+if modmode ~= 'ctrl-alt' then
 hl.on('input.keyboard.key', function(code, _, state)
     if code == 133 or code == 134 then
         if state ~= 0 then
-            if not superkeys[133] and not superkeys[134] then super_chord = false end
+            if not superkeys[133] and not superkeys[134] then
+                super_chord = false
+                -- Länger gehaltene Super-Taste öffnet den Launcher nicht (nur kurzes Antippen)
+                super_hold_token = super_hold_token + 1
+                local token = super_hold_token
+                hl.timer(function()
+                    if token == super_hold_token and (superkeys[133] or superkeys[134]) then super_chord = true end
+                end, { timeout = SUPER_HOLD_MS, type = 'oneshot' })
+            end
             superkeys[code] = true
         else
             local was_down = superkeys[code]
@@ -108,6 +147,7 @@ hl.on('input.keyboard.key', function(code, _, state)
         super_chord = true
     end
 end)
+end
 
 -- Keep dock icons above the panel when adaptive visibility raises Waybar.
 hl.layer_rule({name='aurora-dock-panel-order',match={namespace='^aurora$'},order=20})

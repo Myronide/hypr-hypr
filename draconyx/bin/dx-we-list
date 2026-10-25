@@ -1,48 +1,71 @@
 #!/usr/bin/env python3
 # Draconyx: listet alle Steam-Workshop-Wallpaper der Wallpaper Engine als TSV: id, titel, typ, vorschau-pfad, geändert
-# Suchorte (alle zusammen): Ordner aus ~/.config/draconyx/workshop, Aurora-Einstellung "workshop",
+#   dx-we-list            Liste
+#   dx-we-list --roots    Diagnose: durchsuchte Ordner mit Anzahl gefundener Wallpaper
+# Suchorte (alle zusammen): ~/.config/draconyx/workshop, Aurora-Einstellung "workshop" (auch der Ordner darüber/darunter),
 # alle Steam-Bibliotheken (libraryfolders.vdf) und gängige Einhängepunkte.
-import glob, json, os, re
+import glob, json, os, re, sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 APP = "431960"
 home = os.path.expanduser("~")
 roots = []
 def add(p):
-    p = os.path.expanduser(p.strip())
-    if p and p not in roots: roots.append(p)
+    p = os.path.expanduser((p or "").strip()).rstrip("/")
+    if not p:
+        return
+    # Nutzer geben mal den Workshop-Ordner, mal die Steam-Bibliothek, mal ein einzelnes Wallpaper an
+    cands = [p, p + "/" + APP, p + "/steamapps/workshop/content/" + APP, p + "/workshop/content/" + APP]
+    if os.path.isfile(p + "/project.json"):
+        cands.append(os.path.dirname(p))
+    for c in cands:
+        if c not in roots:
+            roots.append(c)
+def read(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+add(read(home + "/.config/draconyx/workshop"))
 try:
-    add(open(home + "/.config/draconyx/workshop").read())
-except OSError:
-    pass
-try:
-    add(json.load(open(home + "/.config/hypr/aurora/preferences.json")).get("workshop", ""))
-except (OSError, ValueError):
+    add(json.loads(read(home + "/.config/hypr/aurora/preferences.json") or "{}").get("workshop", ""))
+except ValueError:
     pass
 for vdf in (home + "/.local/share/Steam/steamapps/libraryfolders.vdf", home + "/.steam/steam/steamapps/libraryfolders.vdf"):
-    try:
-        for m in re.finditer(r'"path"\s+"([^"]+)"', open(vdf, encoding="utf-8", errors="replace").read()):
-            add(m.group(1) + "/steamapps/workshop/content/" + APP)
-    except OSError:
-        pass
-add(home + "/.local/share/Steam/steamapps/workshop/content/" + APP)
+    for m in re.finditer(r'"path"\s+"([^"]+)"', read(vdf)):
+        add(m.group(1))
+add(home + "/.local/share/Steam")
 for pat in ("/run/media/*/*/SteamLibrary", "/run/media/*/*/steamapps", "/mnt/*/SteamLibrary", "/mnt/*/Steam*", "/mnt/SteamLibrary",
-            "/media/*/SteamLibrary", "/media/*/*/SteamLibrary", "/media/*/steamapps"):
+            "/media/*/SteamLibrary", "/media/*/*/SteamLibrary", "/media/*/steamapps", "/mnt/*", "/media/*"):
     for p in glob.glob(pat):
-        add(p + ("" if p.endswith("steamapps") else "/steamapps") + "/workshop/content/" + APP)
+        add(p)
+diag = "--roots" in sys.argv
 seen = set()
 for root in roots:
-    if not os.path.isdir(root):
+    found = 0
+    try:
+        names = sorted(os.listdir(root)) if os.path.isdir(root) else []
+    except OSError as e:
+        if diag: print("%s\t(Fehler: %s)" % (root, e.strerror))
         continue
-    for d in sorted(os.listdir(root)):
+    for d in names:
         if d in seen:
             continue
         base = os.path.join(root, d)
         try:
-            j = json.load(open(os.path.join(base, "project.json"), encoding="utf-8", errors="replace"))
+            with open(os.path.join(base, "project.json"), encoding="utf-8-sig", errors="replace") as f:
+                j = json.load(f)
         except Exception:
             continue
         seen.add(d)
-        title = (j.get("title") or d).replace("\t", " ").replace("\n", " ")
-        typ = (j.get("type") or "?").lower()
+        found += 1
+        if diag:
+            continue
+        title = str(j.get("title") or d).replace("\t", " ").replace("\n", " ")
+        typ = str(j.get("type") or "?").lower()
         prev = j.get("preview") or ""
         prev_path = os.path.join(base, prev) if prev else ""
         if prev_path and not os.path.exists(prev_path):
@@ -52,3 +75,5 @@ for root in roots:
         except OSError:
             mt = 0
         print("\t".join([d, title, typ, prev_path, str(mt)]))
+    if diag and os.path.isdir(root):
+        print("%s\t%d Wallpaper" % (root, found))

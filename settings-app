@@ -3,7 +3,7 @@ import gi,json,subprocess,os,threading
 from pathlib import Path
 gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
 from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango
-from preferences import BASE,SHELL,load_preferences,save_preferences,send_ui,apply_background,stop_engine
+from preferences import BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
 SHELL_SETTINGS=Path.home()/'.local/state/draconyx/settings.json'
 def shell_get(key,default=None):
  try:return json.loads(SHELL_SETTINGS.read_text()).get(key,default)
@@ -152,6 +152,15 @@ class Settings(Gtk.Application):
  def stop_background(self):stop_engine();self.p['engine_active']=False;save_preferences(self.p);self.message('Animierter Hintergrund gestoppt.')
  def shortcuts(self):
   b=self.page('Tastenkombinationen','Eigene Tasten für die wichtigsten Desktop-Funktionen. Beispiel: SUPER + V')
+  mods=[('super','Super (Windows-Taste)'),('both','Super und Strg + Alt'),('ctrl-alt','Super aus: Strg + Alt ersetzt sie'),('caps','Feststelltaste wird zu Super')]
+  w=Gtk.ComboBoxText()
+  for k,v in mods:w.append(k,v)
+  w.set_active_id(modifier_mode() if modifier_mode() in dict(mods) else 'super')
+  def mod_changed(w):
+   mode=w.get_active_id()
+   if mode:set_modifier_mode(mode);subprocess.run(['hyprctl','reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);self.message('Haupttaste gewechselt: '+dict(mods)[mode])
+  w.connect('changed',mod_changed)
+  self.row(b,'Haupttaste',w,'Defekte oder fehlende Super-Taste? „Super aus“ nutzt überall Strg + Alt statt Super, „Feststelltaste“ macht sie zur Super-Taste. Wirkt sofort.')
   defaults={'launcher':('App-Launcher','SUPER + A'),'clipboard':('Zwischenablage','SUPER + V'),'settings':('Einstellungen','SUPER + comma'),'desktop':('Schreibtisch zeigen','SUPER + D'),'mode':('Desktop / Anordnung','SUPER + SHIFT + F'),'minimize':('Minimieren','SUPER + H')}
   for key,(title,default) in defaults.items():
    w=Gtk.Entry(text=self.p['shortcuts'].get(key,default));w.set_width_chars(24);w.connect('changed',lambda w,key=key:self.p['shortcuts'].__setitem__(key,w.get_text()));self.row(b,title,w)

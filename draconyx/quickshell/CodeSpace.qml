@@ -17,10 +17,10 @@ PanelWindow {
     anchors.left: true
     margins.bottom: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
     margins.top: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
-    margins.left: Global.barMargin
+    margins.left: Global.popupLeft()
     implicitWidth: 600
     implicitHeight: 640
-    exclusiveZone: 0
+    exclusionMode: ExclusionMode.Ignore      // Abstand zur Leiste kommt aus den Rändern; die Leisten-Reservierung nicht doppelt rechnen
     color: "transparent"
     WlrLayershell.namespace: "draconyx-code"
     WlrLayershell.layer: WlrLayer.Overlay

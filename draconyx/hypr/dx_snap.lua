@@ -283,7 +283,12 @@ local function tick()
             return
         end
     end
-    if tiling ~= nil and tiling.isTiled(w) then writePreview("none"); return end
+    if tiling ~= nil and tiling.isTiled(w) then
+        writePreview("none")
+        local c = hl.get_cursor_pos()
+        if c ~= nil then pcall(tiling.liveSwap, w, c.x, c.y) end
+        return
+    end
     local zone, m = zoneNow()
     if zone == nil then writePreview("none"); return end
     local rz = (zone == "max") and "max" or zone

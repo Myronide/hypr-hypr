@@ -16,10 +16,10 @@ PanelWindow {
     anchors.right: true
     margins.bottom: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
     margins.top: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
-    margins.right: 14
+    margins.right: Global.popupRightMargin()
     implicitWidth: 420
     implicitHeight: content.implicitHeight + 36
-    exclusiveZone: 0
+    exclusionMode: ExclusionMode.Ignore      // Abstand zur Leiste kommt aus den Rändern; die Leisten-Reservierung nicht doppelt rechnen
     color: "transparent"
     WlrLayershell.namespace: "draconyx-control"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -32,11 +32,36 @@ PanelWindow {
 
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property var source: Pipewire.defaultAudioSource
+    // Besten Player wählen: spielend und mit Titel zuerst (Browser melden oft mehrere Player, einige ohne Metadaten)
     readonly property var player: {
         const list = Mpris.players.values;
-        for (const p of list) if (p.isPlaying) return p;
-        return list.length > 0 ? list[0] : null;
+        let best = null, bestScore = -1;
+        for (const p of list) {
+            const score = (p.isPlaying ? 4 : 0) + ((p.trackTitle || "") !== "" ? 2 : 0) + ((p.trackArtist || "") !== "" ? 1 : 0);
+            if (score > bestScore) { best = p; bestScore = score; }
+        }
+        return best;
     }
+    // Zuletzt gesehene Infos behalten: Browser nehmen den Player kurz nach dem Pausieren wieder weg
+    property string lastTitle: ""
+    property string lastArtist: ""
+    property string lastArt: ""
+    property string lastPlayerName: ""
+    function remember() {
+        const p = cc.player;
+        if (!p) return;
+        if ((p.trackTitle || "") !== "") { lastTitle = p.trackTitle; lastArtist = p.trackArtist || ""; lastArt = p.trackArtUrl || ""; lastPlayerName = p.identity || ""; }
+    }
+    onPlayerChanged: remember()
+    Connections { target: cc.player; ignoreUnknownSignals: true
+        function onTrackTitleChanged() { cc.remember(); }
+        function onTrackArtistChanged() { cc.remember(); }
+        function onTrackArtUrlChanged() { cc.remember(); }
+        function onPlaybackStateChanged() { cc.remember(); } }
+    Component.onCompleted: remember()
+    readonly property string shownTitle: cc.player && (cc.player.trackTitle || "") !== "" ? cc.player.trackTitle : (lastTitle !== "" ? lastTitle : (cc.player ? cc.player.identity : ""))
+    readonly property string shownArtist: cc.player && (cc.player.trackTitle || "") !== "" ? (cc.player.trackArtist || "") : lastArtist
+    readonly property string shownArt: cc.player && (cc.player.trackArtUrl || "") !== "" ? cc.player.trackArtUrl : lastArt
 
     Rectangle {
         anchors.fill: parent
@@ -125,7 +150,7 @@ PanelWindow {
 
             // ---------- Medien ----------
             Rectangle {
-                visible: cc.player !== null
+                visible: cc.player !== null || cc.lastTitle !== ""
                 width: parent.width
                 height: 96
                 radius: 16
@@ -144,7 +169,7 @@ PanelWindow {
                     Image {
                         id: art
                         anchors.fill: parent
-                        source: cc.player ? cc.player.trackArtUrl : ""
+                        source: cc.shownArt
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                     }
@@ -158,12 +183,12 @@ PanelWindow {
                     spacing: 2
                     Text {
                         width: parent.width; elide: Text.ElideRight
-                        text: cc.player ? (cc.player.trackTitle || cc.player.identity) : ""
+                        text: cc.shownTitle
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
                     }
                     Text {
                         width: parent.width; elide: Text.ElideRight
-                        text: cc.player ? (cc.player.trackArtist || "") : ""
+                        text: cc.shownArtist
                         color: Theme.textDim; font.family: Theme.font; font.pixelSize: 12
                     }
                     Row {

@@ -88,6 +88,7 @@ Singleton {
     property alias startLogo:     settings.startLogo
     property alias barStyle:      settings.barStyle
     property alias barPartHide:   settings.barPartHide
+    property alias hideOnFullscreen: settings.hideOnFullscreen
     property alias barItems:      settings.barItems
     property alias showDate:      settings.showDate
     property alias settingsCmd:   settings.settingsCmd
@@ -127,6 +128,7 @@ Singleton {
             property var barItems: ({})            // { start, search, taskview, code, wallpaper, desktops, apps, tray, system, notifications, clock, showDesktop, mode, settings } an/aus
             property bool showDate: true            // Datum unter der Uhrzeit
             property string settingsCmd: ""         // Befehl der Einstellungs-App (leer = automatisch)
+            property bool hideOnFullscreen: false   // Taskleiste bei Vollbild-Fenstern (Spiele, Videos) ausblenden; aus = bleibt sichtbar
             property bool barPartHide: false        // Dock mit Auto-Hide: nur die Kapsel unter der Maus fährt hoch
             property string barStyle: "bar"     // "bar" = durchgehende Leiste, "dock" = schwebendes Dock (wie Aurora)
             property string startLogo: ""        // "" = Draconyx, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild
@@ -647,7 +649,14 @@ Singleton {
             hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"set\" })");
         }
         hypr("hl.dsp.focus({ window = \"address:" + a + "\" })");
+        raise(a);
     }
+    // Fenster über alle anderen auf dem Bildschirm legen (sonst bleibt ein zurückgeholtes Fenster verdeckt)
+    function raise(a) {
+        raiseTimer.addr = a; raiseTimer.restart();
+        hypr("hl.dsp.window.alter_zorder({ mode = \"top\", window = \"address:" + a + "\" })");
+    }
+    Timer { id: raiseTimer; property string addr: ""; interval: 220; onTriggered: root.hypr("hl.dsp.window.alter_zorder({ mode = \"top\", window = \"address:" + addr + "\" })") }
     function minimizeH(h) { const a = addressOf(h); if (a !== "") minimizeAddr(a); }
     function minimizeToplevel(wl) { minimizeH(hyprFor(wl)); }
     function restoreH(h) { const a = addressOf(h); if (a !== "") restoreAddr(a); }
@@ -656,7 +665,7 @@ Singleton {
         if (!h) return;
         if (isMinimizedH(h)) { restoreH(h); return; }
         const a = addressOf(h);
-        if (a !== "") hypr("hl.dsp.focus({ window = \"address:" + a + "\" })");
+        if (a !== "") { hypr("hl.dsp.focus({ window = \"address:" + a + "\" })"); raise(a); }
     }
     function focusToplevel(wl) {
         const h = hyprFor(wl);
@@ -852,9 +861,16 @@ Singleton {
     function setWindowMode(m) { windowMode = m; hyprEval("DXTiling.setDefault(\"" + m + "\")"); }
     function toggleWindowMode() { setWindowMode(windowMode === "tiling" ? "floating" : "tiling"); }
     function openSettings() {
-        const c = settingsCmd !== "" ? settingsCmd : "python3 \"$HOME/.config/hypr/aurora/settings-app\"";
+        // über XWayland starten: nur so kommt das Minimieren-Symbol des Fensters bei Hyprland an (xdg-Minimieren wird dort ignoriert)
+        const c = settingsCmd !== "" ? settingsCmd : "GDK_BACKEND=x11 python3 \"$HOME/.config/hypr/aurora/settings-app\"";
         Quickshell.execDetached(["sh", "-c", c]);
     }
+
+    // Dock-Stil: Lage der Kapseln je Monitor (von der Leiste gemeldet), damit Menüs an der passenden Kapsel hängen
+    property var dockGeom: ({})            // mon -> { x, w, sx, sw, screenW }
+    function setDockGeom(mon, g) { const m = Object.assign({}, dockGeom); m[mon] = g; dockGeom = m; }
+    function popupLeft() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(barMargin, g.x) : barMargin; }
+    function popupRightMargin() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(8, g.screenW - (g.sx + g.sw)) : 14; }
 
     // Symbol des Startknopfs: Draconyx (Standard), Arch oder eigenes Bild
     readonly property string startLogoUrl: startLogo === "" ? Theme.logo
@@ -887,6 +903,7 @@ Singleton {
     Timer { interval: 4000; running: true; onTriggered: if (Object.keys(root.weWallpapers).length > 0) root.weApply() }
 
     Component.onCompleted: {
+        hyprEval("hl.config({ cursor = { no_warps = true } })");   // Maus springt beim Fokuswechsel nicht in die Fenstermitte
         netState.running = true;
         perfRead.running = true;
         zonesTimer.restart();

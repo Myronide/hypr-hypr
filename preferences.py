@@ -11,6 +11,12 @@ def send_ui(*args):
  try:
   with socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM) as s:s.sendto(json.dumps(args).encode(),str(Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-ui.sock'))
  except OSError:pass
+def modifier_mode():
+ """Haupttaste (Aurora-Einstellungen): super | both | ctrl-alt | caps – gemeinsame Datei mit der Draconyx-Shell."""
+ try:return (Path.home()/'.config/draconyx/modifier').read_text().strip() or 'super'
+ except OSError:return 'super'
+def set_modifier_mode(mode):
+ d=Path.home()/'.config/draconyx';d.mkdir(parents=True,exist_ok=True);(d/'modifier').write_text(mode+'\n')
 def save_preferences(p):
  (BASE/'preferences.json').write_text(json.dumps(p,ensure_ascii=False,indent=2))
  if p.get('terminal'):
@@ -23,6 +29,7 @@ def save_preferences(p):
  for key,combo in p.get('shortcuts',{}).items():
   if key not in actions:continue
   if not re.fullmatch(r'[A-Za-z0-9 +_:\-]*',combo):raise ValueError('Ungültige Tastenkombination: '+combo)
+  if modifier_mode()=='ctrl-alt':combo=combo.replace('SUPER + CTRL','CTRL + ALT + SHIFT').replace('SUPER','CTRL + ALT')   # Super aus: Strg+Alt ersetzt sie
   source+='if aurora_bindings and aurora_bindings.'+key+' then aurora_bindings.'+key+':remove() end\n'
   if combo.strip():source+='aurora_bindings.'+key+' = hl.bind('+json.dumps(combo)+',hl.dsp.exec_cmd('+json.dumps(str(BASE)+'/'+actions[key])+'))\n'
  (BASE/'preferences.lua').write_text(source)

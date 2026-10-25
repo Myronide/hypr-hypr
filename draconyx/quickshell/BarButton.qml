@@ -50,10 +50,12 @@ Rectangle {
         property real pressX: 0
         property bool wasDrag: false
 
-        onPressed: mouse => { pressX = mouse.x; wasDrag = false; }
+        // Fensterkoordinaten statt Knopfkoordinaten: der Knopf verschiebt sich beim Ziehen selbst, sonst schaukelt sich die Messung auf
+        function sceneX(mouse) { return area.mapToItem(null, mouse.x, mouse.y).x; }
+        onPressed: mouse => { pressX = sceneX(mouse); wasDrag = false; }
         onPositionChanged: mouse => {
             if (!btn.draggable || !pressed || !(pressedButtons & Qt.LeftButton)) return;
-            const dx = mouse.x - pressX;
+            const dx = sceneX(mouse) - pressX;
             if (btn.dragging || Math.abs(dx) > 10) {
                 btn.dragging = true;
                 wasDrag = true;

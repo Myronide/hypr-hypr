@@ -14,7 +14,23 @@ if SHELL_QML.exists() and os.environ.get('AURORA_LEGACY_UI')!='1':
     elif _cmd=='minimize':_qs('shell','minimizeActive')
     elif _cmd=='mode':_qs('shell','toggleWindowMode')
     elif _cmd=='launcher':_qs('shell','toggleStart')
-    elif _cmd=='switcher':_qs('switcher','prev' if '--reverse' in sys.argv else 'next')
+    elif _cmd=='switcher':
+        _qs('switcher','prev' if '--reverse' in sys.argv else 'next')
+        # Auroras Lua schreibt den Alt-Zustand nach $XDG_RUNTIME_DIR/aurora-alt-state; beim Loslassen von Alt bestätigt der Wächter die Auswahl
+        _lock=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-alt-watch.pid'
+        try:_alive=_lock.exists() and Path('/proc/'+_lock.read_text().strip()).exists()
+        except OSError:_alive=False
+        if not _alive:
+            subprocess.Popen([sys.executable,sys.argv[0],'__altwatch'],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    elif _cmd=='__altwatch':
+        _run=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'));(_run/'aurora-alt-watch.pid').write_text(str(os.getpid()))
+        _t0=time.monotonic()
+        while time.monotonic()-_t0<20:
+            try:_st=(_run/'aurora-alt-state').read_text().strip()
+            except OSError:_st='up'
+            if _st!='down' and time.monotonic()-_t0>0.12:break
+            time.sleep(0.02)
+        _qs('switcher','commit');(_run/'aurora-alt-watch.pid').unlink(missing_ok=True)
     elif _cmd=='show-desktop':subprocess.run(['hyprctl','dispatch','hl.dsp.focus({ workspace = "empty" })'],stdout=subprocess.DEVNULL)
     elif _cmd=='controls':_qs('shell','toggleControl')
     elif _cmd=='clipboard-store':

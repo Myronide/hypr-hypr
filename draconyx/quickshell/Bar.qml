@@ -34,13 +34,14 @@ PanelWindow {
     readonly property bool dock: Global.barStyle === "dock"
     readonly property int gap: Global.barMargin        // Abstand zum Bildschirmrand
 
-    visible: enabledHere && !fullscreenHere
+    visible: enabledHere && (!fullscreenHere || !Global.hideOnFullscreen)
     anchors { left: true; right: true; top: Global.barTop; bottom: !Global.barTop }
     implicitHeight: Global.barHeight + gap * 2 + 6
     color: "transparent"
     exclusiveZone: autohideHere ? 0 : Global.barHeight + gap * 2
     WlrLayershell.namespace: "draconyx-bar"
-    WlrLayershell.layer: WlrLayer.Top
+    // Vollbild-Fenster liegen über der Top-Ebene: soll die Leiste bleiben, rückt sie in die Overlay-Ebene
+    WlrLayershell.layer: fullscreenHere && !Global.hideOnFullscreen ? WlrLayer.Overlay : WlrLayer.Top
 
     onKeepOpenChanged: {
         if (keepOpen) { hideTimer.stop(); shown = true; }
@@ -95,6 +96,10 @@ PanelWindow {
         return out;
     }
 
+
+    // Lage der Kapseln an die Menüs melden (Dock-Stil)
+    readonly property var dockGeom: ({ x: surf.x, w: surf.width, sx: sysPill.x, sw: sysPill.width, screenW: bar.width })
+    onDockGeomChanged: Global.setDockGeom(mon, dockGeom)
 
     // Rechtsklick auf den Startknopf: Symbol wählen (Draconyx / Arch / eigenes Bild)
     PopupWindow {

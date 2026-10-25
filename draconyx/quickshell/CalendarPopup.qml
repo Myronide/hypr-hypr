@@ -14,10 +14,10 @@ PanelWindow {
     anchors.right: true
     margins.bottom: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
     margins.top: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
-    margins.right: 14
+    margins.right: Global.popupRightMargin()
     implicitWidth: 360
     implicitHeight: 420
-    exclusiveZone: 0
+    exclusionMode: ExclusionMode.Ignore      // Abstand zur Leiste kommt aus den Rändern; die Leisten-Reservierung nicht doppelt rechnen
     color: "transparent"
     WlrLayershell.namespace: "draconyx-calendar"
     WlrLayershell.layer: WlrLayer.Overlay

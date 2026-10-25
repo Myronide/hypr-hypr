@@ -15,13 +15,13 @@ PanelWindow {
     anchors.left: true
     margins.bottom: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
     margins.top: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
-    margins.left: Global.barMargin + 600 + 6          // rechts neben dem Coding-Space-Feld (600 breit)
+    margins.left: Global.popupLeft() + 600 + 6          // rechts neben dem Coding-Space-Feld (600 breit)
     readonly property int mainW: 560
     readonly property int diffW: 600
     readonly property bool diffOpen: detailTitle !== "" || diffLines.length > 0
     implicitWidth: mainW + (diffOpen ? diffW + 6 : 0)
     implicitHeight: 640
-    exclusiveZone: 0
+    exclusionMode: ExclusionMode.Ignore      // Abstand zur Leiste kommt aus den Rändern; die Leisten-Reservierung nicht doppelt rechnen
     color: "transparent"
     WlrLayershell.namespace: "draconyx-code"
     WlrLayershell.layer: WlrLayer.Overlay

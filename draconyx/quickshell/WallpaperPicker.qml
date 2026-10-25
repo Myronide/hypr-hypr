@@ -15,10 +15,10 @@ PanelWindow {
     anchors.left: true
     margins.bottom: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
     margins.top: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
-    margins.left: Global.barMargin + 120
+    margins.left: Global.popupLeft() + 120
     implicitWidth: 760
     implicitHeight: 660
-    exclusiveZone: 0
+    exclusionMode: ExclusionMode.Ignore      // Abstand zur Leiste kommt aus den Rändern; die Leisten-Reservierung nicht doppelt rechnen
     color: "transparent"
     WlrLayershell.namespace: "draconyx-code"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -32,10 +32,16 @@ PanelWindow {
     readonly property var shown: items.filter(i => (typ === "" || i.type === typ)
                                                     && (query === "" || i.title.toLowerCase().includes(query.toLowerCase())))
 
-    onVisibleChanged: if (visible) { query = ""; search.text = ""; search.forceActiveFocus(); load.running = false; load.running = true; }
+    onVisibleChanged: if (visible) { query = ""; search.text = ""; search.forceActiveFocus(); load.running = false; load.running = true; rootsProc.running = false; rootsProc.running = true; }
 
     HyprlandFocusGrab { windows: [wp]; active: wp.visible; onCleared: Global.weOpen = false }
 
+    property string rootsText: ""
+    Process {
+        id: rootsProc
+        command: [Theme.home + "/.local/bin/dx-we-list", "--roots"]
+        stdout: StdioCollector { onStreamFinished: wp.rootsText = text.trim().split("\n").filter(l => l.indexOf("\t") > 0).slice(0, 8).map(l => l.split("\t").join("  →  ")).join("\n"); }
+    }
     Process {
         id: load
         command: [Theme.home + "/.local/bin/dx-we-list"]
@@ -117,6 +123,16 @@ PanelWindow {
                 Keys.onEscapePressed: Global.weOpen = false
                 Text { visible: search.text === ""; text: "Wallpaper suchen …"; color: Theme.textDim; font: search.font }
             }
+        }
+
+        Text {
+            visible: wp.items.length === 0
+            anchors.centerIn: parent
+            width: parent.width - 80
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            text: "Keine Wallpaper gefunden.\nOrdner in Aurora → Wallpaper Engine wählen oder die Steam-Bibliothek prüfen.\n\nGesucht in:\n" + wp.rootsText
+            color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsS
         }
 
         GridView {

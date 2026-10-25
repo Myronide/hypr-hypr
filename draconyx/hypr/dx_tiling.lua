@@ -313,6 +313,47 @@ function M.shift(dir)
 end
 
 -- Fenster per Maus losgelassen: bei Kachel-Fenstern mit dem Fenster unter dem Zeiger tauschen
+-- Platz Nr. idx (in Reihenfolge der gekachelten Fenster eines Desktops) als Rechteck
+local function slotRect(list, idx, m)
+    local zones = (M.mode == "zones" and Z ~= nil) and Z.zones(m.name) or {}
+    if #zones > 0 then return zones[idx] end
+    local ax, ay, aw, ah = usable(m)
+    local mode = (M.mode == "zones") and "grid" or M.mode
+    return layout(#list, mode, ax, ay, aw, ah)[idx]
+end
+
+-- Live-Tauschen beim Ziehen: Zieht man ein gekacheltes Fenster über ein anderes, gleitet dieses sofort in den
+-- Platz des gezogenen (animiert). Das gezogene Fenster folgt weiter der Maus und rastet beim Loslassen ein.
+local lastSwap = 0
+function M.liveSwap(w, cx, cy)
+    if w == nil or not tiled[w.address] or applying then return false end
+    local now = os.clock()
+    if now - lastSwap < 0.25 then return false end
+    local map = windowMap()
+    local list = tiledOn(w.workspace.id, map)
+    for _, o in ipairs(list) do
+        if o.address ~= w.address
+           and cx >= o.at.x and cx <= o.at.x + o.size.x and cy >= o.at.y and cy <= o.at.y + o.size.y then
+            local i, j = indexOf(w.address), indexOf(o.address)
+            if i == nil or j == nil then return false end
+            order[i], order[j] = order[j], order[i]
+            lastSwap = now
+            local m = o.monitor or hl.get_active_monitor()
+            local fresh = tiledOn(w.workspace.id, map)
+            -- o übernimmt den Platz, den w verlassen hat (neuer Index i in der neu sortierten Liste)
+            local r
+            for k, ww in ipairs(fresh) do if ww.address == o.address then r = slotRect(fresh, k, m) end end
+            if r ~= nil then
+                applying = true
+                pcall(place, o, r)
+                applying = false
+            end
+            return true
+        end
+    end
+    return false
+end
+
 function M.dropAt(w, cx, cy)
     if w == nil or not tiled[w.address] then return false end
     local map = windowMap()

@@ -161,6 +161,13 @@ local mainMod = "CTRL + ALT"   -- Strg+Alt ist der Hauptmodifikator für ALLE Ko
 
 -- Windows-Taste allein = Startmenü
 hl.bind(mainMod .. " + space", hl.dsp.exec_cmd(startMenu))                 -- Startmenü
+-- Strg+Space öffnet die Suche NUR auf dem Desktop (kein Fenster im Fokus). Die Taste bleibt nicht verbraucht (non_consuming),
+-- Apps bekommen sie also weiter (z. B. Autovervollständigung im Editor).
+hl.bind("CTRL + space", function()
+    local w = hl.get_active_window()
+    local onDesktop = (w == nil) or (w.workspace == nil) or (w.mapped == false) or (w.hidden == true)
+    if onDesktop then hl.exec_cmd(startMenu) end
+end, { non_consuming = true })
 
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))                 -- Explorer
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(runMenu))                     -- Ausführen

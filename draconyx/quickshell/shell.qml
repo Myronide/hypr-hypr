@@ -88,6 +88,7 @@ ShellRoot {
             const t = Hyprland.activeToplevel;
             if (t) Global.minimizeAddr("0x" + String(t.address).replace(/^0x/, ""));
         }
+        function hideOnFullscreen(v: bool): void { Global.hideOnFullscreen = v; }
         function barPartHide(v: bool): void { Global.barPartHide = v; }
         function barStyle(v: string): void { Global.barStyle = v; }
         function openSettings(): void { Global.openSettings(); }
