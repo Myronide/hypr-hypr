@@ -11,7 +11,8 @@ BarButton {
     minWidth: 44
     implicitHeight: Global.barHeight - 10
     active: Global.startOpen && Global.popupScreen === bar.mon
-    Component.onCompleted: if (bar) bar.startItem = startBtn
+    // bar wird vom Loader erst nach dem Erzeugen gesetzt – deshalb auf die Änderung reagieren, nicht auf onCompleted
+    onBarChanged: if (bar) bar.startItem = startBtn
     Image {
         source: Global.startLogoUrl
         width: 34; height: 34
