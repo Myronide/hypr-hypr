@@ -1,0 +1,31 @@
+@import url("palette.css");
+* { font-family:"Sans"; font-size:12px; }
+window { background:@shell_bg; color:@shell_text; }
+headerbar { background:@shell_bg; color:@shell_text; border:0; border-bottom:1px solid @shell_border; box-shadow:none; min-height:42px; }
+headerbar .title { font-size:13px; font-weight:600; }
+headerbar .subtitle { font-size:11px; color:@shell_muted; }
+stacksidebar { background:#22262c; border-right:1px solid @shell_border; padding:10px 6px; }
+stacksidebar list { background:transparent; }
+stacksidebar row { color:@shell_muted; border-radius:8px; margin:2px 0; padding:9px 10px; }
+stacksidebar row:selected { background:@shell_selected; color:#edf5ff; }
+stacksidebar row:hover { background:@shell_hover; }
+.page-title { font-size:24px; font-weight:600; color:@shell_text; }
+.subtitle { color:@shell_muted; font-size:12px; }
+.setting-row { background:@shell_surface; border:1px solid #3d444e; border-radius:10px; padding:12px 14px; margin-bottom:3px; }
+button { background:#3a424e; color:@shell_text; border:1px solid #4d5968; border-radius:8px; padding:8px 12px; box-shadow:none; text-shadow:none; }
+button:hover { background:#465363; border-color:#6984a5; }
+button:focus { border-color:@shell_blue; }
+button.suggested-action { background:#397acb; border-color:#4d8fe0; color:white; }
+entry,spinbutton { background:#242b34; color:@shell_text; border:1px solid #505d6e; border-radius:8px; box-shadow:none; }
+entry:focus,spinbutton:focus { border-color:@shell_blue; }
+spinbutton button { background:transparent; border:0; padding:6px; }
+combobox button { background:#343e4b; color:@shell_text; }
+switch { background:#4b5767; border:0; border-radius:12px; }
+switch:checked { background:#397acb; }
+switch slider { background:#dfe8f4; border:0; border-radius:11px; }
+list,row,viewport,scrolledwindow { background:transparent; color:@shell_text; }
+row:selected { background:@shell_selected; }
+menu,menuitem { background:@shell_bg; color:@shell_text; }
+menuitem:hover { background:@shell_selected; }
+scrollbar { background:transparent; }
+scrollbar slider { background:#57667a; min-width:5px; border-radius:5px; }

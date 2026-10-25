@@ -1,0 +1,9 @@
+
+@import "launcher.rasi"
+window { width: 1000px; padding: 24px; }
+mainbox { children: [message, listview]; spacing: 20px; }
+message { padding: 4px 8px; }
+listview { columns: 4; lines: 2; fixed-height: false; layout: vertical; spacing: 14px; }
+element { padding: 22px 14px; spacing: 16px; }
+element-icon { size: 64px; }
+element-text { horizontal-align: 0.5; }

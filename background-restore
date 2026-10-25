@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+from preferences import load_preferences,apply_background
+p=load_preferences()
+if p.get('engine_active') and p.get('engine_path'):apply_background(p,engine=True)
+elif p.get('wallpaper'):apply_background(p)

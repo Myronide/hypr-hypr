@@ -1,0 +1,685 @@
+#!/usr/bin/python3
+"""Aurora: grouped/pinned dock, launcher and race-free Alt-Tab."""
+import os, sys, json, socket, subprocess, time, re, fcntl, math
+import sqlite3, hashlib
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+BASE=Path.home()/'.config/hypr/aurora'
+RUN=Path(os.environ['XDG_RUNTIME_DIR'])
+SOCKET=RUN/'aurora-ui.sock'
+HISTORY=Path.home()/'.local/share/aurora'
+def history_db():
+    HISTORY.mkdir(parents=True,exist_ok=True,mode=0o700)
+    os.chmod(HISTORY,0o700)
+    db=sqlite3.connect(HISTORY/'clipboard.sqlite3',timeout=5)
+    db.execute('CREATE TABLE IF NOT EXISTS clips (hash TEXT PRIMARY KEY, mime TEXT, data BLOB, updated REAL)')
+    os.chmod(HISTORY/'clipboard.sqlite3',0o600)
+    return db
+if len(sys.argv)>1 and sys.argv[1]=='clipboard-store':
+    if os.environ.get('CLIPBOARD_STATE') in ('nil','clear','sensitive'):sys.exit(0)
+    data=sys.stdin.buffer.read(5*1024*1024+1)
+    if not data or len(data)>5*1024*1024:sys.exit(0)
+    mime='image/png' if sys.argv[2]=='image/png' else 'text/plain;charset=utf-8'
+    with history_db() as db:
+        db.execute('INSERT OR REPLACE INTO clips VALUES (?,?,?,?)',(hashlib.sha256(data).hexdigest(),mime,data,time.time()))
+        db.execute('DELETE FROM clips WHERE hash NOT IN (SELECT hash FROM clips ORDER BY updated DESC LIMIT 100)')
+        while db.execute('SELECT coalesce(sum(length(data)),0) FROM clips').fetchone()[0]>30*1024*1024:
+            db.execute('DELETE FROM clips WHERE hash = (SELECT hash FROM clips ORDER BY updated LIMIT 1)')
+    sys.exit(0)
+if len(sys.argv)>1 and sys.argv[1]!='daemon':
+    with socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM) as client:
+        client.sendto(json.dumps(sys.argv[1:]).encode(),str(SOCKET))
+    sys.exit(0)
+import gi
+gi.require_version('Gtk','3.0');gi.require_version('GtkLayerShell','0.1');gi.require_version('GioUnix','2.0')
+from gi.repository import Gtk,Gdk,Gio,GioUnix,GLib,Pango,GdkPixbuf,GtkLayerShell as Layer
+from preferences import load_preferences
+from dock_visibility import DockVisibility
+from control_center import ControlCenter,symbol
+lock=open(RUN/'aurora-ui.lock','w')
+try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+except BlockingIOError:sys.exit(0)
+def ctl(*args):return subprocess.check_output(['hyprctl',*args],text=True)
+def clients():
+    return sorted([w for w in json.loads(ctl('-j','clients')) if w.get('mapped') and (w.get('workspace',{}).get('name')=='special:aurora-minimized' or (not w.get('hidden') and w.get('workspace',{}).get('id',0)>0))],key=lambda w:w.get('focusHistoryID',999))
+def focus(w):
+    subprocess.run(['hyprctl','dispatch','hl.dsp.focus({window="address:'+w['address']+'"})'],stdout=subprocess.DEVNULL)
+def css(widget,name):widget.get_style_context().add_class(name);return widget
+def label(text,name=None):
+    l=Gtk.Label(label=text)
+    if name:css(l,name)
+    return l
+class Aurora(ControlCenter):
+    def __init__(self):
+        self.display=Gdk.Display.get_default();self.apps={};self.aliases={};self.popup=[];self.kind=None;self.selection=0;self.switches=[];self.cards=[];self.signature=None;self.pending_at=0;self.query=''
+        (RUN/'aurora-controls-open').unlink(missing_ok=True)
+        self.control_panel=None;self.preview_panel=None;self.return_focus=None
+        self.dragging_pin=False;self.suppress_dock_click_until=0
+        self.popover=None;self.dock_buttons={};self.preview_pool=ThreadPoolExecutor(max_workers=2)
+        self.preview_dir=RUN/'aurora-previews';self.preview_dir.mkdir(mode=0o700,exist_ok=True)
+        self.prefs=load_preferences()
+        self.desktop_state_file=BASE/'desktop-layout.json'
+        self.desktop_state=json.loads(self.desktop_state_file.read_text()) if self.desktop_state_file.exists() else {'positions':{},'sort':'name'}
+        self.drag_offset=(30,30)
+        self.reload_apps()
+        self.minfile=RUN/'aurora-minimized.json'
+        self.minimized=json.loads(self.minfile.read_text()) if self.minfile.exists() else {}
+        self.desktop_hidden=[]
+        self.layout_file=RUN/'aurora-layout-state.json'
+        saved=json.loads(self.layout_file.read_text()) if self.layout_file.exists() else {}
+        self.layout_mode=saved.get('mode','desktop');self.layout_style=saved.get('style','master');self.ratio=saved.get('ratio',.58)
+        self.layout_order=saved.get('order',[]);self.excluded=set(saved.get('excluded',[]));self.float_geometry=saved.get('geometry',{})
+        self.layout_signature=None;self.layout_expected={};self.layout_applied=0
+        pinfile=BASE/'pins.json'
+        if not pinfile.exists():pinfile.write_text(json.dumps(['kitty','brave-browser','org.kde.dolphin'],indent=2))
+        self.pins=json.loads(pinfile.read_text())
+        self.sock=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM)
+        SOCKET.unlink(missing_ok=True);self.sock.bind(str(SOCKET));self.sock.setblocking(False)
+        GLib.io_add_watch(self.sock.fileno(),GLib.IO_IN,self.receive)
+        provider=Gtk.CssProvider();provider.load_from_path(str(BASE/'ui.css'))
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.preference_provider=Gtk.CssProvider()
+        if (BASE/'preferences.css').exists():self.preference_provider.load_from_path(str(BASE/'preferences.css'))
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),self.preference_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION+1)
+        Gtk.Settings.get_default().set_property('gtk-icon-theme-name','Fluent-dark')
+        self.dock=Gtk.Window(type=Gtk.WindowType.TOPLEVEL);self.prepare(self.dock,'aurora-apps',Layer.Layer.OVERLAY)
+        Layer.set_anchor(self.dock,Layer.Edge.BOTTOM,True);Layer.set_margin(self.dock,Layer.Edge.BOTTOM,23)
+        Layer.set_exclusive_zone(self.dock,-1)
+        self.dock.set_size_request(-1,50)
+        self.box=css(Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,spacing=3),'app-dock');self.dock.add(self.box)
+        self.desktop=None;self.desktop_monitor=None;self.desktop_files=[]
+        self.desktop_path=Path.home()/'Schreibtisch';self.desktop_path.mkdir(exist_ok=True)
+        self.filemon=Gio.File.new_for_path(str(self.desktop_path)).monitor_directory(Gio.FileMonitorFlags.NONE,None)
+        self.filemon.connect('changed',lambda *_:self.refresh_desktop())
+        self.visibility_ctl=ctl
+        self.dock_monitor();self.update_dock();self.layout_tick();self.save_layout();self.dock_visibility=DockVisibility(self)
+        GLib.timeout_add(500,self.update_dock);GLib.timeout_add(15,self.tick);GLib.timeout_add(180,self.layout_tick)
+        self.display.connect('monitor-added',lambda *_:self.dock_monitor());self.display.connect('monitor-removed',lambda *_:self.dock_monitor())
+    def prepare(self,w,namespace,layer):
+        w.set_app_paintable(True);w.set_visual(w.get_screen().get_rgba_visual());w.set_decorated(False)
+        Layer.init_for_window(w);Layer.set_namespace(w,namespace);Layer.set_layer(w,layer);Layer.set_exclusive_zone(w,0);Layer.set_keyboard_mode(w,Layer.KeyboardMode.NONE)
+    def monitors(self):return [self.display.get_monitor(i) for i in range(self.display.get_n_monitors())]
+    def monitor(self,hypr):
+        return next((m for m in self.monitors() if m.get_geometry().x==hypr['x'] and m.get_geometry().y==hypr['y']),None)
+    def dock_monitor(self):
+        hs=json.loads(ctl('-j','monitors'));m=next((x for x in hs if x['name']==self.prefs['dock_monitor']),None)
+        if m and self.monitor(m):
+            mon=self.monitor(m);Layer.set_monitor(self.dock,mon);self.dock.show_all();self.setup_desktop(mon)
+        else:
+            self.dock.hide()
+            if self.desktop:self.desktop.hide()
+    def setup_desktop(self,mon):
+        if self.desktop and self.desktop_monitor==mon:self.desktop.show_all();return
+        if self.desktop:self.desktop.destroy()
+        self.desktop_monitor=mon;self.desktop=Gtk.Window(type=Gtk.WindowType.TOPLEVEL);self.prepare(self.desktop,'aurora-desktop',Layer.Layer.BACKGROUND);Layer.set_monitor(self.desktop,mon);Layer.set_exclusive_zone(self.desktop,-1)
+        for edge in [Layer.Edge.TOP,Layer.Edge.BOTTOM,Layer.Edge.LEFT,Layer.Edge.RIGHT]:Layer.set_anchor(self.desktop,edge,True)
+        self.desktop_root=Gtk.EventBox();self.desktop_root.set_visible_window(False);self.desktop_root.connect('button-press-event',self.desktop_background_press);self.desktop.add(self.desktop_root)
+        overlay=Gtk.Overlay();self.desktop_root.add(overlay);self.grid_drawing=Gtk.DrawingArea();self.grid_drawing.connect('draw',self.draw_grid);overlay.add(self.grid_drawing)
+        self.desktop_grid=Gtk.Fixed();self.desktop_grid.set_hexpand(True);self.desktop_grid.set_vexpand(True);overlay.add_overlay(self.desktop_grid)
+        self.desktop_grid.drag_dest_set(Gtk.DestDefaults.ALL,[Gtk.TargetEntry.new('text/uri-list',Gtk.TargetFlags.SAME_APP,0)],Gdk.DragAction.MOVE)
+        self.desktop_grid.connect('drag-data-received',self.desktop_drop)
+        self.refresh_desktop();self.desktop.show_all()
+    def save_desktop(self):self.desktop_state_file.write_text(json.dumps(self.desktop_state,ensure_ascii=False,indent=2))
+    def grid_metrics(self):return self.prefs['grid_width'],self.prefs['grid_height']
+    def draw_grid(self,widget,cr):
+        if not self.prefs['grid_visible']:return False
+        width,height=widget.get_allocated_width(),widget.get_allocated_height();gx,gy=self.grid_metrics();cr.set_source_rgba(.65,.75,1,.22)
+        for x in range(24,width,gx):
+            for y in range(24,height-90,gy):cr.arc(x+52,y+44,1.5,0,6.283);cr.fill()
+        return False
+    def next_desktop_position(self,used):
+        gx,gy=self.grid_metrics();height=self.desktop_monitor.get_geometry().height;rows=max(1,(height-125)//gy)
+        for i in range(10000):
+            pos=[24+(i//rows)*gx,24+(i%rows)*gy]
+            if tuple(pos) not in used:return pos
+        return [24,24]
+    def desktop_background_press(self,b,event):
+        if event.button!=3:return False
+        panel=self.popover_box(self.desktop_grid,Gtk.PositionType.BOTTOM,(int(event.x),int(event.y),1,1))
+        self.popover_row(panel,'󰉋  Schreibtisch im Dateimanager',lambda:subprocess.Popen(['dolphin',str(self.desktop_path)]))
+        for title,key in [('Nach Namen sortieren','name'),('Nach Dateityp sortieren','type'),('Nach Änderungsdatum sortieren','modified')]:self.popover_row(panel,title,lambda key=key:self.sort_desktop(key))
+        self.popover_row(panel,('✓  ' if self.prefs['grid_snap'] else '○  ')+'Am Raster ausrichten',lambda:self.desktop_preference('grid_snap',not self.prefs['grid_snap']))
+        self.popover_row(panel,('✓  ' if self.prefs['grid_visible'] else '○  ')+'Raster anzeigen',lambda:self.desktop_preference('grid_visible',not self.prefs['grid_visible']))
+        self.popover_row(panel,'󰒓  Aurora-Einstellungen',lambda:subprocess.Popen([str(BASE/'settings-app')]))
+        self.show_popover();return True
+    def desktop_preference(self,key,value):
+        self.prefs[key]=value;(BASE/'preferences.json').write_text(json.dumps(self.prefs,ensure_ascii=False,indent=2));self.refresh_desktop();self.grid_drawing.queue_draw()
+    def sort_desktop(self,mode):
+        self.desktop_state['sort']=mode;self.desktop_state['positions']={};self.refresh_desktop();self.save_desktop()
+    def desktop_drop(self,widget,context,x,y,data,info,timestamp):
+        uris=data.get_uris() or []
+        if not uris:Gtk.drag_finish(context,False,False,timestamp);return
+        path=Path(Gio.File.new_for_uri(uris[0]).get_path());key=path.name
+        if path.parent!=self.desktop_path:Gtk.drag_finish(context,False,False,timestamp);return
+        gx,gy=self.grid_metrics();x-=self.drag_offset[0];y-=self.drag_offset[1]
+        bounds=self.desktop_monitor.get_geometry();x=max(8,min(int(x),bounds.width-116));y=max(8,min(int(y),bounds.height-196))
+        if self.prefs['grid_snap']:
+            x=24+round((x-24)/gx)*gx;y=24+round((y-24)/gy)*gy
+            used={tuple(v) for k,v in self.desktop_state['positions'].items() if k!=key}
+            if (x,y) in used:x,y=self.next_desktop_position(used)
+        self.desktop_state['positions'][key]=[x,y];self.save_desktop();self.refresh_desktop();Gtk.drag_finish(context,True,False,timestamp)
+    def refresh_desktop(self):
+        if not self.desktop:return
+        if self.popover:self.close_popover()
+        for c in self.desktop_grid.get_children():c.destroy()
+        self.desktop_files=[];positions=self.desktop_state.setdefault('positions',{});used={tuple(pos) for key,pos in positions.items() if (self.desktop_path/key).exists()}
+        files=[p for p in self.desktop_path.iterdir() if not p.name.startswith('.')];mode=self.desktop_state.get('sort','name')
+        files.sort(key=lambda p:(not p.is_dir(),-p.stat().st_mtime if mode=='modified' else p.suffix.lower() if mode=='type' else '',p.name.lower()))
+        for path in files:
+            try:info=Gio.File.new_for_path(str(path)).query_info('standard::icon,standard::display-name',Gio.FileQueryInfoFlags.NONE,None)
+            except GLib.Error:continue
+            title=info.get_display_name();icon=info.get_icon()
+            if path.suffix=='.desktop':
+                a=GioUnix.DesktopAppInfo.new_from_filename(str(path))
+                if a:title=a.get_display_name();icon=a.get_icon() or icon
+            b=css(Gtk.Button(),'desktop-file');b.set_size_request(110,100);v=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);im=Gtk.Image.new_from_gicon(icon,Gtk.IconSize.DIALOG);im.set_pixel_size(self.prefs['desktop_icon_size']);v.pack_start(im,False,False,0)
+            l=label(title,'desktop-label');l.set_max_width_chars(15);l.set_line_wrap(True);l.set_lines(2);l.set_ellipsize(Pango.EllipsizeMode.END);l.set_justify(Gtk.Justification.CENTER);v.pack_start(l,False,False,0);b.add(v);b.set_tooltip_text(title)
+            b.connect('button-press-event',self.desktop_press,path);b.connect('key-press-event',self.desktop_key,path)
+            b.drag_source_set(Gdk.ModifierType.BUTTON1_MASK,[Gtk.TargetEntry.new('text/uri-list',Gtk.TargetFlags.SAME_APP,0)],Gdk.DragAction.MOVE)
+            b.connect('drag-data-get',lambda _,context,data,info,t,p=path:data.set_uris([p.as_uri()]))
+            b.connect('drag-begin',lambda widget,context,icon=icon:Gtk.drag_set_icon_gicon(context,icon,0,0))
+            if path.name not in positions:positions[path.name]=self.next_desktop_position(used);used.add(tuple(positions[path.name]))
+            self.desktop_grid.put(b,*positions[path.name]);self.desktop_files.append(path)
+        self.save_desktop();self.desktop_grid.show_all()
+    def desktop_press(self,b,event,path):
+        if event.button==1:self.drag_offset=(int(event.x),int(event.y))
+        if event.button==1 and event.type==Gdk.EventType.DOUBLE_BUTTON_PRESS:self.open_file(path);return True
+        if event.button==3:
+            panel=self.popover_box(b,Gtk.PositionType.RIGHT)
+            self.popover_row(panel,'Öffnen',lambda:self.open_file(path))
+            self.popover_row(panel,'Im Dateimanager anzeigen',lambda:subprocess.Popen(['dolphin','--select',str(path)]))
+            self.show_popover();return True
+        return False
+    def desktop_key(self,b,event,path):
+        if event.keyval in (Gdk.KEY_Return,Gdk.KEY_KP_Enter):self.open_file(path);return True
+        return False
+    def open_file(self,path):
+        try:
+            if path.suffix=='.desktop':
+                a=GioUnix.DesktopAppInfo.new_from_filename(str(path))
+                if a:a.launch([],None)
+            elif path.is_file() and os.access(path,os.X_OK):subprocess.Popen([str(path)],cwd=str(path.parent),start_new_session=True)
+            else:Gio.AppInfo.launch_default_for_uri(path.as_uri(),None)
+        except Exception as e:print('Open:',e,flush=True)
+    def save_layout(self):
+        self.layout_file.write_text(json.dumps({'mode':self.layout_mode,'style':self.layout_style,'ratio':self.ratio,'order':self.layout_order,'excluded':sorted(self.excluded),'geometry':self.float_geometry}))
+    def layout_command(self,code):
+        if code:ctl('eval',';'.join(code))
+    def set_geometry(self,w,rect):
+        x,y,width,height=map(int,rect);a=w['address'];sel='window="address:'+a+'"'
+        return [f'hl.dispatch(hl.dsp.window.resize({{{sel},x={max(150,width)},y={max(100,height)}}}))',f'hl.dispatch(hl.dsp.window.move({{{sel},x={x},y={y}}}))']
+    def tile_rectangles(self,n,rect):
+        x,y,width,height=rect;gap=self.prefs['tile_gap']
+        if n==1:return [rect]
+        if self.layout_style=='master' and n<=4:
+            left=round((width-gap)*(0.5 if n==2 else self.ratio));right=width-gap-left
+            result=[(x,y,left,height)];stack=(height-gap*(n-2))//(n-1)
+            for i in range(n-1):result.append((x+left+gap,y+i*(stack+gap),right,height-i*(stack+gap) if i==n-2 else stack))
+            return result
+        columns=min(n,max(1,math.ceil(math.sqrt(n*width/height))));rows=math.ceil(n/columns)
+        cellw=(width-gap*(columns-1))//columns;cellh=(height-gap*(rows-1))//rows
+        return [(x+(i%columns)*(cellw+gap),y+(i//columns)*(cellh+gap),cellw,cellh) for i in range(n)]
+    def layout_tick(self):
+        try:
+            ws=clients();monitors=json.loads(ctl('-j','monitors'));by_monitor={m['id']:m for m in monitors};live={w['address'] for w in ws}
+            self.visibility_windows=ws;self.visibility_monitors=monitors
+            self.layout_order=[a for a in self.layout_order if a in live];self.excluded.intersection_update(live)
+            self.float_geometry={a:g for a,g in self.float_geometry.items() if a in live}
+            commands=[]
+            for w in ws:
+                a=w['address']
+                if a not in self.layout_order:
+                    self.layout_order.append(a)
+                    m=by_monitor.get(w['monitor'],monitors[0]);width=min(1080,int(m['width']/m['scale'])-80);height=min(720,int(m['height']/m['scale'])-120)
+                    self.float_geometry.setdefault(a,[m['x']+60,m['y']+60,width,height])
+                if not w['floating'] and not w.get('fullscreen'):
+                    commands.append('hl.dispatch(hl.dsp.window.float({window="address:'+a+'",action="set"}))')
+            self.layout_command(commands)
+            # All managed windows use floating surfaces. Native maximize/minimize requests remain usable.
+            signature=((BASE/'csd-apps').stat().st_mtime_ns,self.layout_mode,self.layout_style,round(self.ratio,3),tuple(self.layout_order),tuple(sorted(self.excluded)),tuple((m['id'],m['x'],m['y'],m['width'],m['height'],m['scale'],tuple(m.get('reserved',[0,0,0,0])),m['activeWorkspace']['id']) for m in monitors),tuple(sorted((w['address'],w['monitor'],w['workspace']['id'],w.get('fullscreen',0)) for w in ws)))
+            if signature==self.layout_signature:
+                # Dragging or resizing a tile by its native titlebar makes it a free window.
+                # Ignore the compositor's transition animation before comparing positions.
+                if self.layout_mode=='tiling' and time.monotonic()-self.layout_applied>1.2:
+                    detached=[]
+                    for w in ws:
+                        expected=self.layout_expected.get(w['address'])
+                        if expected and max(abs(a-b) for a,b in zip(w['at']+w['size'],expected))>14:detached.append(w['address'])
+                    if detached:
+                        self.excluded.update(detached);self.layout_signature=None;self.save_layout()
+                return True
+            self.layout_signature=signature;self.layout_expected={}
+            if self.layout_mode=='tiling':
+                csd=set((BASE/'csd-apps').read_text().splitlines());groups={};lookup={w['address']:w for w in ws}
+                for a in self.layout_order:
+                    w=lookup[a]
+                    if a in self.excluded or a in self.minimized or w.get('fullscreen') or w['workspace']['id']<0:continue
+                    m=by_monitor.get(w['monitor'])
+                    if m and w['workspace']['id']==m['activeWorkspace']['id']:groups.setdefault(m['id'],[]).append(w)
+                moves=[]
+                for mid,group in groups.items():
+                    m=by_monitor[mid];left,top,right,bottom=m.get('reserved',[0,0,0,0]);gap=18
+                    rect=(m['x']+left+gap,m['y']+top+gap,int(m['width']/m['scale'])-left-right-2*gap,int(m['height']/m['scale'])-top-bottom-2*gap)
+                    for w,cell in zip(group,self.tile_rectangles(len(group),rect)):
+                        x,y,width,height=cell;bar=0 if w['class'] in csd else self.prefs['titlebar_height']
+                        target=[x,y+bar,width,height-bar];moves+=self.set_geometry(w,target);self.layout_expected[w['address']]=target
+                self.layout_command(moves);self.layout_applied=time.monotonic()
+            self.save_layout()
+        except Exception as e:print('Layout:',e,flush=True);self.layout_signature=None
+        return True
+    def toggle_layout_mode(self):
+        ws=clients()
+        if self.layout_mode=='desktop':
+            for w in ws:
+                if w['address'] not in self.minimized and not w.get('fullscreen'):self.float_geometry[w['address']]=w['at']+w['size']
+            self.layout_mode='tiling'
+        else:
+            self.layout_mode='desktop';moves=[]
+            for w in ws:
+                if w['address'] not in self.minimized and not w.get('fullscreen') and w['address'] in self.float_geometry:moves+=self.set_geometry(w,self.float_geometry[w['address']])
+            self.layout_command(moves)
+        self.layout_signature=None;self.layout_tick();self.save_layout();subprocess.run(['pkill','-RTMIN+8','-x','waybar'])
+    def detach_window(self):
+        w=json.loads(ctl('-j','activewindow'));a=w.get('address')
+        if not a:return
+        if a in self.excluded:self.excluded.remove(a)
+        else:self.excluded.add(a)
+        self.layout_signature=None;self.layout_tick();self.save_layout()
+    def reload_apps(self):
+        self.apps={};self.aliases={}
+        for a in Gio.AppInfo.get_all():
+            aid=a.get_id()
+            if not aid:continue
+            key=aid.removesuffix('.desktop');self.apps[key]=a;self.aliases[key.lower()]=key
+            if isinstance(a,GioUnix.DesktopAppInfo):
+                wm=a.get_startup_wm_class()
+                if wm:self.aliases[wm.lower()]=key
+        self.aliases.update({'chatgpt':'chatgpt','brave-browser':'brave-browser','settings-app':'aurora-settings'})
+    def appkey(self,w):return self.aliases.get(w['class'].lower(),w['class'])
+    def name(self,key):return self.apps[key].get_display_name() if key in self.apps else key
+    def image(self,key,size):
+        a=self.apps.get(key);icon=a.get_icon() if a else Gio.ThemedIcon.new(key.lower())
+        im=Gtk.Image.new_from_gicon(icon or Gio.ThemedIcon.new('application-x-executable'),Gtk.IconSize.DIALOG);im.set_pixel_size(size);return im
+    def launch(self,key):
+        a=self.apps.get(key)
+        if a:
+            try:a.launch([],None)
+            except GLib.Error as e:print(e,flush=True)
+    def update_dock(self):
+        try:ws=clients()
+        except Exception as e:print(e,flush=True);return True
+        live={w['address'] for w in ws}
+        stale=set(self.minimized)-live
+        if stale:
+            for address in stale:self.minimized.pop(address,None)
+            self.minfile.write_text(json.dumps(self.minimized))
+        groups={}
+        for w in ws:groups.setdefault(self.appkey(w),[]).append(w)
+        self.groups=groups
+        sig=(tuple(self.pins),tuple((self.appkey(w),w['address'],w['title'],w.get('focusHistoryID')==0) for w in ws))
+        if self.dragging_pin or (self.popover and self.popover.get_visible()):return True
+        if sig==self.signature:return True
+        self.signature=sig
+        self.dock_buttons={}
+        for child in self.box.get_children():child.destroy()
+        active=next((self.appkey(w) for w in ws if w.get('focusHistoryID')==0),None)
+        unpinned=[k for k in groups if k not in self.pins]
+        for k in self.pins:self.add_dock_button(k,groups.get(k,[]),active)
+        if self.pins and unpinned:self.box.pack_start(label('│','dock-divider'),False,False,7)
+        for k in unpinned:self.add_dock_button(k,groups[k],active)
+        self.box.show_all();return True
+    def add_dock_button(self,key,windows,active):
+        b=css(Gtk.Button(),'dock-app');overlay=Gtk.Overlay();overlay.add(self.image(key,self.prefs['dock_icon_size']))
+        if len(windows)>1:
+            count=label(str(len(windows)),'window-count');count.set_halign(Gtk.Align.END);count.set_valign(Gtk.Align.START);overlay.add_overlay(count)
+        b.add(overlay);b.set_tooltip_text(self.name(key)+(' · '+str(len(windows))+' Fenster' if windows else ' · angeheftet'))
+        if windows:css(b,'running')
+        if windows and all(w['address'] in self.minimized for w in windows):css(b,'minimized')
+        if key==active:css(b,'active')
+        self.dock_buttons[key]=b
+        b.connect('clicked',lambda *_:self.dock_click(key,b));b.connect('button-press-event',self.dock_mouse,key)
+        if key in self.pins:
+            targets=[Gtk.TargetEntry.new('application/x-aurora-pin',Gtk.TargetFlags.SAME_APP,1)]
+            b.drag_source_set(Gdk.ModifierType.BUTTON1_MASK,targets,Gdk.DragAction.MOVE)
+            b.drag_dest_set(Gtk.DestDefaults.ALL,targets,Gdk.DragAction.MOVE)
+            b.connect('drag-data-get',lambda widget,context,data,info,t,key=key:data.set(data.get_target(),8,key.encode()))
+            b.connect('drag-begin',self.pin_drag_begin,key)
+            b.connect('drag-end',self.pin_drag_end)
+            b.connect('drag-data-received',self.pin_drop,key)
+            b.connect('drag-motion',lambda widget,*_: (widget.get_style_context().add_class('drop-target'),False)[1])
+            b.connect('drag-leave',lambda widget,*_:widget.get_style_context().remove_class('drop-target'))
+
+        b.add_events(Gdk.EventMask.SCROLL_MASK);b.connect('scroll-event',self.dock_scroll,key)
+        self.box.pack_start(b,False,False,0)
+    def pin_drag_begin(self,widget,context,key):
+        self.close_preview();self.close_popover();self.dragging_pin=True
+        app=self.apps.get(key)
+        if app and app.get_icon():
+            try:
+                info=Gtk.IconTheme.get_default().lookup_by_gicon(app.get_icon(),32,Gtk.IconLookupFlags.FORCE_SIZE)
+                if info:Gtk.drag_set_icon_pixbuf(context,info.load_icon(),16,16)
+            except GLib.Error:pass
+    def pin_drag_end(self,*_):
+        self.dragging_pin=False;self.suppress_dock_click_until=time.monotonic()+.35;self.signature=None;GLib.idle_add(lambda:(self.update_dock(),False)[1])
+    def pin_drop(self,widget,context,x,y,data,info,t,target):
+        key=(data.get_data() or b'').decode(errors='ignore').rstrip('\0')
+        widget.get_style_context().remove_class('drop-target')
+        if key not in self.pins or target not in self.pins:Gtk.drag_finish(context,False,False,t);return
+        if key!=target:
+            order=[k for k in self.pins if k!=key];index=order.index(target)+(1 if x>widget.get_allocated_width()/2 else 0);order.insert(index,key);self.pins=order
+            (BASE/'pins.json').write_text(json.dumps(self.pins,indent=2))
+        Gtk.drag_finish(context,True,False,t);self.dragging_pin=False;self.suppress_dock_click_until=time.monotonic()+.35;self.signature=None;GLib.idle_add(lambda:(self.update_dock(),False)[1])
+    def dock_click(self,key,anchor=None):
+        if self.dragging_pin or time.monotonic()<self.suppress_dock_click_until:return
+        ws=self.groups.get(key,[])
+        if not ws:self.launch(key)
+        elif len(ws)==1:
+            if ws[0]['address'] in self.minimized:self.restore(ws[0])
+            elif ws[0].get('focusHistoryID')==0:self.minimize(ws[0])
+            else:focus(ws[0])
+        else:self.window_menu(key,anchor)
+    def dock_mouse(self,b,event,key):
+        if event.button==3:self.context_menu(key,b);return True
+        if event.button==2:self.launch(key);return True
+        return False
+    def dock_scroll(self,b,event,key):
+        ws=self.groups.get(key,[])
+        if ws:self.restore(ws[-1] if event.direction==Gdk.ScrollDirection.UP else ws[min(1,len(ws)-1)])
+        return True
+    def popover_box(self,anchor,position=Gtk.PositionType.TOP,rect=None):
+        self.capture_return_focus()
+        self.close_popover()
+        if anchor is None:anchor=self.box
+        pop=Gtk.Popover.new(anchor);pop.set_position(position);pop.set_modal(True);pop.set_constrain_to(Gtk.PopoverConstraint.NONE);css(pop,'context-popover')
+        if rect:
+            r=Gdk.Rectangle();r.x,r.y,r.width,r.height=rect;pop.set_pointing_to(r)
+        panel=css(Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4),'context-card');pop.add(panel);self.popover=pop
+        parent=anchor.get_toplevel()
+        if Layer.is_layer_window(parent):Layer.set_keyboard_mode(parent,Layer.KeyboardMode.ON_DEMAND)
+        def closed(*_):
+            if self.popover==pop:self.popover=None
+            if Layer.is_layer_window(parent):Layer.set_keyboard_mode(parent,Layer.KeyboardMode.NONE if parent!=self.control_panel else Layer.KeyboardMode.ON_DEMAND)
+            self.restore_keyboard_focus()
+        pop.connect('closed',closed);return panel
+    def popover_row(self,panel,text,action):
+        b=css(Gtk.Button(),'context-row');b.set_halign(Gtk.Align.FILL);box=Gtk.Box(spacing=10)
+        icons={'󰐕':'view-pin-symbolic','󰐊':'window-new-symbolic','󰖰':'window-minimize-symbolic','󰒓':'preferences-system-symbolic','󰉋':'folder-open-symbolic'}
+        icon=next((icon for prefix,icon in icons.items() if text.startswith(prefix)),None)
+        if icon:text=text.split(' ',1)[-1].strip();box.pack_start(symbol(icon,16),False,False,0)
+        l=label(text);l.set_xalign(0);box.pack_start(l,True,True,0);b.add(box)
+        def run(*_):self.close_popover();action()
+        b.connect('clicked',run);panel.pack_start(b,False,False,0);return b
+    def show_popover(self):
+        if self.popover:self.popover.show_all();self.popover.popup()
+    def close_popover(self):
+        if self.popover:
+            p=self.popover;self.popover=None;p.popdown();p.destroy();Layer.set_keyboard_mode(self.dock,Layer.KeyboardMode.NONE)
+    def context_menu(self,key,anchor=None):
+        panel=self.popover_box(anchor or self.dock_buttons.get(key));panel.pack_start(label(self.name(key),'context-title'),False,False,5)
+        self.popover_row(panel,'󰐕  Vom Dock lösen' if key in self.pins else '󰐕  An Dock anheften',lambda:self.pin(key))
+        if key in self.apps:self.popover_row(panel,'󰐊  Neues Fenster',lambda:self.launch(key))
+        if self.groups.get(key):
+            self.popover_row(panel,'󰖰  Fenster minimieren',lambda:self.minimize(self.groups[key][0]))
+            cls=self.groups[key][0]['class'];csd=set((BASE/'csd-apps').read_text().splitlines())
+            self.popover_row(panel,'Zusätzliche Titelleiste anzeigen' if cls in csd else 'Zusatzleiste ausblenden',lambda:self.toggle_csd(cls))
+        self.popover_row(panel,'󰒓  Einstellungen',lambda:subprocess.Popen([str(BASE/'settings-app')]))
+        self.show_popover()
+    def pin(self,key):
+        if key in self.pins:self.pins.remove(key)
+        else:self.pins.append(key)
+        (BASE/'pins.json').write_text(json.dumps(self.pins,indent=2));self.signature=None;self.update_dock()
+    def toggle_csd(self,cls):
+        p=BASE/'csd-apps';classes=set(p.read_text().splitlines())
+        if cls in classes:classes.remove(cls)
+        else:classes.add(cls)
+        p.write_text('\n'.join(sorted(classes))+'\n');subprocess.run(['hyprctl','reload','config-only'],stdout=subprocess.DEVNULL)
+    def request_preview(self,w,image):
+        target=self.preview_dir/(w['address']+'.png')
+        def worker():
+            try:
+                r=subprocess.run([str(BASE/'native/preview/window-preview'),hex(int(w['address'],16)&0xffffffff),str(target)],capture_output=True,timeout=2)
+                if r.returncode==0 and image:
+                    def update():
+                        if image.get_parent():image.set_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(str(target),260,146,True))
+                        return False
+                    GLib.idle_add(update)
+            except Exception:pass
+        self.preview_pool.submit(worker)
+        if target.exists() and image:image.set_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(str(target),260,146,True))
+    def close_preview(self):
+        if self.preview_panel:
+            w=self.preview_panel;self.preview_panel=None;w.destroy()
+            if not self.control_panel:(RUN/'aurora-controls-open').unlink(missing_ok=True)
+            self.restore_keyboard_focus()
+    def window_menu(self,key,anchor=None):
+        self.close_popup();self.capture_return_focus();ws=self.groups.get(key,[])
+        if not ws:return
+        hs=json.loads(ctl('-j','monitors'));m=next((m for m in hs if m['name']==self.prefs['dock_monitor']),hs[0]);self.preview_monitor=m
+        w=Gtk.Window(type=Gtk.WindowType.TOPLEVEL);self.prepare(w,'aurora-window-previews',Layer.Layer.OVERLAY);Layer.set_monitor(w,self.monitor(m));Layer.set_exclusive_zone(w,-1);Layer.set_keyboard_mode(w,Layer.KeyboardMode.ON_DEMAND)
+        Layer.set_anchor(w,Layer.Edge.BOTTOM,True);Layer.set_anchor(w,Layer.Edge.LEFT,True);Layer.set_margin(w,Layer.Edge.BOTTOM,90)
+        self.preview_panel=w;(RUN/'aurora-controls-open').touch()
+        w.connect('key-press-event',lambda _,e:(self.close_preview(),True)[1] if e.keyval==Gdk.KEY_Escape else False)
+        panel=css(Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12),'preview-panel');w.add(panel)
+        head=Gtk.Box(spacing=8);head.pack_start(self.image(key,20),False,False,0);name=label(self.name(key)+' · '+str(len(ws))+' Fenster','preview-heading');name.set_xalign(0);head.pack_start(name,True,True,0);close=Gtk.Button();close.add(symbol('window-close-symbolic',16));close.connect('clicked',lambda *_:self.close_preview());head.pack_end(close,False,False,0);panel.pack_start(head,False,False,0)
+        row=Gtk.Box(spacing=10)
+        for item in ws:
+            v=css(Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8),'preview-card');v.set_size_request(276,-1)
+            b=css(Gtk.Button(),'preview-open');content=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8)
+            image=self.image(key,48);image.set_size_request(260,146);image.set_halign(Gtk.Align.CENTER);content.pack_start(image,False,False,0)
+            title=label(item['title'],'preview-caption');title.set_max_width_chars(30);title.set_ellipsize(Pango.EllipsizeMode.END);content.pack_start(title,False,False,0);b.add(content);b.connect('clicked',lambda _,item=item:(self.close_preview(),self.delayed_focus(item)));v.pack_start(b,True,True,0)
+            actions=Gtk.Box(spacing=8)
+            for icon,tip,action in [('window-minimize-symbolic','Minimieren',lambda item=item:self.minimize(item)),('window-close-symbolic','Schließen',lambda item=item:ctl('dispatch','hl.dsp.window.close({window="address:'+item['address']+'"})'))]:
+                button=css(Gtk.Button(),'preview-action');button.add(symbol(icon,16));button.set_tooltip_text(tip);button.connect('clicked',lambda _,action=action:(self.close_preview(),action()));actions.pack_end(button,False,False,0)
+            v.pack_start(actions,False,False,0);row.pack_start(v,False,False,0);self.request_preview(item,image)
+        scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.AUTOMATIC,Gtk.PolicyType.NEVER);scroll.set_min_content_width(min(880,len(ws)*296));scroll.set_min_content_height(224);scroll.add(row);panel.pack_start(scroll,False,False,0)
+        anchor=anchor or self.dock_buttons.get(key)
+        center=m['width']/m['scale']/2
+        if anchor:
+            a=anchor.get_allocation();center=center-self.dock.get_allocated_width()/2+a.x+a.width/2
+        def position(_,allocation):
+            self.preview_offset=max(18,min(int(center-allocation.width/2),int(m['width']/m['scale'])-18-allocation.width));Layer.set_margin(w,Layer.Edge.LEFT,self.preview_offset)
+        w.connect('size-allocate',position);w.show_all()
+    def open_popup(self,kind):
+        self.capture_return_focus()
+        self.kind=kind;hs=json.loads(ctl('-j','monitors'));target=next((h for h in hs if h.get('focused')),hs[0]);selected=self.monitor(target)
+        self.popup=[]
+        for mon in self.monitors():
+            w=Gtk.Window(type=Gtk.WindowType.TOPLEVEL);self.prepare(w,'aurora-popup',Layer.Layer.OVERLAY);Layer.set_monitor(w,mon)
+            Layer.set_exclusive_zone(w,-1)
+            for edge in [Layer.Edge.TOP,Layer.Edge.BOTTOM,Layer.Edge.LEFT,Layer.Edge.RIGHT]:Layer.set_anchor(w,edge,True)
+            outer=css(Gtk.EventBox(),'backdrop');outer.add_events(Gdk.EventMask.BUTTON_PRESS_MASK);outer.connect('button-press-event',lambda *_:(self.close_popup(),True)[1]);w.add(outer)
+            overlay=Gtk.Overlay();outer.add(overlay)
+            if mon==selected:
+                self.main=w;self.overlay=overlay;Layer.set_keyboard_mode(w,Layer.KeyboardMode.EXCLUSIVE);w.connect('key-press-event',self.key_press);w.connect('key-release-event',self.key_release)
+            self.popup.append(w)
+    def card(self,width):
+        event=Gtk.EventBox();event.connect('button-press-event',lambda *_:True);event.set_halign(Gtk.Align.CENTER);event.set_valign(Gtk.Align.CENTER)
+        panel=css(Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=18),'popup-card');panel.set_size_request(width,-1);event.add(panel);self.overlay.add_overlay(event);self.panel=panel;return panel
+    def show_popup(self):
+        for w in self.popup:w.show_all()
+    def capture_return_focus(self):
+        if self.popup or self.popover or self.control_panel or self.preview_panel:return
+        try:self.return_focus=json.loads(ctl('-j','activewindow')).get('address')
+        except Exception:self.return_focus=None
+    def restore_keyboard_focus(self):
+        address=self.return_focus
+        if not address:return
+        def restore():
+            if self.popup or self.popover or self.control_panel or self.preview_panel:return False
+            try:
+                current=json.loads(ctl('-j','activewindow')).get('address')
+                if not current or current==address:
+                    ctl('dispatch','hl.dsp.focus({window="address:'+address+'"})');ctl('eval','if hl.plugin.aurora_native then hl.plugin.aurora_native.repair_focus() end')
+            except Exception:pass
+            return False
+        GLib.timeout_add(90,restore)
+    def close_popup(self):
+        self.close_preview()
+        self.close_controls()
+        self.close_popover()
+        self.kind=None;self.pending_at=0
+        for w in self.popup:w.destroy()
+        self.popup=[];self.cards=[]
+        self.restore_keyboard_focus()
+    def delayed_focus(self,w):
+        def go():self.restore(w);return False
+        GLib.timeout_add(65,go)
+    def minimize(self,w=None):
+        if w is None:w=json.loads(ctl('-j','activewindow'))
+        address=w.get('address')
+        if not address or address in self.minimized:return
+        self.minimized[address]={'workspace':w['workspace']['name'],'fullscreen':w.get('fullscreen',0)}
+        self.minfile.write_text(json.dumps(self.minimized))
+        if w.get('fullscreen'):ctl('dispatch','hl.dsp.window.fullscreen({window="address:'+address+'",action="unset"})')
+        ctl('dispatch','hl.dsp.window.move({window="address:'+address+'",workspace="special:aurora-minimized",follow=false})')
+        self.signature=None;self.update_dock()
+    def show_desktop(self):
+        self.close_popup()
+        if self.desktop_hidden:
+            ws={w['address']:w for w in clients()}
+            for address in reversed(self.desktop_hidden):
+                if address in ws:self.restore(ws[address])
+            self.desktop_hidden=[]
+        else:
+            monitors=json.loads(ctl('-j','monitors'));main=next((m for m in monitors if m['name']==self.prefs['dock_monitor']),None)
+            if not main:return
+            ws=[w for w in clients() if w['monitor']==main['id'] and w['workspace']['id']==main['activeWorkspace']['id']]
+            self.desktop_hidden=[w['address'] for w in ws]
+            for w in ws:self.minimize(w)
+    def restore(self,w):
+        address=w['address'];state=self.minimized.pop(address,None)
+        if state:
+            ctl('dispatch','hl.dsp.window.move({window="address:'+address+'",workspace='+json.dumps(state['workspace'])+',follow=false})')
+            self.minfile.write_text(json.dumps(self.minimized))
+        focus(w)
+        if state and state['fullscreen']:ctl('dispatch','hl.dsp.window.fullscreen({window="address:'+address+'",mode="'+('maximized' if state['fullscreen']==1 else 'fullscreen')+'",action="set"})')
+    def launcher(self):
+        if self.kind=='launcher':self.close_popup();return
+        self.close_popup();self.reload_apps();self.open_popup('launcher');p=self.card(1000)
+        heading=Gtk.Box(spacing=12);heading.pack_start(Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(str(Path.home()/'Bilder/Arch_logo.png'),28,28,True)),False,False,0);heading.pack_start(label('Anwendungen','popup-title'),False,False,0);p.pack_start(heading,False,False,0)
+        self.search=css(Gtk.SearchEntry(),'app-search');self.search.set_placeholder_text('Apps suchen …');self.search.connect('search-changed',self.filter_apps);p.pack_start(self.search,False,False,0)
+        scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);scroll.set_size_request(-1,440)
+        self.flow=Gtk.FlowBox();self.flow.set_selection_mode(Gtk.SelectionMode.NONE);self.flow.set_min_children_per_line(6);self.flow.set_max_children_per_line(6);self.flow.set_row_spacing(10);self.flow.set_column_spacing(8);scroll.add(self.flow);p.pack_start(scroll,True,True,0)
+        self.launcher_buttons=[]
+        for key,a in sorted(self.apps.items(),key=lambda item:item[1].get_display_name().lower()):
+            if not a.should_show():continue
+            b=css(Gtk.Button(),'launcher-app');b.connect('button-press-event',self.dock_mouse,key);v=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12);v.pack_start(self.image(key,48),False,False,0)
+            l=label(a.get_display_name());l.set_max_width_chars(15);l.set_ellipsize(Pango.EllipsizeMode.END);v.pack_start(l,False,False,0);b.add(v);b.set_tooltip_text(a.get_display_name());b.connect('clicked',lambda _,k=key:(self.close_popup(),self.launch(k)));self.flow.add(b)
+            self.launcher_buttons.append((b.get_parent(),key,(a.get_display_name()+' '+key+' '+(a.get_description() or '')).lower()))
+        self.flow.set_filter_func(lambda child:not self.query or all(t in next((s for c,k,s in self.launcher_buttons if c==child),'') for t in self.query.split()))
+        self.query='';p.pack_start(label('Tippen zum Suchen  ·  Enter öffnen  ·  Rechtsklick zum Anheften','hint'),False,False,0)
+        self.search.connect('activate',self.launch_first);self.show_popup();self.search.grab_focus()
+    def clipboard(self):
+        if self.kind=='clipboard':self.close_popup();return
+        self.close_popup();self.open_popup('clipboard');p=self.card(780)
+        head=Gtk.Box(spacing=18);head.pack_start(label('󰅍  Zwischenablage','popup-title'),True,True,0)
+        clear=Gtk.Button(label='Verlauf leeren');head.pack_start(clear,False,False,0);p.pack_start(head,False,False,0)
+        def erase(*_):
+            with history_db() as db:db.execute('DELETE FROM clips')
+            self.close_popup()
+        clear.connect('clicked',erase)
+        search=css(Gtk.SearchEntry(),'app-search');search.set_placeholder_text('Verlauf durchsuchen …');p.pack_start(search,False,False,0)
+        scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);scroll.set_size_request(-1,470)
+        rows=Gtk.ListBox();rows.set_selection_mode(Gtk.SelectionMode.NONE);scroll.add(rows);p.pack_start(scroll,True,True,0)
+        with history_db() as db:items=db.execute('SELECT mime,data FROM clips ORDER BY updated DESC').fetchall()
+        self.cliprows=[]
+        for mime,data in items:
+            text=('󰋩  Bild · '+str(round(len(data)/1024))+' KiB') if mime=='image/png' else data.decode('utf-8',errors='replace')
+            b=css(Gtk.Button(),'menu-row');l=label(' '.join(text.split())[:150]);l.set_xalign(0);l.set_max_width_chars(75);l.set_ellipsize(Pango.EllipsizeMode.END);b.add(l)
+            def copy(_,mime=mime,data=data):
+                self.close_popup();subprocess.run(['wl-copy','--type',mime],input=data)
+            b.connect('clicked',copy);rows.add(b);self.cliprows.append((b.get_parent(),text.lower()))
+        if not items:rows.add(label('Noch keine Einträge. Kopiere Text oder ein Bild.','hint'))
+        search.connect('search-changed',lambda e:[r.set_visible(e.get_text().lower() in t) for r,t in self.cliprows])
+        search.connect('activate',lambda *_:next((r.get_child().emit('clicked') for r,t in self.cliprows if r.get_visible()),None))
+        p.pack_start(label('Eintrag wählen, dann Ctrl + V zum Einfügen  ·  Außenklick schließt','hint'),False,False,0)
+        self.show_popup();search.grab_focus()
+    def filter_apps(self,entry):self.query=entry.get_text().lower();self.flow.invalidate_filter()
+    def launch_first(self,*_):
+        key=next((k for c,k,s in self.launcher_buttons if c.get_child_visible()),None)
+        if key:self.close_popup();self.launch(key)
+    def switcher(self,reverse=False,preview=False):
+        if self.kind=='switcher':self.cycle(-1 if reverse else 1);return
+        self.close_popup();self.switches=clients()
+        if not self.switches:return
+        self.switches=[w for w in self.switches if w['address'] not in self.minimized]
+        if not self.switches:return
+        self.selection=(len(self.switches)-1 if reverse else 1)%len(self.switches);self.kind='switcher';self.preview=preview;self.pending_at=time.monotonic()+.14
+        if not preview and self.alt_released():self.accept_switch()
+    def alt_released(self):
+        try:return (RUN/'aurora-alt-state').read_text().strip()!='down'
+        except FileNotFoundError:return True
+    def show_switcher(self):
+        self.open_popup('switcher');p=self.card(930);p.pack_start(label('Fenster wechseln','popup-title'),False,False,0)
+        grid=Gtk.Grid(column_spacing=12,row_spacing=12);self.cards=[]
+        for i,w in enumerate(self.switches):
+            b=css(Gtk.Button(),'switcher-app');v=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=13);key=self.appkey(w);v.pack_start(self.image(key,60),False,False,0);v.pack_start(label(self.name(key)),False,False,0)
+            l=label(w['title']);l.set_max_width_chars(26);l.set_ellipsize(Pango.EllipsizeMode.END);css(l,'hint');v.pack_start(l,False,False,0);b.add(v);b.connect('clicked',lambda _,i=i:self.accept_switch(i));grid.attach(b,i%4,i//4,1,1);self.cards.append(b)
+        p.pack_start(grid,True,True,0);p.pack_start(label('Alt + Tab weiter  ·  Alt loslassen auswählen  ·  Außenklick abbrechen','hint'),False,False,0);self.paint_selection();self.show_popup()
+    def cycle(self,delta):self.selection=(self.selection+delta)%len(self.switches);self.paint_selection()
+    def paint_selection(self):
+        for i,b in enumerate(self.cards):
+            c=b.get_style_context();c.add_class('selected') if i==self.selection else c.remove_class('selected')
+    def accept_switch(self,index=None):
+        if not self.switches:return
+        w=self.switches[self.selection if index is None else index];self.close_popup();self.delayed_focus(w)
+    def key_press(self,w,event):
+        key=event.keyval
+        if key==Gdk.KEY_Escape:self.close_popup();return True
+        if self.kind=='switcher':
+            if key in (Gdk.KEY_Tab,Gdk.KEY_ISO_Left_Tab,Gdk.KEY_Right,Gdk.KEY_Left):self.cycle(-1 if event.state&Gdk.ModifierType.SHIFT_MASK or key==Gdk.KEY_Left else 1);return True
+            if key in (Gdk.KEY_Return,Gdk.KEY_KP_Enter):self.accept_switch();return True
+        return False
+    def key_release(self,w,event):
+        if self.kind=='switcher' and event.keyval in (Gdk.KEY_Alt_L,Gdk.KEY_Alt_R):self.accept_switch();return True
+        return False
+    def tick(self):
+        if self.kind=='switcher':
+            if not self.preview and self.alt_released():self.accept_switch()
+            elif self.pending_at and time.monotonic()>=self.pending_at:self.pending_at=0;self.show_switcher()
+        return True
+    def receive(self,*_):
+        try:
+            args=json.loads(self.sock.recv(8192));cmd=args[0]
+            if cmd=='controls':self.controls(args[1] if len(args)>1 else 'right')
+            elif cmd=='pointer-button':
+                if self.control_panel and not self.popover and not getattr(self,'control_dialog',False):
+                    m=self.control_monitor;geometry=self.control_panel.get_allocation();width=m['width']/m['scale'];height=m['height']/m['scale'];x=m['x']+24 if self.control_side=='left' else m['x']+width-24-geometry.width;y=m['y']+height-92-geometry.height
+                    if not (x<=args[1]<=x+geometry.width and y<=args[2]<=y+geometry.height):self.close_controls()
+                elif self.preview_panel:
+                    m=self.preview_monitor;geometry=self.preview_panel.get_allocation();x=m['x']+getattr(self,'preview_offset',18);y=m['y']+m['height']/m['scale']-90-geometry.height
+                    if not (x<=args[1]<=x+geometry.width and y<=args[2]<=y+geometry.height):self.close_preview()
+            elif cmd=='inspect':
+                rects={k:{'x':b.get_allocation().x,'y':b.get_allocation().y,'width':b.get_allocated_width(),'height':b.get_allocated_height()} for k,b in self.dock_buttons.items()}
+                (RUN/'aurora-ui-state.json').write_text(json.dumps({'kind':self.kind,'pins':self.pins,'dock_buttons':rects,'preview':bool(self.preview_panel),'dock_visible':self.dock_visibility.visible,'dock_visibility':self.prefs.get('dock_visibility','always')}))
+            elif cmd=='launcher':self.launcher()
+            elif cmd=='clipboard':self.clipboard()
+            elif cmd=='switcher':self.switcher('--reverse' in args,'--preview' in args)
+            elif cmd=='close':self.close_popup()
+            elif cmd=='minimize':
+                w=next((w for w in clients() if len(args)>1 and w['address']==args[1]),None)
+                if len(args)==1 or w:self.minimize(w)
+            elif cmd=='show-desktop':self.show_desktop()
+            elif cmd=='mode':self.toggle_layout_mode()
+            elif cmd=='detach':self.detach_window()
+            elif cmd=='window-open' and len(args)>1:
+                if '--dialog' in args:self.excluded.add(args[1])
+                self.layout_signature=None;self.layout_tick()
+            elif cmd=='layout-cycle':self.layout_style='grid' if self.layout_style=='master' else 'master';self.layout_signature=None;self.layout_tick()
+            elif cmd=='ratio' and len(args)>1:self.ratio=max(.3,min(.75,self.ratio+float(args[1])));self.layout_signature=None;self.layout_tick()
+            elif cmd=='make-master':
+                w=json.loads(ctl('-j','activewindow'));a=w.get('address')
+                if a in self.layout_order:self.layout_order.remove(a);self.layout_order.insert(0,a);self.layout_signature=None;self.layout_tick()
+            elif cmd=='restore' and len(args)>1:
+                w=next((w for w in clients() if w['address']==args[1]),None)
+                if w:self.restore(w)
+            elif cmd=='reload-settings':
+                self.prefs=load_preferences();self.preference_provider.load_from_path(str(BASE/'preferences.css'));self.signature=None;self.layout_signature=None;self.dock_monitor();self.refresh_desktop();self.grid_drawing.queue_draw();self.update_dock();self.dock_visibility.reset()
+            elif cmd=='desktop-sort' and len(args)>1:self.sort_desktop(args[1])
+            elif cmd=='windows' and len(args)>1:self.window_menu(args[1])
+            elif cmd=='refresh':self.signature=None;self.update_dock()
+            elif cmd=='pin' and len(args)>1:self.pin(args[1])
+            elif cmd=='context' and len(args)>1:self.context_menu(args[1],self.dock_buttons.get(args[1]))
+        except Exception as e:print('IPC:',e,flush=True)
+        return True
+Aurora();Gtk.main()

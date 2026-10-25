@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+cd "$HOME/.config/hypr/aurora/native"
+g++ -O2 -shared -fPIC -std=c++2b -fno-gnu-unique $(pkg-config --cflags pixman-1 libdrm hyprland libinput libudev wayland-server xkbcommon) minimize.cpp -o ../aurora-native-next.so

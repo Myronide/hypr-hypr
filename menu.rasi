@@ -1,0 +1,6 @@
+
+@import "launcher.rasi"
+window { width: 470px; }
+listview { columns: 1; lines: 7; fixed-height: false; }
+element { orientation: horizontal; padding: 14px; }
+element-text { horizontal-align: 0.0; }

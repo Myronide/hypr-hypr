@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+cd "$HOME/.config/hypr/aurora/native/preview"
+wayland-scanner client-header toplevel-export.xml export-client.h
+wayland-scanner private-code toplevel-export.xml export.c
+wayland-scanner private-code foreign-toplevel.xml foreign.c
+cc -O2 preview.c export.c foreign.c -o window-preview $(pkg-config --cflags --libs wayland-client cairo)

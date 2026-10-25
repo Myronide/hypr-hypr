@@ -1,0 +1,27 @@
+
+configuration {
+  show-icons: true;
+  icon-theme: "Papirus-Dark";
+  font: "JetBrainsMono Nerd Font 11";
+  drun-display-format: "{name}";
+  display-drun: "󰣇";
+  matching: "fuzzy";
+  sorting-method: "fzf";
+}
+* {
+  bg: #141824ed; surface: #212739dd; fg: #edf1ff; muted: #8793b2;
+  accent: #89dceb; violet: #cba6f7; background-color: transparent; text-color: @fg;
+  border-color: #495675;
+}
+window { width: 1000px; border: 1px; border-radius: 26px; padding: 28px; background-color: @bg; }
+mainbox { children: [ inputbar, message, listview ]; spacing: 20px; }
+inputbar { children: [prompt, entry]; padding: 16px 20px; spacing: 16px; border-radius: 16px; background-color: @surface; }
+prompt { text-color: @accent; font: "JetBrainsMono Nerd Font 20"; }
+entry { placeholder: "Apps suchen …"; placeholder-color: @muted; vertical-align: 0.5; }
+message { padding: 0px 6px; }
+textbox { text-color: @muted; }
+listview { columns: 6; lines: 3; fixed-height: true; spacing: 12px; scrollbar: false; cycle: true; }
+element { orientation: vertical; padding: 18px 8px; spacing: 12px; border-radius: 18px; border: 1px; border-color: transparent; }
+element selected.normal { background-color: #394462dd; border-color: @accent; }
+element-icon { size: 52px; horizontal-align: 0.5; }
+element-text { horizontal-align: 0.5; vertical-align: 0.5; font: "JetBrainsMono Nerd Font 10"; }

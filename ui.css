@@ -1,0 +1,65 @@
+@import url("palette.css");
+window { background:transparent; color:@shell_text; font-family:"Sans"; font-size:12px; }
+button { background:transparent; color:@shell_text; border:1px solid transparent; box-shadow:none; text-shadow:none; border-radius:9px; transition:background-color 120ms ease; }
+button:hover { background:@shell_hover; }
+button:focus { border-color:@shell_blue; }
+image { color:inherit; }
+.app-dock { background:transparent; border:0; padding:1px 4px; }
+.dock-app { padding:5px 9px; min-width:32px; border-radius:9px; border-bottom:2px solid transparent; }
+.dock-app.running { border-bottom-color:#768395; }
+.dock-app.active { background:@shell_selected; border-bottom-color:@shell_blue; }
+.dock-app:hover { background:@shell_hover; }
+.dock-app.minimized { opacity:.62; }
+.window-count { background:@shell_blue; color:#16202d; font-size:9px; font-weight:bold; border-radius:5px; padding:0 3px; }
+.dock-divider { color:#677383; font-size:21px; }
+.backdrop { background:rgba(0,0,0,.22); }
+.popup-card { background:@shell_bg; border:1px solid @shell_border; border-radius:16px; padding:24px; }
+.popup-title { color:@shell_text; font-size:17px; font-weight:600; }
+.hint { color:@shell_muted; font-size:11px; }
+.app-search { background:@shell_surface; color:@shell_text; border:1px solid @shell_border; border-radius:10px; padding:12px 14px; box-shadow:none; }
+.app-search:focus { border-color:@shell_blue; }
+.launcher-app { min-width:120px; min-height:108px; padding:12px 5px; border-radius:11px; }
+.launcher-app:hover,.launcher-app:focus { background:@shell_hover; }
+.switcher-app { min-width:180px; min-height:140px; padding:18px 12px; border-radius:12px; }
+.switcher-app.selected { background:@shell_selected; border-color:@shell_blue; }
+.menu-row { padding:11px; border-radius:9px; }
+flowboxchild { padding:0; }
+.desktop-file { min-width:94px; min-height:84px; padding:8px; border-radius:10px; }
+.desktop-file:hover,.desktop-file:focus { background:rgba(107,169,255,.16); border-color:rgba(107,169,255,.4); }
+.desktop-label { color:#ffffff; text-shadow:0 1px 2px #000000; font-size:11px; }
+.popup-card list,.popup-card row,.popup-card viewport,.popup-card scrolledwindow { background:transparent; color:@shell_text; }
+.popup-card row:hover { background:@shell_hover; border-radius:9px; }
+scrollbar { background:transparent; }
+scrollbar slider { background:#5b6879; min-width:5px; border-radius:5px; }
+popover.context-popover { background:@shell_bg; color:@shell_text; font-family:"Sans"; font-size:12px; border:1px solid @shell_border; border-radius:12px; box-shadow:0 6px 16px rgba(0,0,0,.25); }
+.context-card { padding:8px; }
+.context-title { padding:6px 10px; color:@shell_muted; font-size:12px; font-weight:600; }
+.context-row { padding:9px 12px; border-radius:7px; }
+.context-row:hover { background:@shell_hover; }
+.preview-panel { background:@shell_bg; border:1px solid @shell_border; border-radius:14px; padding:14px; }
+.preview-heading { font-size:13px; font-weight:600; }
+.preview-card { padding:8px; border:1px solid @shell_border; border-radius:10px; background:@shell_surface; }
+.preview-open { padding:0; border:0; border-radius:7px; }
+.preview-open:hover { background:@shell_hover; }
+.preview-caption { font-size:12px; color:@shell_text; }
+.preview-action { min-height:26px; min-width:38px; padding:4px; }
+.quick-panel { background:@shell_bg; border:1px solid @shell_border; border-radius:16px; padding:18px; }
+.quick-panel .popup-title { font-size:16px; font-weight:600; }
+.quick-tile { background:@shell_surface; border-radius:10px; padding:12px 10px; min-width:88px; min-height:48px; }
+.quick-tile label { font-size:11px; font-weight:500; }
+.quick-tile image { -gtk-icon-shadow:none; }
+.quick-tile.enabled { background:@shell_selected; border-color:#4a7db8; color:#edf5ff; }
+.quick-tile:hover { background:@shell_hover; border-color:@shell_border; }
+.quick-tile.enabled:hover { background:#406a9b; }
+.quick-network { background:@shell_surface; padding:9px 12px; border-radius:9px; }
+.quick-panel scale { padding:5px 0; }
+.quick-panel scale trough { min-height:4px; background:#515b69; border-radius:4px; border:0; }
+.quick-panel scale highlight { background:@shell_blue; border-radius:4px; }
+.quick-panel scale slider { min-height:13px; min-width:13px; background:@shell_blue; border:0; border-radius:50%; box-shadow:none; }
+.quick-value { color:@shell_muted; font-size:12px; }
+.quick-icon-button { min-width:28px; min-height:28px; padding:5px; }
+.quick-footer button { background:@shell_surface; border-radius:8px; padding:7px; min-width:28px; }
+.media-card { background:@shell_surface; border-radius:11px; padding:12px; }
+.media-card label { font-size:12px; }
+.media-card button { min-width:30px; min-height:28px; padding:3px; }
+.dock-app.drop-target { background:#355a86; border-left:2px solid #6ba9ff; }

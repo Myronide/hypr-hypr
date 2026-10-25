@@ -1,0 +1,6 @@
+#!/bin/sh
+mkdir -p "$HOME/.cache/aurora"
+exec flock -w 3 "${XDG_RUNTIME_DIR:?}/aurora-dock.lock" sh -c '
+    printf "%s\n" "$$" > "$XDG_RUNTIME_DIR/aurora-waybar.pid"
+    exec waybar -c "$HOME/.config/waybar/config.jsonc" -s "$HOME/.config/waybar/style.css"
+' >> "$HOME/.cache/aurora/waybar.log" 2>&1

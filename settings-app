@@ -1,0 +1,149 @@
+#!/usr/bin/python3
+import gi,json,subprocess,os,threading
+from pathlib import Path
+gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
+from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango
+from preferences import BASE,load_preferences,save_preferences,send_ui,apply_background,stop_engine
+class Settings(Gtk.Application):
+ def __init__(self):super().__init__(application_id='local.aurora.Settings',flags=Gio.ApplicationFlags.FLAGS_NONE);self.window=None
+ def do_activate(self):
+  if self.window:self.window.present();return
+  Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme',True)
+  Gtk.Settings.get_default().set_property('gtk-icon-theme-name','Fluent-dark')
+  self.p=load_preferences();self.p.setdefault('shortcuts',{});self.monitor_names=[m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
+  self.window=Gtk.ApplicationWindow(application=self);self.window.set_default_size(1050,780);self.window.set_title('Aurora Einstellungen');self.window.set_icon_name('preferences-system')
+  head=Gtk.HeaderBar(title='Aurora',subtitle='Desktop-Einstellungen',show_close_button=True);self.window.set_titlebar(head)
+  apply=Gtk.Button(label='Übernehmen');apply.get_style_context().add_class('suggested-action');apply.connect('clicked',self.apply);head.pack_end(apply)
+  self.status=Gtk.Label();root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.window.add(root);body=Gtk.Box();root.pack_start(body,True,True,0)
+  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);sidebar=Gtk.StackSidebar();sidebar.set_stack(self.stack);sidebar.set_size_request(215,-1);body.pack_start(sidebar,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
+  self.general();self.windows();self.dock();self.desktop();self.wallpaper();self.engine();self.shortcuts();self.system()
+  css=Gtk.CssProvider();css.load_from_path(str(BASE/'settings.css'))
+  Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+  self.window.show_all();self.window.present()
+  if os.environ.get('AURORA_SETTINGS_PAGE'):self.stack.set_visible_child_name(os.environ['AURORA_SETTINGS_PAGE'])
+ def page(self,title,description):
+  scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12,margin=26)
+  heading=Gtk.Label(label=title,xalign=0);heading.get_style_context().add_class('page-title');box.pack_start(heading,False,False,0)
+  l=Gtk.Label(label=description,xalign=0);l.set_line_wrap(True);l.set_max_width_chars(80);l.get_style_context().add_class('subtitle');box.pack_start(l,False,False,8);scroll.add(box);self.stack.add_titled(scroll,title,title);return box
+ def row(self,box,title,widget,description=''):
+  row=Gtk.Box(spacing=18);row.get_style_context().add_class('setting-row');labels=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4);l=Gtk.Label(label=title,xalign=0);labels.pack_start(l,False,False,0)
+  if description:
+   l=Gtk.Label(label=description,xalign=0);l.set_line_wrap(True);l.set_max_width_chars(52);l.get_style_context().add_class('subtitle');labels.pack_start(l,False,False,0)
+  row.pack_start(labels,True,True,0);row.pack_end(widget,False,False,0);box.pack_start(row,False,False,0);return widget
+ def toggle(self,box,title,key,description=''):
+  w=Gtk.Switch(active=bool(self.p.get(key,False)));w.set_valign(Gtk.Align.CENTER);w.connect('notify::active',lambda w,_:self.p.__setitem__(key,w.get_active()));return self.row(box,title,w,description)
+ def spin(self,box,title,key,minimum,maximum,step=1,description=''):
+  w=Gtk.SpinButton.new_with_range(minimum,maximum,step);w.set_value(float(self.p.get(key,minimum)));w.connect('value-changed',lambda w:self.p.__setitem__(key,w.get_value() if step<1 else w.get_value_as_int()));return self.row(box,title,w,description)
+ def combo(self,box,title,key,choices):
+  w=Gtk.ComboBoxText()
+  for value,text in choices:w.append(value,text)
+  w.set_active_id(str(self.p.get(key,choices[0][0])));w.connect('changed',lambda w:self.p.__setitem__(key,w.get_active_id()));return self.row(box,title,w)
+ def button(self,box,title,text,action,description=''):
+  b=Gtk.Button(label=text);b.connect('clicked',lambda *_:action());return self.row(box,title,b,description)
+ def message(self,text):self.status.set_text(text)
+ def apply(self,*_):
+  try:save_preferences(self.p);self.message('Einstellungen übernommen.')
+  except Exception as e:self.message('Konnte nicht übernommen werden: '+str(e))
+ def general(self):
+  b=self.page('Übersicht','Alle Aurora-Einstellungen an einem Ort. Änderungen mit „Übernehmen“ speichern.')
+  self.button(b,'Kontrollzentrum','Öffnen',lambda:send_ui('controls'))
+  self.button(b,'Fensteranordnung','Desktop / Aurora wechseln',lambda:send_ui('mode'),'Native Maximieren- und Minimieren-Buttons bleiben in beiden Modi aktiv.')
+  self.button(b,'Schreibtisch anzeigen','Zeigen / Zurück',lambda:send_ui('show-desktop'))
+  self.button(b,'Zwischenablage','Verlauf öffnen',lambda:send_ui('clipboard'))
+  self.toggle(b,'Fokus folgt der Maus','focus_follows_mouse','Ausgeschaltet bleibt der Tastaturfokus beim zuletzt angeklickten Fenster.')
+ def windows(self):
+  b=self.page('Fenster','Größe und Erscheinung der Titelleisten, Fensterkanten und Effekte.')
+  self.spin(b,'Titelleistenhöhe','titlebar_height',22,48);self.spin(b,'Titelschrift','titlebar_font',8,16)
+  self.spin(b,'Abgerundete Ecken','rounding',0,40);self.spin(b,'Rahmenbreite','border_size',0,6)
+  self.toggle(b,'Hintergrundunschärfe','blur');self.spin(b,'Unschärferadius','blur_size',1,15);self.spin(b,'Unschärfedurchgänge','blur_passes',1,5)
+  self.spin(b,'Abstand in der Aurora-Anordnung','tile_gap',0,40)
+  self.button(b,'Anordnung','Hauptfenster / Raster',lambda:send_ui('layout-cycle'))
+  self.button(b,'Eigene Titelleisten je App','Anpassen',self.titlebar_dialog,'Zusatzleisten für Anwendungen mit eigenen Fenster-Buttons abschalten.')
+ def titlebar_dialog(self):
+  d=Gtk.Dialog(title='Titelleisten pro Anwendung',transient_for=self.window,modal=True);d.add_button('Schließen',Gtk.ResponseType.CLOSE);d.set_default_size(650,500);scroll=Gtk.ScrolledWindow();box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6,margin=15);scroll.add(box);d.get_content_area().pack_start(scroll,True,True,0)
+  classes=set((BASE/'csd-apps').read_text().splitlines());ws=json.loads(subprocess.check_output(['hyprctl','-j','clients']))
+  for cls in sorted(set(w['class'] for w in ws)):
+   c=Gtk.CheckButton(label=cls+' · eigene Titelleiste');c.set_active(cls in classes)
+   def changed(w,cls=cls):
+    if w.get_active():classes.add(cls)
+    else:classes.discard(cls)
+    (BASE/'csd-apps').write_text('\n'.join(sorted(classes))+'\n');subprocess.run(['hyprctl','reload','config-only'],stdout=subprocess.DEVNULL)
+   c.connect('toggled',changed);box.pack_start(c,False,False,0)
+  d.show_all();d.run();d.destroy()
+ def dock(self):
+  b=self.page('Dock','Angeheftete Apps, gruppierte Fenster und Vorschauen direkt am jeweiligen Icon.')
+  self.combo(b,'Bildschirm','dock_monitor',[(m,m) for m in self.monitor_names]);self.spin(b,'Icon-Größe','dock_icon_size',20,42)
+  self.spin(b,'Deckkraft','dock_opacity',.2,1,.05)
+  self.combo(b,'Sichtbarkeit','dock_visibility',[('always','Immer sichtbar'),('dodge','Fenstern ausweichen'),('auto','Automatisch ausblenden')])
+  hint=Gtk.Label(label='Fenstern ausweichen: blendet die Dock bei überlappenden Fenstern aus. Automatisch ausblenden: bleibt bis zur Maus am unteren Bildschirmrand verborgen. Menüs und Vorschauen halten die Dock offen.',xalign=0);hint.set_line_wrap(True);hint.set_max_width_chars(75);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,4)
+  self.button(b,'Angeheftete Apps','Bearbeiten',self.pins_dialog,'Rechtsklick auf ein App-Icon funktioniert ebenfalls.')
+ def pins_dialog(self):
+  d=Gtk.Dialog(title='Angeheftete Apps',transient_for=self.window,modal=True);d.add_button('Fertig',Gtk.ResponseType.CLOSE);d.set_default_size(550,500);scroll=Gtk.ScrolledWindow();box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4,margin=12);scroll.add(box);d.get_content_area().pack_start(scroll,True,True,0)
+  pins=json.loads((BASE/'pins.json').read_text())
+  for app in sorted([a for a in Gio.AppInfo.get_all() if a.should_show() and a.get_id()],key=lambda a:a.get_display_name().lower()):
+   key=app.get_id().removesuffix('.desktop');c=Gtk.CheckButton(label=app.get_display_name());c.set_active(key in pins);c.connect('toggled',lambda _,key=key:send_ui('pin',key));box.pack_start(c,False,False,0)
+  d.show_all();d.run();d.destroy()
+ def desktop(self):
+  b=self.page('Schreibtisch','Icons aus ~/Schreibtisch frei verschieben oder am Raster ausrichten. Positionen bleiben gespeichert.')
+  self.spin(b,'Icon-Größe','desktop_icon_size',24,80);self.spin(b,'Beschriftungsgröße','desktop_font_size',8,20)
+  self.toggle(b,'Am Raster ausrichten','grid_snap');self.toggle(b,'Rasterpunkte anzeigen','grid_visible')
+  self.spin(b,'Rasterbreite','grid_width',110,220);self.spin(b,'Rasterhöhe','grid_height',105,220)
+  for title,mode in [('Nach Namen','name'),('Nach Dateityp','type'),('Nach Änderungsdatum','modified')]:self.button(b,title,'Sortieren',lambda mode=mode:send_ui('desktop-sort',mode))
+ def chooser(self,box,title,key,folder=False):
+  b=Gtk.FileChooserButton(title=title,action=Gtk.FileChooserAction.SELECT_FOLDER if folder else Gtk.FileChooserAction.OPEN);b.set_width_chars(26)
+  if self.p.get(key):b.set_filename(self.p[key])
+  if not folder:
+   f=Gtk.FileFilter();f.set_name('Bilder');f.add_pixbuf_formats();b.add_filter(f)
+  b.connect('file-set',lambda w:self.p.__setitem__(key,w.get_filename()));self.row(box,title,b);return b
+ def wallpaper(self):
+  b=self.page('Hintergrund','Statische Bilder pro Bildschirm auswählen. Die aktuelle Auswahl bleibt nach dem Login erhalten.')
+  self.chooser(b,'Hintergrundbild','wallpaper');self.combo(b,'Bildschirm','wallpaper_monitor',[('','Alle Bildschirme')]+[(m,m) for m in self.monitor_names])
+  self.combo(b,'Darstellung','wallpaper_fit',[('cover','Bildschirm ausfüllen'),('contain','Ganzes Bild zeigen'),('fill','Strecken'),('tile','Kacheln')])
+  self.button(b,'Ausgewähltes Bild','Als Hintergrund verwenden',lambda:self.background(False))
+ def engine(self):
+  b=self.page('Wallpaper Engine','Deine Steam-Workshop-Hintergründe direkt unter Hyprland. Szenen, Videos und Web-Hintergründe nutzen den installierten Renderer.')
+  self.chooser(b,'Workshop-Ordner','workshop',True);self.chooser(b,'Wallpaper-Engine-Assets','engine_assets',True)
+  self.combo(b,'Bildschirm','engine_monitor',[('','Alle Bildschirme')]+[(m,m) for m in self.monitor_names])
+  self.spin(b,'Bildrate','engine_fps',10,120,5);self.spin(b,'Lautstärke','engine_volume',0,100,5)
+  actions=Gtk.Box(spacing=10)
+  for text,fn in [('Workshop laden',self.load_workshop),('Vorschau',lambda:self.background(True,True)),('Anwenden',lambda:self.background(True)),('Stoppen',self.stop_background)]:
+   button=Gtk.Button(label=text);button.connect('clicked',lambda _,fn=fn:fn());actions.pack_start(button,True,True,0)
+  b.pack_start(actions,False,False,0);self.workshop_list=Gtk.ListBox();self.workshop_list.set_selection_mode(Gtk.SelectionMode.SINGLE);self.workshop_list.connect('row-selected',self.wallpaper_selected);b.pack_start(self.workshop_list,False,False,0);self.properties_box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6);b.pack_start(self.properties_box,False,False,0);self.load_workshop()
+ def load_workshop(self):
+  for r in self.workshop_list.get_children():r.destroy()
+  folder=Path(self.p['workshop']).expanduser()
+  if not folder.is_dir():self.message('Workshop-Ordner auswählen.');return
+  items=[]
+  for path in folder.iterdir():
+   try:project=json.loads((path/'project.json').read_text());items.append((project.get('title',path.name),path,project))
+   except (OSError,ValueError):continue
+  for title,path,project in sorted(items,key=lambda i:i[0].lower()):
+   row=Gtk.ListBoxRow();row.folder=path;row.project=project;h=Gtk.Box(spacing=12,margin=8);preview=path/project.get('preview','preview.jpg')
+   if preview.is_file():
+    try:h.pack_start(Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(str(preview),110,65,True)),False,False,0)
+    except GLib.Error:pass
+   v=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4);l=Gtk.Label(label=title,xalign=0);l.set_ellipsize(Pango.EllipsizeMode.END);l.set_max_width_chars(55);v.pack_start(l,False,False,0);v.pack_start(Gtk.Label(label=project.get('type','')+' · '+path.name,xalign=0),False,False,0);h.pack_start(v,True,True,0);row.add(h);self.workshop_list.add(row)
+  self.workshop_list.show_all();self.message(str(len(items))+' Workshop-Hintergründe gefunden.')
+ def wallpaper_selected(self,_,row):
+  if not row:return
+  self.p['engine_path']=str(row.folder);self.p['engine_properties']={}
+  for c in self.properties_box.get_children():c.destroy()
+  for key,prop in row.project.get('general',{}).get('properties',{}).items():
+   if prop.get('type')=='bool':
+    w=Gtk.CheckButton(label=prop.get('text',key));w.set_active(bool(prop.get('value')));self.p['engine_properties'][key]={'value':w.get_active()};w.connect('toggled',lambda w,key=key:self.p['engine_properties'].__setitem__(key,{'value':w.get_active()}));self.properties_box.pack_start(w,False,False,0)
+   elif prop.get('type')=='slider':
+    value=prop.get('value',0);w=Gtk.SpinButton.new_with_range(float(prop.get('min',0)),float(prop.get('max',100)),float(prop.get('step',1)));w.set_value(float(value));self.p['engine_properties'][key]={'value':value};w.connect('value-changed',lambda w,key=key:self.p['engine_properties'].__setitem__(key,{'value':w.get_value()}));self.row(self.properties_box,prop.get('text',key),w)
+  self.properties_box.show_all()
+ def background(self,engine,preview=False):
+  try:save_preferences(self.p);apply_background(self.p,engine=engine,preview=preview);self.message('Vorschau geöffnet.' if preview else 'Hintergrund angewendet.')
+  except Exception as e:self.message(str(e))
+ def stop_background(self):stop_engine();self.p['engine_active']=False;save_preferences(self.p);self.message('Animierter Hintergrund gestoppt.')
+ def shortcuts(self):
+  b=self.page('Tastenkombinationen','Eigene Tasten für die wichtigsten Desktop-Funktionen. Beispiel: SUPER + V')
+  defaults={'launcher':('App-Launcher','SUPER + A'),'clipboard':('Zwischenablage','SUPER + V'),'settings':('Einstellungen','SUPER + comma'),'desktop':('Schreibtisch zeigen','SUPER + D'),'mode':('Desktop / Anordnung','SUPER + SHIFT + F'),'minimize':('Minimieren','SUPER + H')}
+  for key,(title,default) in defaults.items():
+   w=Gtk.Entry(text=self.p['shortcuts'].get(key,default));w.set_width_chars(24);w.connect('changed',lambda w,key=key:self.p['shortcuts'].__setitem__(key,w.get_text()));self.row(b,title,w)
+ def system(self):
+  b=self.page('System','Weitere Geräteeinstellungen ohne Konfigurationsdateien öffnen.')
+  for title,args in [('Netzwerkverbindungen',['nm-connection-editor']),('Audio-Geräte',['kcmshell6','kcm_pulseaudio']),('Bluetooth',['kcmshell6','kcm_bluetooth']),('Tastatur',['kcmshell6','kcm_keyboard']),('Maus',['kcmshell6','kcm_mouse']),('Schriften und Darstellung',['systemsettings']),('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
+Settings().run(None)
