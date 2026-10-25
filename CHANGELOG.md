@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.2.1
+- Fortschrittsanzeige beim Update (oben rechts); Alt+Tab: Antippen springt sofort, Halten + Tab schaltet durch, Maus abschaltbar
+
 ## 1.2.0
 - Update im Hintergrund (sudo-Dialog statt Terminal, Benachrichtigungen, Protokoll), sichert lokale Repo-Änderungen; Installer überschreibt keine Nutzereinstellungen (hyprland.lua nur wenn unverändert)
 
