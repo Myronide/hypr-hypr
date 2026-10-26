@@ -1044,7 +1044,7 @@ Singleton {
     }
     function checkUpdate(manual) { updateManual = !!manual; updCheck.running = false; updCheck.running = true; }
     function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/dx-update", "apply"]); }
-    Timer { interval: 6 * 3600 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
+    Timer { interval: 30 * 60 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
     Timer { interval: 120000; running: true; onTriggered: root.checkUpdate(false) }      // zwei Minuten nach dem Start
 
     // ---------- Terminal-Wächter ----------

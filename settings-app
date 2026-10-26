@@ -854,13 +854,14 @@ class Settings(Gtk.Application):
   def run_update(*_):
    subprocess.Popen([str(Path.home()/'.local/bin/dx-update'),'apply'],start_new_session=True);ub.set_sensitive(False);vl.set_text('Update läuft im Hintergrund – Fortschritt oben rechts');GLib.timeout_add_seconds(30,lambda:(ub.set_sensitive(True),False)[1])
   ub.connect('clicked',run_update)
-  uw=Gtk.Box(spacing=14);uw.pack_start(vl,True,True,0);uw.pack_end(ub,False,False,0);uw.show_all()
+  cb=Gtk.Button(label='Jetzt prüfen');cb.connect('clicked',lambda *_:(vl.set_text('Prüfe …'),check_bg()))
+  uw=Gtk.Box(spacing=10);uw.pack_start(vl,True,True,0);uw.pack_end(ub,False,False,0);uw.pack_end(cb,False,False,0);uw.show_all()
   info=upd_info();show(info)
   # automatisch im Hintergrund prüfen: beim Öffnen (wenn die letzte Prüfung älter als 10 Minuten ist) und danach jede Minute den Stand neu lesen
   import time as _t
   if not info or _t.time()-info.get('checked',0)>600:check_bg()
   GLib.timeout_add_seconds(60,lambda:(show(upd_info()),True)[1])
-  self.row(b,'Draconyx-Version',uw,'Wird automatisch im Hintergrund geprüft. Bei einem Update erscheint hier der Knopf; die Aktualisierung läuft ohne Terminal (nur ein Fenster für das sudo-Passwort), deine Einstellungen bleiben unangetastet.')
+  self.row(b,'Draconyx-Version',uw,'Wird automatisch im Hintergrund geprüft (alle 30 Minuten), „Jetzt prüfen“ sofort. Bei einem Update erscheint hier der Knopf; die Aktualisierung läuft ohne Terminal (nur ein Fenster für das sudo-Passwort), deine Einstellungen bleiben unangetastet.')
   self.sw(b,'Update-Benachrichtigungen','updateNotify',True,'Höchstens eine Meldung pro Tag, solange ein Update bereitsteht („Nicht mehr erinnern“ in der Meldung gilt nur für diese Version). Aus: gar keine Meldungen mehr – die Zeile oben zeigt ein Update trotzdem an.')
   for title,args in [('Netzwerkverbindungen',['nm-connection-editor']),('Audio-Geräte',['kcmshell6','kcm_pulseaudio']),('Bluetooth',['kcmshell6','kcm_bluetooth']),('Tastatur',['kcmshell6','kcm_keyboard']),('Maus',['kcmshell6','kcm_mouse']),('Schriften und Darstellung',['systemsettings']),('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
 Settings().run(None)
