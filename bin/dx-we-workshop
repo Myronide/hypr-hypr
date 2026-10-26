@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Draconyx: Steam Workshop der Wallpaper Engine (App 431960) durchsuchen.
+  dx-we-workshop browse [--sort trend|new|top] [--search TEXT] [--page N]
+      Ausgabe (TSV): id <TAB> Titel <TAB> Vorschaubild (lokale Datei) <TAB> installiert (0/1)
+  dx-we-workshop open ID        Seite des Wallpapers in Steam öffnen (dort „Abonnieren“: Steam lädt es herunter, danach erscheint es unter „Meine“)
+  dx-we-workshop web ID         Seite im Browser öffnen
+Die Liste kommt von der öffentlichen Workshop-Seite (kein Konto, kein API-Schlüssel nötig). Herunterladen selbst macht Steam:
+Ein Abo lädt nur der Steam-Client herunter, der das Eigentum an Wallpaper Engine prüft."""
+import html, os, re, subprocess, sys, urllib.parse, urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+HOME = Path.home()
+CACHE = HOME / ".cache/draconyx/workshop"
+UA = "Mozilla/5.0 (X11; Linux x86_64) Draconyx"
+SORTS = {"trend": ("trend", "7"), "new": ("mostrecent", "-1"), "top": ("toprated", "-1")}
+
+
+def fetch(url, timeout=25):
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "de,en"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def installed_ids():
+    try:
+        out = subprocess.run([str(HOME / ".local/bin/dx-we-list")], capture_output=True, text=True, timeout=30).stdout
+        return {l.split("\t")[0] for l in out.splitlines() if l}
+    except (OSError, subprocess.SubprocessError):
+        return set()
+
+
+def browse(sort, search, page):
+    key, days = SORTS.get(sort, SORTS["trend"])
+    q = {"appid": "431960", "browsesort": key, "section": "readytouseitems", "actualsort": key, "p": str(page), "days": days}
+    if search:
+        q["searchtext"] = search
+        q["browsesort"] = q["actualsort"] = "textsearch"
+    page_html = fetch("https://steamcommunity.com/workshop/browse/?" + urllib.parse.urlencode(q)).decode("utf-8", "replace")
+    items = re.findall(r'href="https://steamcommunity\.com/sharedfiles/filedetails/\?id=(\d+)"[^>]*><img src="([^"]+)" alt="([^"]*)"', page_html)
+    seen, out = set(), []
+    for fid, img, title in items:
+        if fid not in seen:
+            seen.add(fid); out.append((fid, html.unescape(title), html.unescape(img)))
+    CACHE.mkdir(parents=True, exist_ok=True)
+
+    def thumb(it):
+        f = CACHE / (it[0] + ".jpg")
+        if not f.exists() or f.stat().st_size < 500:
+            try:
+                f.write_bytes(fetch(it[2], 20))
+            except Exception:
+                return ""
+        return str(f)
+    with ThreadPoolExecutor(8) as ex:
+        paths = list(ex.map(thumb, out))
+    have = installed_ids()
+    for (fid, title, _), p in zip(out, paths):
+        print("%s\t%s\t%s\t%d" % (fid, title.replace("\t", " "), p, 1 if fid in have else 0))
+
+
+def main():
+    a = sys.argv[1:]
+    if not a:
+        print(__doc__); sys.exit(2)
+    if a[0] == "browse":
+        opts = {"sort": "trend", "search": "", "page": 1}
+        i = 1
+        while i < len(a):
+            if a[i] == "--sort": opts["sort"] = a[i + 1]; i += 2
+            elif a[i] == "--search": opts["search"] = a[i + 1]; i += 2
+            elif a[i] == "--page": opts["page"] = int(a[i + 1]); i += 2
+            else: i += 1
+        try:
+            browse(opts["sort"], opts["search"], opts["page"])
+        except Exception as e:
+            print("FEHLER\t%s" % e, file=sys.stderr); sys.exit(1)
+    elif a[0] == "open" and len(a) == 2 and a[1].isdigit():
+        subprocess.Popen(["xdg-open", "steam://url/CommunityFilePage/" + a[1]], start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif a[0] == "web" and len(a) == 2 and a[1].isdigit():
+        subprocess.Popen(["xdg-open", "https://steamcommunity.com/sharedfiles/filedetails/?id=" + a[1]], start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        print(__doc__); sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

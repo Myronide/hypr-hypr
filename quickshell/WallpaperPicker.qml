@@ -24,6 +24,33 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
+    // ---- Steam Workshop (Tab): Liste von der öffentlichen Workshop-Seite; Abonnieren macht der Steam-Client ----
+    property string tab: "mine"                // "mine" | "workshop"
+    property var wsItems: []
+    property string wsSort: "trend"
+    property string wsQuery: ""
+    property int wsPage: 1
+    property bool wsLoading: false
+    property string wsError: ""
+    function wsLoad(page) {
+        wsPage = page;
+        wsLoading = true; wsError = "";
+        wsProc.command = [Theme.home + "/.local/bin/dx-we-workshop", "browse", "--sort", wsSort, "--search", wsQuery, "--page", String(page)];
+        wsProc.running = false; wsProc.running = true;
+    }
+    Process {
+        id: wsProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const rows = text.split("\n").filter(l => l !== "").map(l => { const p = l.split("\t"); return { id: p[0], title: p[1], preview: p[2], have: p[3] === "1", workshop: true }; });
+                wp.wsItems = wp.wsPage > 1 ? wp.wsItems.concat(rows) : rows;
+                wp.wsLoading = false;
+                if (rows.length === 0 && wp.wsPage === 1) wp.wsError = "Nichts gefunden.";
+            }
+        }
+        stderr: StdioCollector { onStreamFinished: if (text.trim() !== "") { wp.wsError = "Der Workshop ließ sich nicht laden (keine Verbindung?)"; wp.wsLoading = false; } }
+    }
+    onTabChanged: { search.text = ""; if (tab === "workshop" && wsItems.length === 0) wsLoad(1); }
     property var items: []
     property string query: ""
     property string typ: ""
@@ -32,7 +59,7 @@ PanelWindow {
     readonly property var shown: items.filter(i => (typ === "" || i.type === typ)
                                                     && (query === "" || i.title.toLowerCase().includes(query.toLowerCase())))
 
-    onVisibleChanged: if (visible) { query = ""; search.text = ""; search.forceActiveFocus(); load.running = false; load.running = true; rootsProc.running = false; rootsProc.running = true; }
+    onVisibleChanged: if (visible) { if (tab === "workshop" && wsItems.length === 0) wsLoad(1); query = ""; search.text = ""; search.forceActiveFocus(); load.running = false; load.running = true; rootsProc.running = false; rootsProc.running = true; }
 
     HyprlandFocusGrab { windows: [wp]; active: wp.visible; onCleared: Global.weOpen = false }
 
@@ -67,10 +94,39 @@ PanelWindow {
             Column {
                 anchors.left: parent.left; anchors.leftMargin: 22; anchors.verticalCenter: parent.verticalCenter
                 spacing: 1
-                Text { text: "Wallpaper Engine"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsL; font.weight: Font.DemiBold }
-                Text { text: "für " + wp.mon + "  ·  " + wp.shown.length + " Wallpaper"; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs }
+                Row {
+                    spacing: 6
+                    Repeater {
+                        model: [{ k: "mine", t: "Meine Wallpaper" }, { k: "workshop", t: "Steam Workshop" }]
+                        BarButton {
+                            required property var modelData
+                            implicitHeight: 32; padding: 14; radiusSize: 16
+                            active: wp.tab === modelData.k
+                            color: wp.tab === modelData.k ? Theme.accent : (hovered ? Theme.tileHover : Theme.tile)
+                            Text { text: modelData.t; color: wp.tab === modelData.k ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsM; font.weight: Font.DemiBold }
+                            onClicked: wp.tab = modelData.k
+                        }
+                    }
+                }
+                Text { text: wp.tab === "mine" ? "für " + wp.mon + "  ·  " + wp.shown.length + " Wallpaper" : "Abonnieren lädt Steam herunter – danach erscheint es unter „Meine Wallpaper“"; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs }
             }
             Row {
+                visible: wp.tab === "workshop"
+                anchors.right: parent.right; anchors.rightMargin: 18; anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+                Repeater {
+                    model: [{ k: "trend", t: "Beliebt" }, { k: "new", t: "Neu" }, { k: "top", t: "Top bewertet" }]
+                    BarButton {
+                        required property var modelData
+                        implicitHeight: 32; padding: 12; radiusSize: 16
+                        active: wp.wsSort === modelData.k
+                        Text { text: modelData.t; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsS }
+                        onClicked: { wp.wsSort = modelData.k; wp.wsLoad(1); }
+                    }
+                }
+            }
+            Row {
+                visible: wp.tab === "mine"
                 anchors.right: parent.right; anchors.rightMargin: 18; anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
                 Repeater {
@@ -119,14 +175,15 @@ PanelWindow {
                 color: Theme.text; selectionColor: Theme.accent
                 font.family: Theme.font; font.pixelSize: Theme.fsM + 1
                 clip: true
-                onTextChanged: wp.query = text
+                onTextChanged: if (wp.tab === "mine") wp.query = text
+                Keys.onReturnPressed: if (wp.tab === "workshop") { wp.wsQuery = text; wp.wsLoad(1); }
                 Keys.onEscapePressed: Global.weOpen = false
-                Text { visible: search.text === ""; text: "Wallpaper suchen …"; color: Theme.textDim; font: search.font }
+                Text { visible: search.text === ""; text: wp.tab === "mine" ? "Wallpaper suchen …" : "Im Steam Workshop suchen … (Enter)"; color: Theme.textDim; font: search.font }
             }
         }
 
         Text {
-            visible: wp.items.length === 0
+            visible: wp.tab === "mine" && wp.items.length === 0
             anchors.centerIn: parent
             width: parent.width - 80
             horizontalAlignment: Text.AlignHCenter
@@ -144,13 +201,30 @@ PanelWindow {
             cellWidth: Math.floor((width - 8) / 4)
             cellHeight: cellWidth * 0.62 + 30
             boundsBehavior: Flickable.StopAtBounds
-            model: wp.shown
+            model: wp.tab === "mine" ? wp.shown : wp.wsItems
+            footer: Item {
+                visible: wp.tab === "workshop"
+                width: grid.width; height: wp.tab === "workshop" ? 56 : 0
+                Text {
+                    anchors.centerIn: parent
+                    visible: wp.wsLoading || wp.wsError !== ""
+                    text: wp.wsLoading ? "Lade …" : wp.wsError
+                    color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsS
+                }
+                BarButton {
+                    anchors.centerIn: parent
+                    visible: !wp.wsLoading && wp.wsError === "" && wp.wsItems.length > 0
+                    implicitHeight: 34; padding: 18; radiusSize: 17
+                    Text { text: "Mehr laden"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsS }
+                    onClicked: wp.wsLoad(wp.wsPage + 1)
+                }
+            }
 
             delegate: Item {
                 id: cell
                 required property var modelData
                 width: grid.cellWidth; height: grid.cellHeight
-                readonly property bool on: wp.current === modelData.id
+                readonly property bool on: wp.tab === "mine" && wp.current === modelData.id
                 Rectangle {
                     anchors.fill: parent; anchors.margins: 5
                     radius: Theme.rM
@@ -159,7 +233,7 @@ PanelWindow {
                     Image {
                         id: img
                         x: 6; y: 6; width: parent.width - 12; height: width * 0.56
-                        source: cell.modelData.preview !== "" ? "file://" + cell.modelData.preview : ""
+                        source: (cell.modelData.preview || "") !== "" ? "file://" + cell.modelData.preview : ""
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true; cache: true
                         sourceSize: Qt.size(320, 180)
@@ -171,7 +245,26 @@ PanelWindow {
                         elide: Text.ElideRight
                         color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsXs
                     }
-                    MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; onClicked: Global.weSet(wp.mon, cell.modelData.id) }
+                    // Workshop: Häkchen, wenn schon installiert; Klick öffnet die Seite in Steam (dort Abonnieren)
+                    Rectangle {
+                        visible: !!cell.modelData.workshop && !!cell.modelData.have
+                        anchors.right: img.right; anchors.top: img.top; anchors.margins: 6
+                        width: tag.implicitWidth + 14; height: 22; radius: 11; color: Theme.accent
+                        Text { id: tag; anchors.centerIn: parent; text: "✓ installiert"; color: "white"; font.family: Theme.font; font.pixelSize: Theme.fsXs }
+                    }
+                    Rectangle {
+                        visible: !!cell.modelData.workshop && !cell.modelData.have && ma.containsMouse
+                        anchors.fill: img; radius: 4; color: "#99000000"
+                        Text { anchors.centerIn: parent; text: "In Steam öffnen\n(Abonnieren)"; horizontalAlignment: Text.AlignHCenter; color: "white"; font.family: Theme.font; font.pixelSize: Theme.fsS; font.weight: Font.DemiBold }
+                    }
+                    MouseArea {
+                        id: ma; anchors.fill: parent; hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: mouse => {
+                            if (cell.modelData.workshop) Quickshell.execDetached([Theme.home + "/.local/bin/dx-we-workshop", mouse.button === Qt.RightButton ? "web" : "open", cell.modelData.id]);
+                            else Global.weSet(wp.mon, cell.modelData.id);
+                        }
+                    }
                 }
             }
         }
