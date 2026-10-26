@@ -27,7 +27,7 @@ PanelWindow {
     HyprlandFocusGrab {
         windows: [cc]
         active: cc.visible
-        onCleared: Global.controlOpen = false
+        onCleared: if (!Global.snipBusy) Global.controlOpen = false
     }
 
     readonly property var sink: Pipewire.defaultAudioSink

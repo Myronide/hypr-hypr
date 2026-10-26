@@ -46,10 +46,12 @@ PanelWindow {
     }
 
     HyprlandFocusGrab {
+        id: smGrab
         windows: [menu]
         active: menu.visible
-        onCleared: Global.startOpen = false
+        onCleared: if (!Global.snipBusy) Global.startOpen = false
     }
+    Connections { target: Global; function onSnipBusyChanged() { if (!Global.snipBusy && menu.visible) { smGrab.active = false; smGrab.active = true; } } }
 
     // Testhaken: Suchtext von außen setzen (IPC "shell search <text>")
     Connections {

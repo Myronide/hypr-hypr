@@ -22,7 +22,7 @@ PopupWindow {
     color: "transparent"
     visible: true
 
-    HyprlandFocusGrab { windows: [pm]; active: pm.visible; onCleared: pm.dismissed() }
+    HyprlandFocusGrab { windows: [pm]; active: pm.visible; onCleared: if (!Global.snipBusy) pm.dismissed() }
     QsMenuOpener { id: opener; menu: pm.current }
 
     function clean(t) { return (t || "").replace(/_(?!_)/g, "").replace(/&(?!&)/g, ""); }   // Mnemonik-Zeichen entfernen

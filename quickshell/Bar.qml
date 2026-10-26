@@ -121,7 +121,7 @@ PanelWindow {
         implicitHeight: logoCol.implicitHeight + 16
         color: "transparent"
         visible: false
-        HyprlandFocusGrab { windows: [logoMenu]; active: logoMenu.visible; onCleared: logoMenu.visible = false }
+        HyprlandFocusGrab { windows: [logoMenu]; active: logoMenu.visible; onCleared: if (!Global.snipBusy) logoMenu.visible = false }
         Surface {
             anchors.fill: parent
             level: 2

@@ -46,7 +46,7 @@ PanelWindow {
     HyprlandFocusGrab {
         windows: [tv]
         active: tv.visible
-        onCleared: Global.taskViewOpen = false
+        onCleared: if (!Global.snipBusy) Global.taskViewOpen = false
     }
 
     // Abdunkelung + Klick daneben schließt

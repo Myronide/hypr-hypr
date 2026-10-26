@@ -25,7 +25,7 @@ PanelWindow {
     HyprlandFocusGrab {
         windows: [cal]
         active: cal.visible
-        onCleared: Global.calendarOpen = false
+        onCleared: if (!Global.snipBusy) Global.calendarOpen = false
     }
 
     property int monthOffset: 0

@@ -46,10 +46,13 @@ PanelWindow {
     }
 
     HyprlandFocusGrab {
+        id: csGrab
         windows: cs.extraGrab ? [cs, cs.extraGrab] : [cs]
         active: cs.visible
-        onCleared: Global.closeAll()
+        onCleared: if (!Global.snipBusy) Global.closeAll()
     }
+    // Nach dem Snip (Fokus kam vom Snip-Fenster zurück) den Fokus-Wächter neu setzen, sonst bleibt das Fenster ohne Tastatur
+    Connections { target: Global; function onSnipBusyChanged() { if (!Global.snipBusy && cs.visible) { csGrab.active = false; csGrab.active = true; } } }
 
     function ago(mtime) {
         const s = Math.max(0, Date.now() / 1000 - mtime);

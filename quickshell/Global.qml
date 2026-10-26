@@ -22,6 +22,8 @@ Singleton {
     property bool weOpen: false
     property bool searchOpen: false
     property bool snipOpen: false
+    // Solange das Snip-Werkzeug aufnimmt oder offen ist (oder der Foto-Editor), dürfen Fokuswechsel andere Fenster der Shell nicht schließen
+    readonly property bool snipBusy: snipOpen || editOpen || snipCap.running
     property bool editOpen: false            // Foto-Editor für Snips
     property string editFile: ""
     property var snipFiles: ({})              // Monitor -> eingefrorenes Foto

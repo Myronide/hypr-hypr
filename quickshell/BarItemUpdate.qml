@@ -36,7 +36,7 @@ BarButton {
             implicitHeight: Math.min(body.implicitHeight + 32, 560)
             color: "transparent"
             visible: true
-            HyprlandFocusGrab { windows: [pop]; active: pop.visible; onCleared: ub.open = false }
+            HyprlandFocusGrab { windows: [pop]; active: pop.visible; onCleared: if (!Global.snipBusy) ub.open = false }
             Surface {
                 anchors.fill: parent
                 level: 2

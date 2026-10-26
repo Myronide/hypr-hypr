@@ -168,7 +168,7 @@ BarButton {
         HyprlandFocusGrab {
             windows: [popup]
             active: popup.visible && (popup.mode === "menu" || popup.sticky)
-            onCleared: popup.visible = false
+            onCleared: if (!Global.snipBusy) popup.visible = false
         }
 
         Surface {

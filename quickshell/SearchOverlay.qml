@@ -32,7 +32,8 @@ PanelWindow {
         if (visible) { query = ""; input.text = ""; sel = 0; fileHits = []; ctx = null; input.forceActiveFocus(); }
     }
 
-    HyprlandFocusGrab { windows: [so]; active: so.visible; onCleared: Global.searchOpen = false }
+    HyprlandFocusGrab { id: soGrab; windows: [so]; active: so.visible; onCleared: if (!Global.snipBusy) Global.searchOpen = false }
+    Connections { target: Global; function onSnipBusyChanged() { if (!Global.snipBusy && so.visible) { soGrab.active = false; soGrab.active = true; } } }
     Connections { target: Global; function onSearchTestChanged() { if (so.visible) input.text = Global.searchTest; } }
 
     // ---------- Daten ----------

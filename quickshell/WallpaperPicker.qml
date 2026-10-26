@@ -61,7 +61,8 @@ PanelWindow {
 
     onVisibleChanged: if (visible) { if (tab === "workshop" && wsItems.length === 0) wsLoad(1); query = ""; search.text = ""; search.forceActiveFocus(); load.running = false; load.running = true; rootsProc.running = false; rootsProc.running = true; }
 
-    HyprlandFocusGrab { windows: [wp]; active: wp.visible; onCleared: Global.weOpen = false }
+    HyprlandFocusGrab { id: wpGrab; windows: [wp]; active: wp.visible; onCleared: if (!Global.snipBusy) Global.weOpen = false }
+    Connections { target: Global; function onSnipBusyChanged() { if (!Global.snipBusy && wp.visible) { wpGrab.active = false; wpGrab.active = true; } } }
 
     property string rootsText: ""
     Process {
