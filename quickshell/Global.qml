@@ -118,6 +118,7 @@ Singleton {
     property alias codeCustom:    settings.codeCustom
     readonly property int barMargin: 16
 
+    Timer { id: retryTimer; interval: 800; onTriggered: settingsFile.reload() }
     FileView {
         id: settingsFile
         path: Theme.home + "/.local/state/draconyx/settings.json"
@@ -129,7 +130,6 @@ Singleton {
         onLoaded: everLoaded = true
         onAdapterUpdated: if (everLoaded) writeAdapter()
         onLoadFailed: error => { if (error === FileViewError.FileNotFound) { everLoaded = true; writeAdapter(); } else retryTimer.restart(); }
-        Timer { id: retryTimer; interval: 800; onTriggered: settingsFile.reload() }
 
         JsonAdapter {
             id: settings
