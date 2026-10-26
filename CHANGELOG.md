@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.3.8
+- Taskleisten-Anordnung per Ziehen (Bereiche links/Mitte/rechts, beim Dock als Inseln, Ausgeblendet-Ablage, Rechtsklick-Menü); Aurora ohne Übernehmen-Knopf, Änderungen wirken live; Mausrad-Geschwindigkeit wirkt auch in den Listen der Shell
+
 ## 1.3.7
 - Mausrad-Geschwindigkeit einstellbar (Aurora → Übersicht); Einstellungen werden bei Updates nicht mehr zurückgesetzt (seit 1.3.6)
 
