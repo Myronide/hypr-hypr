@@ -2,7 +2,7 @@ import json,subprocess,os,re,shutil,time
 from pathlib import Path
 BASE=Path.home()/'.config/hypr/aurora'
 SHELL=(Path.home()/'.config/quickshell/draconyx/shell.qml').exists()   # Draconyx-Shell vorhanden -> eigene Taskleiste statt waybar
-DEFAULTS={'dock_visibility':'always','dock_monitor':'DP-2','dock_icon_size':32,'dock_opacity':0.95,'desktop_icon_size':44,'desktop_font_size':11,'grid_snap':True,'grid_visible':False,'grid_width':122,'grid_height':112,'titlebar_height':28,'titlebar_font':10,'tile_gap':12,'rounding':12,'border_size':0,'blur':True,'blur_size':6,'blur_passes':3,'wallpaper':'','wallpaper_monitor':'','wallpaper_fit':'cover','workshop':'/mnt/Games/Steam/steamapps/workshop/content/431960','engine_assets':'/mnt/Games/Steam/steamapps/common/wallpaper_engine/assets','engine_fps':30,'engine_volume':0,'engine_path':'','engine_monitor':'DP-2','engine_mouse':True,'engine_parallax':True,'engine_fullscreen_pause':True,'engine_active':False}
+DEFAULTS={'scroll_speed':1.0,'dock_visibility':'always','dock_monitor':'DP-2','dock_icon_size':32,'dock_opacity':0.95,'desktop_icon_size':44,'desktop_font_size':11,'grid_snap':True,'grid_visible':False,'grid_width':122,'grid_height':112,'titlebar_height':28,'titlebar_font':10,'tile_gap':12,'rounding':12,'border_size':0,'blur':True,'blur_size':6,'blur_passes':3,'wallpaper':'','wallpaper_monitor':'','wallpaper_fit':'cover','workshop':'/mnt/Games/Steam/steamapps/workshop/content/431960','engine_assets':'/mnt/Games/Steam/steamapps/common/wallpaper_engine/assets','engine_fps':30,'engine_volume':0,'engine_path':'','engine_monitor':'DP-2','engine_mouse':True,'engine_parallax':True,'engine_fullscreen_pause':True,'engine_active':False}
 def load_preferences():
  try:return DEFAULTS|json.loads((BASE/'preferences.json').read_text())
  except (OSError,ValueError):return DEFAULTS.copy()
@@ -30,6 +30,8 @@ def save_preferences(p):
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p['blur'] else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))
  source+='hl.config({input={follow_mouse=%d}})\n'%(1 if p.get('focus_follows_mouse',False) else 0)
+ sf=max(0.1,min(10.0,float(p.get('scroll_speed',1.0) or 1.0)))
+ source+='hl.config({input={scroll_factor=%.2f}})\n'%sf   # Mausrad-Geschwindigkeit (1.0 = Standard)
  if p.get('keymap') in KEYMAPS:
   source+='hl.config({input={kb_layout="%s"}})\n'%p['keymap']   # Tastaturbelegung (gilt sofort nach dem Neuladen)
   d=Path.home()/'.config/draconyx';d.mkdir(parents=True,exist_ok=True);(d/'keymap').write_text(p['keymap']+'\n')
