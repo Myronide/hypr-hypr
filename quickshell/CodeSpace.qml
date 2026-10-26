@@ -355,25 +355,17 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 4
 
-                    // IntelliJ IDEA
-                    BarButton {
-                        minWidth: 40; implicitHeight: 38
-                        color: hovered ? Theme.accentHover : Theme.tile
-                        IconImage {
-                            implicitSize: 24
-                            source: Global.intellijEntry ? Global.iconFor(Global.intellijEntry.id, Global.intellijEntry) : Quickshell.iconPath("idea", "application-x-executable")
+                    // Programme (Aurora → Coding Space): ausgewählte erkannte IDEs/Editoren und eigene
+                    Repeater {
+                        model: Global.codeAppsShown
+                        delegate: BarButton {
+                            required property var modelData
+                            minWidth: 40; implicitHeight: 38
+                            color: hovered ? Theme.accentHover : Theme.tile
+                            tip: "In " + modelData.name + " öffnen"
+                            IconImage { implicitSize: 24; source: Global.codeAppIcon(modelData) }
+                            onClicked: Global.openProject(row.modelData.path, "app:" + modelData.id)
                         }
-                        onClicked: Global.openProject(row.modelData.path, "idea")
-                    }
-                    // VS Code
-                    BarButton {
-                        minWidth: 40; implicitHeight: 38
-                        color: hovered ? Theme.accentHover : Theme.tile
-                        IconImage {
-                            implicitSize: 24
-                            source: Global.iconFor("com.microsoft.VSCode", cs.vscodeEntry)
-                        }
-                        onClicked: Global.openProject(row.modelData.path, "code")
                     }
                     // Terminal, Claude, Git
                     BarButton {
@@ -383,6 +375,7 @@ PanelWindow {
                         onClicked: Global.openProject(row.modelData.path, "term")
                     }
                     BarButton {
+                        visible: Global.claudeAvailable
                         minWidth: 36; implicitHeight: 38
                         color: hovered ? Theme.accentHover : Theme.tile
                         Image { source: "file://" + Theme.iconDir + "claude-logo.svg"; sourceSize: Qt.size(40, 40); width: 20; height: 20; smooth: true }
@@ -438,9 +431,8 @@ PanelWindow {
                         if (isWs) l.push({ t: "Betreten", a: "enter", i: "chevron-right" });
                         else {
                             l.push({ t: "Terminal hier", a: "term", i: "terminal" });
-                            l.push({ t: "Mit Claude öffnen", a: "claude", i: "bot" });
-                            l.push({ t: "In IntelliJ öffnen", a: "idea", i: "code" });
-                            l.push({ t: "In VS Code öffnen", a: "code", i: "code" });
+                            if (Global.claudeAvailable) l.push({ t: "Mit Claude öffnen", a: "claude", i: "bot" });
+                            for (const ap of Global.codeAppsShown) l.push({ t: "In " + ap.name + " öffnen", a: "app:" + ap.id, i: "code" });
                             l.push({ t: "Git-Client öffnen", a: "git", i: "branch" });
                             l.push({ t: "Alles öffnen", a: "all", i: "apps" });
                         }

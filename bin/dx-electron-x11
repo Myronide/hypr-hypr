@@ -18,7 +18,7 @@ for id in "${IDS[@]}"; do
   mkdir -p "$USER_APPS"
   # nach dem Programm in jeder Exec-Zeile die Option einfügen (Flatpak-Starter ausgenommen)
   grep -q '^Exec=.*flatpak' "$src" && continue
-  { echo "$MARK"; sed -E 's|^(Exec=[^ ]+)|\1 --ozone-platform=x11|' "$src"; } > "$dst.tmp"
+  { echo "$MARK"; sed -E "s|^Exec=([^ ]+)|Exec=$HOME/.local/bin/dx-launch \\1 --ozone-platform=x11|" "$src"; } > "$dst.tmp"
   if [ -f "$dst" ] && cmp -s "$dst.tmp" "$dst"; then rm -f "$dst.tmp"; else mv "$dst.tmp" "$dst"; echo "angelegt: $dst"; n=$((n+1)); fi
 done
 # Chromium-Browser: dieselbe Option über die jeweilige Flags-Datei (nur anlegen, wenn es sie nicht gibt)

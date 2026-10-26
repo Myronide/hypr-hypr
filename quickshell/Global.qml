@@ -113,6 +113,9 @@ Singleton {
     property alias zoneLayouts:   settings.zoneLayouts
     property alias codeRoot:      settings.codeRoot
     property alias codeRoots:     settings.codeRoots
+    property alias desktopDir:    settings.desktopDir
+    property alias codeAppsOn:    settings.codeAppsOn
+    property alias codeCustom:    settings.codeCustom
     readonly property int barMargin: 16
 
     FileView {
@@ -164,6 +167,9 @@ Singleton {
             property var wallpapers: ({})        // { "DP-1": "/pfad/bild.png" } überschreibt das Standard-Wallpaper
             property int iconGrid: 96            // Rasterbreite der Desktop-Icons
             property bool startLeft: true        // Startmenü links (Windows-10-Stil); false = mittig
+            property var codeAppsOn: ["idea", "code"]   // Programme, die in der Projektliste als Knopf erscheinen (Aurora → Coding Space)
+            property var codeCustom: []             // eigene Programme: [{ id, name, cmd (mit {path}), term }]
+            property string desktopDir: ""        // Ordner der Desktop-Symbole; leer = automatisch (xdg-user-dir DESKTOP)
             property var codeRoots: []              // weitere Ordner, die im Coding Space mitlaufen (zusätzlich zum Hauptordner)
             property string codeRoot: ""            // leer = automatisch: <Laufwerk>/Code Space unter /run/media/<user>/
             property var zoneLayouts: ({})       // { "DP-2": Teilungsbaum } eigene Zonen pro Monitor
@@ -215,6 +221,7 @@ Singleton {
     }
     onCodeRootsChanged: codeListTimer.restart()
     function refreshProjects() {
+        probeCodeTools();
         codeRootProbe.running = false; codeRootProbe.running = true;
         codeListTimer.restart();
     }
@@ -274,6 +281,55 @@ Singleton {
         codeListTimer.interval = 600; codeListTimer.restart();
     }
 
+    // Desktop-Ordner: eingestellter Ordner, sonst der des Systems (Schreibtisch / Desktop)
+    property string desktopDirAuto: Theme.home + "/Desktop"
+    readonly property string desktopDirEffective: desktopDir !== "" ? desktopDir : desktopDirAuto
+    Process {
+        id: desktopDirProbe
+        command: ["sh", "-c", "d=$(xdg-user-dir DESKTOP 2>/dev/null); if [ -n \"$d\" ] && [ \"$d\" != \"$HOME\" ] && [ -d \"$d\" ]; then echo \"$d\"; elif [ -d \"$HOME/Schreibtisch\" ]; then echo \"$HOME/Schreibtisch\"; else echo \"$HOME/Desktop\"; fi"]
+        stdout: SplitParser { onRead: line => { if (line) root.desktopDirAuto = line; } }
+    }
+    // Installierte Entwicklungsprogramme (dx-code-apps) und Claude: nur was wirklich da ist, wird angezeigt
+    property var codeDetected: []
+    property bool claudeAvailable: false
+    Process {
+        id: codeAppsProbe
+        command: [Theme.home + "/.local/bin/dx-code-apps"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.codeDetected = text.split("\n").filter(l => l !== "").map(l => {
+                    const p = l.split("\t");
+                    return { id: p[0], name: p[1], cmd: p[2], desk: (p[3] || "").split(","), icon: p[4], term: p[5] === "1" };
+                });
+            }
+        }
+    }
+    Process {
+        id: claudeProbe
+        command: ["sh", "-c", "command -v claude >/dev/null 2>&1 || [ -x \"$HOME/.local/bin/claude\" ]"]
+        onExited: code => root.claudeAvailable = (code === 0)
+    }
+    function probeCodeTools() {
+        codeAppsProbe.running = false; codeAppsProbe.running = true;
+        claudeProbe.running = false; claudeProbe.running = true;
+    }
+    // Knöpfe in der Projektliste: ausgewählte erkannte Programme (in Erkennungsreihenfolge) + eigene
+    readonly property var codeAppsShown: {
+        const on = codeAppsOn || [];
+        const out = codeDetected.filter(a => on.indexOf(a.id) >= 0);
+        for (const c of (codeCustom || [])) if (on.indexOf(c.id) >= 0) out.push({ id: c.id, name: c.name, cmd: c.cmd, desk: [], icon: c.icon || "application-x-executable", term: !!c.term, custom: true });
+        return out;
+    }
+    function codeAppIcon(a) {
+        if (a.id === "idea" && intellijEntry) return iconFor(intellijEntry.id, intellijEntry);
+        for (const d of (a.desk || [])) { const e = DesktopEntries.byId(d); if (e) return iconFor(e.id, e); }
+        return Quickshell.iconPath(a.icon || "", "application-x-executable");
+    }
+    function codeAppById(id) {
+        for (const a of codeAppsShown) if (a.id === id) return a;
+        return null;
+    }
+
     // IntelliJ-Eintrag der JetBrains Toolbox (Name der Desktop-Datei enthält eine Kennung)
     readonly property var intellijEntry: {
         for (const e of DesktopEntries.applications.values) if (e.id.startsWith("jetbrains-idea")) return e;
@@ -287,14 +343,19 @@ Singleton {
         interval: 260
         onTriggered: { for (const c of root.codePending) Quickshell.execDetached(c); root.codePending = []; }
     }
+    function appCommand(a, path) {
+        const tmpl = a.cmd.indexOf("{path}") >= 0 ? a.cmd.replace(/\{path\}/g, "\"$1\"") : a.cmd + " \"$1\"";
+        const sh = ["sh", "-c", tmpl, "dx", path];
+        return a.term ? [Theme.home + "/.local/bin/dx-terminal", "--dir", path, "--"].concat(sh) : sh;
+    }
     function openProject(path, how) {
         closeAll();
         const list = [];
         if (how === "folder" || how === "all") list.push(["dolphin", path]);
         if (how === "term")   list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path]);
-        if (how === "idea") list.push(["idea", path]);
-        if (how === "code" || how === "all") list.push(["code", path]);
-        if (how === "claude" || how === "all") list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path, "--", Theme.home + "/.local/bin/claude"]);
+        if (how.indexOf("app:") === 0) { const a = codeAppById(how.substring(4)); if (a) list.push(appCommand(a, path)); }
+        if (how === "all") for (const a of codeAppsShown) list.push(appCommand(a, path));
+        if ((how === "claude" || how === "all") && claudeAvailable) list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path, "--", Theme.home + "/.local/bin/claude"]);
         hypr("hl.dsp.focus({ workspace = 8 })");
         codePending = list;
         codeLaunchTimer.restart();
@@ -1070,6 +1131,8 @@ Singleton {
     Component.onCompleted: {
         hyprEval("hl.config({ cursor = { no_warps = true } })");   // Maus springt beim Fokuswechsel nicht in die Fenstermitte
         netState.running = true;
+        probeCodeTools();
+        desktopDirProbe.running = true;
         perfRead.running = true;
         zonesTimer.restart();
         Quickshell.execDetached(["sh", "-c", "[ -f \"$XDG_RUNTIME_DIR/draconyx-snap.txt\" ] || echo none > \"$XDG_RUNTIME_DIR/draconyx-snap.txt\""]);

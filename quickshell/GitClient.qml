@@ -573,6 +573,7 @@ PanelWindow {
                         }
                         BarButton {
                             id: claudeMsgBtn
+                            visible: Global.claudeAvailable
                             anchors.left: parent.left; anchors.leftMargin: 10; anchors.bottom: parent.bottom; anchors.bottomMargin: 10
                             implicitHeight: 32; padding: 12; radiusSize: 16
                             color: gcl.claudeBusy ? Theme.accentSoft : (hovered ? Theme.accentHover : Theme.tile)
@@ -584,7 +585,7 @@ PanelWindow {
                             onClicked: gcl.claudeCommitMessage()
                         }
                         BarButton {
-                            anchors.left: claudeMsgBtn.right; anchors.leftMargin: 6; anchors.bottom: parent.bottom; anchors.bottomMargin: 10
+                            anchors.left: Global.claudeAvailable ? claudeMsgBtn.right : parent.left; anchors.leftMargin: Global.claudeAvailable ? 6 : 10; anchors.bottom: parent.bottom; anchors.bottomMargin: 10
                             implicitHeight: 32; padding: 12; radiusSize: 16; color: hovered ? Theme.accentHover : Theme.tile
                             Text { text: "Amend"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsXs }
                             onClicked: gcl.act("Commit geändert", commitMsg.text.trim() !== "" ? ["commit", "--amend", "-m", commitMsg.text.trim()] : ["commit", "--amend", "--no-edit"])
@@ -795,8 +796,9 @@ PanelWindow {
             }
             Rectangle {
                 id: claudeRow
+                visible: Global.claudeAvailable
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                anchors.margins: 6; height: 32; radius: 16
+                anchors.margins: Global.claudeAvailable ? 6 : 0; height: Global.claudeAvailable ? 32 : 0; radius: 16
                 color: Theme.tile; border.color: claudeIn.activeFocus ? Theme.accent : Theme.borderSoft
                 Image { id: cIcon2; source: "file://" + Theme.iconDir + "claude-logo.svg"; sourceSize: Qt.size(32, 32); width: 16; height: 16
                         anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; opacity: gcl.claudeBusy ? 0.5 : 1 }

@@ -386,6 +386,17 @@ class Settings(Gtk.Application):
   b.connect('file-set',lambda w:self.p.__setitem__(key,w.get_filename()));self.row(box,title,b);return b
  def wallpaper(self):
   b=self.page('Hintergrund','Statische Bilder pro Bildschirm auswählen. Die aktuelle Auswahl bleibt nach dem Login erhalten.')
+  # Ordner der Desktop-Symbole (Schreibtisch): automatisch (xdg-user-dir) oder frei wählbar
+  dpb=PathButton('Ordner für die Desktop-Symbole');cur=shell_get('desktopDir','') or ''
+  if cur:dpb.set_filename(cur)
+  def dset(w):
+   p=w.get_filename() or '';shell_set('desktopDir',p)
+   if p:Path(p).mkdir(parents=True,exist_ok=True)
+   self.message('Desktop-Ordner: '+(p or 'automatisch'))
+  dpb.connect('file-set',dset);self.row(b,'Desktop-Ordner',dpb,'Aus diesem Ordner zeigt der Desktop seine Symbole. Leer = automatisch (Schreibtisch bzw. Desktop deines Systems).')
+  def dreset(*_):
+   shell_set('desktopDir','');dpb.unselect_all();self.message('Desktop-Ordner: automatisch')
+  self.button(b,'Desktop-Ordner','Automatisch erkennen',dreset)
   self.chooser(b,'Hintergrundbild','wallpaper');self.combo(b,'Bildschirm','wallpaper_monitor',[('','Alle Bildschirme')]+[(m,m) for m in self.monitor_names])
   self.combo(b,'Darstellung','wallpaper_fit',[('cover','Bildschirm ausfüllen'),('contain','Ganzes Bild zeigen'),('fill','Strecken'),('tile','Kacheln')])
   self.button(b,'Ausgewähltes Bild','Als Hintergrund verwenden',lambda:self.background(False))
@@ -657,6 +668,47 @@ class Settings(Gtk.Application):
    add.connect('clicked',pick);more.pack_start(add,False,False,0);more.show_all()
   refill()
   self.row(b,'Weitere Ordner',more,'Zusätzliche Ordner, die im Coding Space mitlaufen. Ein Git-Projekt erscheint als Projekt, ein Ordner mit „Workspace“ im Namen als Workspace, jeder andere zeigt seine Unterordner.')
+  # ---- Programme in der Projektliste (erkannte IDEs/Editoren + eigene) ----
+  apps_box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
+  def detected():
+   try:
+    out=subprocess.run([str(Path.home()/'.local/bin/dx-code-apps')],capture_output=True,text=True,timeout=20).stdout
+    return [dict(zip(('id','name','cmd','desk','icon','term'),l.split('\t'))) for l in out.splitlines() if l]
+   except (OSError,subprocess.SubprocessError):return []
+  def apps_fill():
+   for c in apps_box.get_children():apps_box.remove(c)
+   on=list(shell_get('codeAppsOn',['idea','code']) or []);custom=list(shell_get('codeCustom',[]) or [])
+   def toggle(i,w,_):
+    cur=list(shell_get('codeAppsOn',['idea','code']) or [])
+    if w.get_active() and i not in cur:cur.append(i)
+    if not w.get_active() and i in cur:cur.remove(i)
+    shell_set('codeAppsOn',cur)
+   for a_ in detected():
+    r=Gtk.Box(spacing=10);l=Gtk.Label(label=a_['name']+('' if not a_['cmd'] else '  ·  '+Path(a_['cmd']).name),xalign=0);r.pack_start(l,True,True,0)
+    sw=Gtk.Switch(active=a_['id'] in on);sw.set_valign(Gtk.Align.CENTER);sw.connect('notify::active',lambda w,p,i=a_['id']:toggle(i,w,p));r.pack_end(sw,False,False,0);apps_box.pack_start(r,False,False,0)
+   for c_ in custom:
+    r=Gtk.Box(spacing=10);l=Gtk.Label(label=c_['name']+'  ·  '+c_['cmd']+('  (Terminal)' if c_.get('term') else ''),xalign=0);l.set_ellipsize(Pango.EllipsizeMode.MIDDLE);r.pack_start(l,True,True,0)
+    def rm(_,i=c_['id']):
+     shell_set('codeCustom',[x for x in (shell_get('codeCustom',[]) or []) if x['id']!=i]);shell_set('codeAppsOn',[x for x in (shell_get('codeAppsOn',[]) or []) if x!=i]);apps_fill()
+    x=Gtk.Button(label='Entfernen');x.connect('clicked',rm);r.pack_end(x,False,False,0);apps_box.pack_start(r,False,False,0)
+   if not detected() and not custom:apps_box.pack_start(Gtk.Label(label='Keine Programme erkannt – eigenes hinzufügen.',xalign=0),False,False,0)
+   add=Gtk.Button(label='Eigenes Programm hinzufügen …')
+   def add_dlg(*_):
+    d=Gtk.Dialog(title='Eigenes Programm',transient_for=self.window,modal=True);d.add_buttons('Abbrechen',Gtk.ResponseType.CANCEL,'Hinzufügen',Gtk.ResponseType.OK)
+    box=d.get_content_area();box.set_spacing(8);box.set_border_width(14)
+    n=Gtk.Entry(placeholder_text='Name, z. B. Obsidian');c=Gtk.Entry(placeholder_text='Befehl, {path} = Projektordner, z. B. obsidian {path}');c.set_width_chars(44)
+    t=Gtk.CheckButton(label='Im Terminal starten (z. B. nvim)')
+    for w in (n,c,t):box.pack_start(w,False,False,0)
+    d.show_all()
+    if d.run()==Gtk.ResponseType.OK and n.get_text().strip() and c.get_text().strip():
+     import re as _re,time as _t
+     ident='c'+_re.sub(r'[^a-z0-9]','',n.get_text().lower())+str(int(_t.time())%10000)
+     shell_set('codeCustom',list(shell_get('codeCustom',[]) or [])+[{'id':ident,'name':n.get_text().strip(),'cmd':c.get_text().strip(),'term':t.get_active()}])
+     shell_set('codeAppsOn',list(shell_get('codeAppsOn',[]) or [])+[ident])
+    d.destroy();apps_fill()
+   add.connect('clicked',add_dlg);apps_box.pack_start(add,False,False,0);apps_box.show_all()
+  apps_fill()
+  self.row(b,'Programme in der Projektliste',apps_box,'Diese Programme bekommen in der Projektliste einen Knopf (öffnet das Projekt darin). Erkannt werden unter anderem IntelliJ, VS Code, Cursor, Zed, Sublime, PyCharm, WebStorm, Kate, Neovim. Claude erscheint nur, wenn es installiert ist.')
   new=Gtk.Entry();new.set_placeholder_text('Name, z. B. Spiele');new.set_width_chars(22)
   def create(*_):
    name=new.get_text().strip().replace('/','')

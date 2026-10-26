@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Draconyx Coding Space: erkennt installierte Entwicklungsprogramme (IDEs/Editoren), die ein Projekt öffnen können.
+# Ausgabe (TSV): id <TAB> Name <TAB> Befehl <TAB> Desktop-Kennungen (Komma) <TAB> Symbolname <TAB> im Terminal (0/1)
+# Neue Programme: Zeile in CANDIDATES ergänzen (id|Name|Programme (Komma)|Desktop-Kennungen|Symbol|Terminal).
+TB="$HOME/.local/share/JetBrains/Toolbox/scripts"
+CANDIDATES='idea|IntelliJ IDEA|idea,intellij-idea-ultimate-edition,intellij-idea-community-edition,intellij-idea-ultimate,intellij-idea-community|jetbrains-idea,idea,intellij-idea-ultimate-edition|idea|0
+code|Visual Studio Code|code,visual-studio-code-bin|com.microsoft.VSCode,code,visual-studio-code|vscode|0
+codium|VSCodium|codium,vscodium|codium,vscodium,com.vscodium.codium|vscodium|0
+cursor|Cursor|cursor|cursor|cursor|0
+windsurf|Windsurf|windsurf|windsurf|windsurf|0
+kiro|Kiro|kiro|kiro|kiro|0
+zed|Zed|zeditor,zed|dev.zed.Zed,zed|zed|0
+sublime|Sublime Text|subl,sublime_text|sublime_text,sublime-text,sublime_text_3|sublime-text|0
+pycharm|PyCharm|pycharm,pycharm-professional,pycharm-community|jetbrains-pycharm,pycharm|pycharm|0
+webstorm|WebStorm|webstorm|jetbrains-webstorm,webstorm|webstorm|0
+phpstorm|PhpStorm|phpstorm|jetbrains-phpstorm,phpstorm|phpstorm|0
+clion|CLion|clion|jetbrains-clion,clion|clion|0
+rustrover|RustRover|rustrover|jetbrains-rustrover,rustrover|rustrover|0
+goland|GoLand|goland|jetbrains-goland,goland|goland|0
+rider|Rider|rider|jetbrains-rider,rider|rider|0
+datagrip|DataGrip|datagrip|jetbrains-datagrip,datagrip|datagrip|0
+androidstudio|Android Studio|android-studio,studio.sh|android-studio,jetbrains-studio|android-studio|0
+eclipse|Eclipse|eclipse|eclipse|eclipse|0
+netbeans|NetBeans|netbeans|netbeans,apache-netbeans|netbeans|0
+fleet|Fleet|fleet|jetbrains-fleet,fleet|fleet|0
+lapce|Lapce|lapce|lapce,dev.lapce.lapce|lapce|0
+kate|Kate|kate|org.kde.kate,kate|kate|0
+geany|Geany|geany|geany|geany|0
+emacs|Emacs|emacs|emacs|emacs|0
+nvim|Neovim (Terminal)|nvim|nvim|nvim|1
+helix|Helix (Terminal)|hx,helix|Helix,hx|helix|1
+micro|Micro (Terminal)|micro|micro|micro|1
+vim|Vim (Terminal)|vim|vim|vim|1'
+find_bin() {   # erstes vorhandenes Programm aus einer Kommaliste (PATH oder JetBrains-Toolbox-Skripte)
+  local b
+  for b in ${1//,/ }; do
+    command -v "$b" >/dev/null 2>&1 && { echo "$b"; return 0; }
+    [ -x "$TB/$b" ] && { echo "$TB/$b"; return 0; }
+  done
+  return 1
+}
+while IFS='|' read -r id name bins desk icon term; do
+  [ -n "$id" ] || continue
+  cmd="$(find_bin "$bins")" || continue          # Programm muss wirklich startbar sein
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$name" "$cmd" "$desk" "$icon" "$term"
+done <<< "$CANDIDATES"
+exit 0

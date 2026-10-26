@@ -122,7 +122,7 @@ PanelWindow {
     // ---------- Icons ----------
     FolderListModel {
         id: folder
-        folder: "file://" + Theme.home + "/Schreibtisch"
+        folder: "file://" + Global.desktopDirEffective
         showDirs: true
         showDotAndDotDot: false
         showHidden: false
@@ -414,21 +414,21 @@ PanelWindow {
                 width: ctxCol.width
                 iconName: "add"
                 label: "Neuer Ordner"
-                onTriggered: { Quickshell.execDetached(["mkdir", "-p", Theme.home + "/Schreibtisch/Neuer Ordner"]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached(["mkdir", "-p", Global.desktopDirEffective + "/Neuer Ordner"]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "empty"
                 width: ctxCol.width
                 iconName: "folder"
                 label: "Desktop-Ordner in Dolphin"
-                onTriggered: { Quickshell.execDetached(["dolphin", Theme.home + "/Schreibtisch"]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached(["dolphin", Global.desktopDirEffective]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "empty"
                 width: ctxCol.width
                 iconName: "add"
                 label: "Terminal hier"
-                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/dx-terminal", "--dir", Theme.home + "/Schreibtisch"]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/dx-terminal", "--dir", Global.desktopDirEffective]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "empty"

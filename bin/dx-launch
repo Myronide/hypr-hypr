@@ -1,0 +1,5 @@
+#!/bin/sh
+# Draconyx: startet ein Programm vollständig abgekoppelt (neue Sitzung, Ein-/Ausgabe nach /dev/null). Verhindert, dass Apps wie Discord
+# mit "write EPIPE" abstürzen, wenn die Pipe ihres Starters (Shell, Terminal) später verschwindet, z. B. nach einem Shell-Neustart.
+#   dx-launch PROGRAMM [ARGUMENTE …]
+exec setsid "$@" >/dev/null 2>&1 </dev/null

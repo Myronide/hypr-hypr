@@ -218,7 +218,7 @@ PanelWindow {
         { name: "Bilder",    icon: "folder", path: Theme.home + "/Bilder" },
         { name: "Videos",    icon: "folder", path: Theme.home + "/Videos" },
         { name: "Musik",     icon: "music",  path: Theme.home + "/Musik" },
-        { name: "Schreibtisch", icon: "desktop", path: Theme.home + "/Schreibtisch" }
+        { name: "Schreibtisch", icon: "desktop", path: Global.desktopDirEffective }
     ]
 
     function fileName(p) { return p.substring(p.lastIndexOf("/") + 1); }
