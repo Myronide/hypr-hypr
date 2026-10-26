@@ -224,6 +224,10 @@ while True:
     if ev.type == 33 and ev.xclient.message_type == change_state and ev.xclient.l[0] == 3:   # IconicState
         addr = hypr_address(ev.xclient.window)
         if addr:
+            try:
+                hypr_call("eval DXSnap.noteMinimize('%s')" % addr)      # sofort: die Meldung "maximiert" der App beim Minimieren nicht ausführen
+            except OSError:
+                pass
             print("iconify", addr, flush=True)
     if ev.type == 33 and ev.xclient.message_type == moveresize and ev.xclient.l[2] == 8:     # _NET_WM_MOVERESIZE_MOVE
         try:

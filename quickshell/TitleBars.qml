@@ -84,8 +84,10 @@ Scope {
             const mi = monsByName[w.mon]; if (!mi || mi.ws !== w.ws) continue;
             if (w.w < 120 || w.h < 80) continue;
             const bar = { x: w.x, y: w.y - bh, w: w.w, h: bh };
-            if (bar.y < mi.y + mi.top) continue;                                  // kein Platz über dem Fenster
+            const dragging = Global.tbDrag === w.addr;                            // wird gerade an der Leiste gezogen: Leiste darf nicht verschwinden (sonst geht das Loslassen der Maus verloren)
+            if (!dragging && bar.y < mi.y + mi.top) continue;                      // kein Platz über dem Fenster
             let blocked = false;
+            if (!dragging)
             for (const o of all) if (o !== w && o.ws === w.ws && o.mon === w.mon && o.fs === 0 && o.fh < w.fh && rectsOverlap(bar, o)) { blocked = true; break; }   // nur Fenster, die weiter oben liegen (zuletzt benutzt), verdecken die Leiste
             if (blocked) continue;
             out.push(w);
@@ -119,7 +121,8 @@ Scope {
             required property string modelData
             readonly property var live: tb.byAddr[modelData] || ({ addr: modelData, x: 0, y: 0, w: 100, h: 100, mon: "", title: "", cls: "", focus: false })
             readonly property var d: live
-            readonly property var scr: Quickshell.screens.find(s => s.name === d.mon) || null
+            readonly property var scr: dragScreen || Quickshell.screens.find(s => s.name === d.mon) || null     // beim Ziehen bleibt die Leiste auf ihrem Bildschirm (Fläche neu anlegen würde das Loslassen verschlucken)
+            property var dragScreen: null
             screen: scr
             visible: scr !== null
             anchors.top: true
@@ -156,6 +159,7 @@ Scope {
             }
             Rectangle {
                 id: barRect
+                opacity: win.dragScreen && win.d.mon !== win.dragScreen.name ? 0 : 1      // Fenster ist auf einen anderen Bildschirm gezogen: Leiste solange unsichtbar
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
                 height: tb.bh
                 topLeftRadius: tb.rounding; topRightRadius: tb.rounding
@@ -171,6 +175,7 @@ Scope {
                     onPressed: mouse => {
                         if (mouse.button !== Qt.LeftButton) return;
                         Global.hypr("hl.dsp.focus({ " + win.sel + " })");
+                        win.dragScreen = win.scr;
                         Global.tbDrag = win.addr;
                         dragProc.running = true;                    // der Helfer nimmt das Fenster mit dem Zeiger mit
                     }
@@ -183,7 +188,7 @@ Scope {
                     id: dragProc
                     command: [Theme.home + "/.local/bin/dx-window-drag", win.addr]
                 }
-                Timer { id: dragEnd; interval: 250; onTriggered: { if (Global.tbDrag === win.addr) Global.tbDrag = ""; } }
+                Timer { id: dragEnd; interval: 250; onTriggered: { win.dragScreen = null; if (Global.tbDrag === win.addr) Global.tbDrag = ""; } }
 
                 Image {
                     id: ico

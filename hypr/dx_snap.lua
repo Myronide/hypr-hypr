@@ -244,12 +244,26 @@ function M.toggleMaxAddr(address)
     end
 end
 
+-- Beim Minimieren melden manche Apps (Brave über XWayland) kurz selbst "maximiert", bevor das Fenster auf den Desktop "minimized" verschoben
+-- ist. Die Shell/der X11-Wächter melden das Minimieren vorher hierher; solange wird jede Maximieren-Meldung des Fensters nur zurückgenommen.
+local minimizing = {}
+function M.noteMinimize(address)
+    minimizing[address] = os.clock() + 2.0
+end
+
 -- Maximieren-Knopf der App (xdg set_maximized, auch X11): Hyprland meldet "fullscreen" mit Zustand 1.
 -- Das wird in eigenes Maximieren umgewandelt (an/aus je nach aktuellem Zustand).
 hl.on("window.fullscreen", function(w)
     pcall(function()
         if w ~= nil and w.fullscreen == 1 then
             local a = "address:" .. w.address
+            -- Minimierte Fenster (Desktop "minimized"): Apps melden beim Minimieren/Wiederholen selbst "maximiert" – das nur zurücknehmen,
+            -- nicht ausführen (sonst: Minimieren-Knopf -> Fenster wird maximiert und dann erst minimiert)
+            local function parked(x) return x == nil or x.workspace == nil or x.workspace.id == nil or x.workspace.id < 1 or x.workspace.name == "minimized" end
+            if (minimizing[w.address] or 0) > os.clock() or parked(w) or (hl.get_active_window() ~= nil and hl.get_active_window().address ~= w.address) then
+                hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
+                return
+            end
             local wasMax = (maxState[w.address] == true) or M.isMaxed(w)     -- Zustand VOR dem Knopfdruck
             -- Ohne Animation und sofort: sonst sieht man erst Hyprlands Maximieren, dann die kleine App-Größe, dann unser Ergebnis (Flackern)
             hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "1" }))
@@ -262,6 +276,7 @@ hl.on("window.fullscreen", function(w)
             local function apply()
                 for _, ww in ipairs(hl.get_windows()) do
                     if ww.address == addr then
+                        if parked(ww) then return end
                         if wasMax then if M.isMaxed(ww) then M.unMax(ww) end else M.setMax(ww) end   -- nicht doppelt wiederherstellen
                         return
                     end
@@ -271,6 +286,7 @@ hl.on("window.fullscreen", function(w)
             hl.timer(function() pcall(function()
                 for _, ww in ipairs(hl.get_windows()) do
                     if ww.address == addr then
+                        if parked(ww) then return end
                         if wasMax then if M.isMaxed(ww) then M.unMax(ww) end else if not M.isMaxed(ww) then M.setMax(ww) end end
                         return
                     end

@@ -740,6 +740,7 @@ Singleton {
         hypr("hl.dsp.window.move({ window = \"address:" + a + "\", workspace = \"" + minWs + "\", follow = false })");
     }
     function minimizeAddr(a) {
+        hyprEval("DXSnap.noteMinimize('" + a + "')");     // Maximieren-Meldungen der App während des Minimierens ignorieren (kein Maximieren-Flackern)
         if (minQueue.indexOf(a) < 0) minQueue.push(a);
         nextMin();
     }
