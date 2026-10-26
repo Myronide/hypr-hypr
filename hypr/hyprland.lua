@@ -450,6 +450,10 @@ hl.window_rule({ name = "games-steam", match = { class = "^(steam_app_.*|gamesco
 hl.window_rule({ name = "games-content", match = { content = "game" },
     float = false, fullscreen = true, workspace = "10", no_shortcuts_inhibit = true, idle_inhibit = "fullscreen" })
 
+-- X11-Apps (Brave, VS Code, Discord …): ihre Maximieren-Wünsche führt Hyprland nicht selbst aus. Der X11-Wächter der Shell liest sie
+-- mit, und dx_snap entscheidet mit seinem eigenen Zustand (kein Aufblitzen, kein Maximieren beim Minimieren).
+hl.window_rule({ name = "dx-x11-own-maximize", match = { xwayland = true }, suppress_event = "maximize" })
+
 hl.window_rule({
     name  = "fix-xwayland-drags",
     match = { class = "^$", title = "^$", xwayland = true, float = true, fullscreen = false, pin = false },

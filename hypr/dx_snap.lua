@@ -129,16 +129,36 @@ function M.snapWindow(w, zone)
     zoneOf[w.address] = (zone ~= "restore") and zone or nil
 end
 
--- ---------- Eigenes Maximieren ----------
--- Hyprlands "maximized" setzt ein Vollbild-Flag am Desktop; dann gehen Mausklicks an das maximierte Fenster,
--- obwohl ein anderes darüber liegt. Deshalb: maximieren = normales schwebendes Fenster in Arbeitsflächengröße.
+-- ---------- Eigenes Maximieren: ein eigener Zustand je Fenster ----------
+-- Hyprlands "maximized" setzt ein Vollbild-Flag am Desktop; dann gehen Mausklicks an das maximierte Fenster, obwohl ein anderes darüber
+-- liegt. Deshalb ist maximieren hier: schwebendes Fenster in Arbeitsflächengröße. Der Zustand gehört UNS (Tabelle maxed), nicht der App:
+--  * Der App wird er nur mitgeteilt (fullscreen_state: intern 0, für die App 1), damit ihr Knopf "Wiederherstellen" zeigt und sie
+--    nicht ständig neu "maximieren" verlangt.
+--  * Wünsche der App (Maximieren-/Wiederherstellen-Knopf, Doppelklick auf ihre Titelleiste) zählen nur, wenn kurz vorher wirklich
+--    geklickt wurde. Alles andere (Steam maximiert sich selbst, Brave meldet beim Minimieren "maximiert" …) wird zurückgenommen.
+--  * Minimieren/Zurückholen (Shell) merkt sich nichts an der Geometrie der App ab: nach dem Zurückholen wird unser Zustand neu angewendet.
 local userMax = {}   -- address -> { x, y, w, h } Geometrie vor dem Maximieren
+local maxed = {}     -- address -> true: von uns maximiert (die einzige Wahrheit)
+local normal = {}    -- address -> letzte normale Geometrie (für Apps, die sich vor unserem Ereignis schon selbst vergrößert haben)
+local quietUntil = {} -- address -> bis wann App-Wünsche ignoriert werden (Minimieren/Zurückholen)
+local lastPressT = -10
+local quietAll = -10     -- bis wann App-Wünsche ALLER Fenster ignoriert werden (ein Minimieren ist unterwegs, Fenster noch unbekannt)
+
+-- Echte Uhrzeit in Sekunden (os.clock wäre die Rechenzeit von Hyprland und läuft viel langsamer)
+local function now()
+    local f = io.open("/proc/uptime", "r")
+    if not f then return os.time() end
+    local s = f:read("*n")
+    f:close()
+    return s or os.time()
+end
+function M.notePress() lastPressT = now() end
 
 local function nearArea(w)
     local m = w.monitor or hl.get_active_monitor()
     if m == nil then return false end
     local x, y, aw, ah = area(m, w)
-    return math.abs(w.size.x - aw) < 12 and math.abs(w.size.y - ah) < 12
+    return math.abs(w.size.x - aw) < 12 and math.abs(w.size.y - ah) < 12 and math.abs(w.at.x - x) < 12 and math.abs(w.at.y - y) < 12
 end
 
 -- Größe vor dem Maximieren (für die Fenstergrößen-Erinnerung dx_sizes), sonst nil
@@ -149,26 +169,33 @@ function M.maxedOrig(w)
 end
 
 function M.isMaxed(w)
-    return w ~= nil and userMax[w.address] ~= nil and nearArea(w)
+    return w ~= nil and maxed[w.address] == true
 end
 
--- Letzte "normale" Geometrie jedes Fensters (nicht maximiert, kein Vollbild): Drückt jemand den Maximieren-Knopf einer App, hat sie
--- die Größe oft schon geändert, bevor wir das Ereignis sehen. Dann nehmen wir diese gemerkte Größe als "vor dem Maximieren".
-local normal = {}
-local maxState = {}   -- address -> war das Fenster (vor dem Knopfdruck) maximiert? Hyprland ändert die Größe schon vor dem Ereignis
-local function noteNormal()
-    pcall(function()
-        for _, w in ipairs(hl.get_windows()) do
-            if w.mapped and w.floating and w.fullscreen == 0 then maxState[w.address] = M.isMaxed(w) end
-            if w.mapped and w.floating and w.fullscreen == 0 and w.workspace ~= nil and w.workspace.id ~= nil and w.workspace.id > 0
-               and w.monitor ~= nil and w.size.x > 100 and w.size.y > 60 and not nearArea(w) then
-                normal[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
-            end
-        end
-    end)
+local function winByAddr(address)
+    for _, w in ipairs(hl.get_windows()) do
+        if w.address == address then return w end
+    end
+    return nil
 end
-hl.timer(noteNormal, { timeout = 400, type = "repeat" })
-hl.on("window.destroy", function(w) pcall(function() if w ~= nil then normal[w.address] = nil end end) end)
+
+local function parked(w)
+    return w == nil or w.workspace == nil or w.workspace.id == nil or w.workspace.id < 1 or w.workspace.name == "minimized"
+end
+
+-- Der App unseren Zustand mitteilen (ohne dass Hyprland selbst maximiert: intern 0)
+local toldAt = {}
+local function tellApp(address, on)
+    toldAt[address] = now()
+    hl.dispatch(hl.dsp.window.fullscreen_state({ window = "address:" .. address, internal = 0, client = on and 1 or 0 }))
+end
+
+local function noAnimFor(address, ms)
+    local a = "address:" .. address
+    hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "1" }))
+    hl.timer(function() pcall(function() hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "0" })) end) end,
+             { timeout = ms or 700, type = "oneshot" })
+end
 
 local function applyArea(w)
     local m = w.monitor or hl.get_active_monitor()
@@ -178,29 +205,52 @@ local function applyArea(w)
     hl.dispatch(hl.dsp.window.move({ window = a, x = x, y = y, relative = false }))
 end
 
+-- Letzte normale Geometrie mitschreiben; wer ein maximiertes Fenster von Hand verkleinert/verschiebt, hat es damit "wiederhergestellt"
+local drift = {}
+local function watchStates()
+    pcall(function()
+        for _, w in ipairs(hl.get_windows()) do
+            if w.mapped and w.floating and w.fullscreen == 0 and not parked(w) and w.monitor ~= nil and w.size.x > 100 and w.size.y > 60 then
+                local near = nearArea(w)
+                if maxed[w.address] then
+                    if near then drift[w.address] = nil
+                    else
+                        drift[w.address] = (drift[w.address] or 0) + 1
+                        if drift[w.address] >= 3 then                  -- seit gut einer Sekunde nicht mehr in Maximal-Größe: gilt als normal
+                            maxed[w.address], userMax[w.address], drift[w.address] = nil, nil, nil
+                            tellApp(w.address, false)
+                        end
+                    end
+                elseif not near then
+                    normal[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
+                end
+            end
+        end
+    end)
+end
+
 function M.setMax(w)
     if w == nil then return end
     local a = "address:" .. w.address
-    if w.fullscreen == 1 then hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" })) end
     if w.fullscreen == 2 or w.fullscreen == 3 then return end   -- echtes Vollbild nicht anfassen
     if tiling ~= nil and tiling.isTiled(w) then tiling.setMaxed(w.address, true) end
-    if userMax[w.address] == nil or not nearArea(w) then
+    if not maxed[w.address] then
         local o = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
-        if nearArea(w) and normal[w.address] ~= nil then o = normal[w.address] end   -- App hat sich schon selbst vergrößert: gemerkte Größe nehmen
+        if (w.fullscreen == 1 or nearArea(w)) and normal[w.address] ~= nil then o = normal[w.address] end   -- App hat sich schon selbst vergrößert
         userMax[w.address] = o
     end
+    maxed[w.address], drift[w.address] = true, nil
     if not w.floating then hl.dispatch(hl.dsp.window.float({ window = a, action = "set" })) end   -- "set" schaltet in dieser Version um: nur wenn nötig
-    maxState[w.address] = true
+    tellApp(w.address, true)
     applyArea(w)
 end
 
 function M.unMax(w)
     if w == nil then return end
     local a = "address:" .. w.address
-    if w.fullscreen == 1 then hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" })) end
-    local o = userMax[w.address]
-    userMax[w.address] = nil
-    maxState[w.address] = false
+    local o = userMax[w.address] or normal[w.address]
+    maxed[w.address], userMax[w.address], drift[w.address] = nil, nil, nil
+    tellApp(w.address, false)
     if tiling ~= nil then tiling.setMaxed(w.address, false) end
     if tiling ~= nil and tiling.isTiled(w) then
         tiling.retile(w.workspace and w.workspace.id)
@@ -214,89 +264,201 @@ function M.unMax(w)
     end
 end
 
+-- Der "Wiederherstellen"-Knopf einer App ändert nur ihren eigenen Zustand (für die App nicht mehr maximiert); Hyprland meldet dafür kein
+-- Ereignis. Deshalb nach jedem Klick (und regelmäßig) vergleichen: hat die App ihn geändert? Nach einem Klick ins aktive Fenster gilt
+-- das als Wunsch des Nutzers, sonst wird unser Zustand wiederhergestellt.
+local function syncClient(afterClick)
+    pcall(function()
+        local act = hl.get_active_window()
+        local t = now()
+        for _, w in ipairs(hl.get_windows()) do
+            local a = w.address
+            if w.mapped and (w.fullscreen or 0) == 0 and not parked(w) and t - (toldAt[a] or -10) > 0.3 then
+                local fc = w.fullscreen_client or 0
+                if maxed[a] and fc == 0 then
+                    if afterClick and act ~= nil and act.address == a and (quietUntil[a] or 0) < t and quietAll < t then
+                        noAnimFor(a, 600)
+                        M.unMax(w)
+                    else
+                        tellApp(a, true)
+                    end
+                elseif not maxed[a] and fc == 1 then
+                    tellApp(a, false)
+                end
+            end
+        end
+    end)
+end
+function M.afterClick()
+    hl.timer(function() syncClient(true) end, { timeout = 80, type = "oneshot" })
+    hl.timer(function() syncClient(true) end, { timeout = 300, type = "oneshot" })
+end
+hl.timer(function() watchStates(); if now() - lastPressT > 1.2 then syncClient(false) end end, { timeout = 400, type = "repeat" })
+
 -- Ein maximiertes Fenster wird an der Titelleiste gezogen (Shell-Leiste, XWayland-Apps): erst auf die alte Größe zurück, und zwar so,
 -- dass der Zeiger im gleichen Verhältnis auf der Leiste bleibt wie vorher (wie unter Windows). cx/cy = Zeigerposition.
 function M.restoreForDrag(address, cx, cy)
-    for _, w in ipairs(hl.get_windows()) do
-        if w.address == address then
-            if not M.isMaxed(w) then return end
-            local o = userMax[address]
-            local fx = (cx - w.at.x) / math.max(1, w.size.x)
-            local oy = cy - w.at.y
-            M.unMax(w)
-            if o ~= nil then
-                hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, x = math.floor(cx - fx * o.w), y = cy - oy, relative = false }))
-            end
-            return
-        end
+    local w = winByAddr(address)
+    if w == nil or not M.isMaxed(w) then return end
+    local o = userMax[address] or normal[address]
+    local fx = (cx - w.at.x) / math.max(1, w.size.x)
+    local oy = cy - w.at.y
+    noAnimFor(address, 400)
+    M.unMax(w)
+    if o ~= nil then
+        hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, x = math.floor(cx - fx * o.w), y = cy - oy, relative = false }))
     end
 end
 
 function M.toggleMax(w)
     w = w or hl.get_active_window()
     if w == nil then return end
+    noAnimFor(w.address, 500)
     if M.isMaxed(w) then M.unMax(w) else M.setMax(w) end
 end
 
 function M.toggleMaxAddr(address)
-    for _, w in ipairs(hl.get_windows()) do
-        if w.address == address then M.toggleMax(w); return end
-    end
+    M.toggleMax(winByAddr(address))
 end
 
--- Beim Minimieren melden manche Apps (Brave über XWayland) kurz selbst "maximiert", bevor das Fenster auf den Desktop "minimized" verschoben
--- ist. Die Shell/der X11-Wächter melden das Minimieren vorher hierher; solange wird jede Maximieren-Meldung des Fensters nur zurückgenommen.
-local minimizing = {}
+-- Minimieren/Zurückholen (von der Shell und dem X11-Wächter gemeldet). Beide geben ein leeres Dispatch-Ergebnis zurück, damit die
+-- Shell sie direkt über den Hyprland-Socket aufrufen kann ("dispatch DXSnap.…").
 function M.noteMinimize(address)
-    minimizing[address] = os.clock() + 2.0
+    quietUntil[address] = now() + 2.0
+    return hl.dsp.no_op()
+end
+-- Der X11-Wächter sieht "Minimieren" sofort, braucht aber einen Moment, um das Fenster zu finden: so lange gilt Ruhe für alle
+function M.noteMinimizeAny()
+    quietAll = now() + 0.6
+    return hl.dsp.no_op()
 end
 
--- Maximieren-Knopf der App (xdg set_maximized, auch X11): Hyprland meldet "fullscreen" mit Zustand 1.
--- Das wird in eigenes Maximieren umgewandelt (an/aus je nach aktuellem Zustand).
-hl.on("window.fullscreen", function(w)
-    pcall(function()
-        if w ~= nil and w.fullscreen == 1 then
-            local a = "address:" .. w.address
-            -- Minimierte Fenster (Desktop "minimized"): Apps melden beim Minimieren/Wiederholen selbst "maximiert" – das nur zurücknehmen,
-            -- nicht ausführen (sonst: Minimieren-Knopf -> Fenster wird maximiert und dann erst minimiert)
-            local function parked(x) return x == nil or x.workspace == nil or x.workspace.id == nil or x.workspace.id < 1 or x.workspace.name == "minimized" end
-            if (minimizing[w.address] or 0) > os.clock() or parked(w) or (hl.get_active_window() ~= nil and hl.get_active_window().address ~= w.address) then
-                hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
+-- Nach dem Zurückholen: Geometrie nach UNSEREM Zustand setzen – maximiert bleibt maximiert, sonst die Geometrie von vor dem Minimieren
+function M.afterRestore(address, x, y, ww, hh)
+    quietUntil[address] = now() + 2.0
+    local function apply()
+        pcall(function()
+            local w = winByAddr(address)
+            if w == nil or parked(w) then return end
+            if maxed[address] then
+                tellApp(address, true)
+                if not nearArea(w) then applyArea(w) end
+            elseif x ~= nil and ww ~= nil and ww > 0 then
+                local a = "address:" .. address
+                if math.abs(w.size.x - ww) > 3 or math.abs(w.size.y - hh) > 3 then hl.dispatch(hl.dsp.window.resize({ window = a, x = ww, y = hh, relative = false })) end
+                if math.abs(w.at.x - x) > 3 or math.abs(w.at.y - y) > 3 then hl.dispatch(hl.dsp.window.move({ window = a, x = x, y = y, relative = false })) end
+            end
+        end)
+    end
+    apply()
+    hl.timer(apply, { timeout = 150, type = "oneshot" })     -- Apps ändern ihre Größe beim Wiederauftauchen manchmal selbst
+    hl.timer(apply, { timeout = 500, type = "oneshot" })
+    return hl.dsp.no_op()
+end
+
+-- Maximieren-/Wiederherstellen-Wünsche der App (xdg set/unset_maximized, X11 _NET_WM_STATE): Hyprland meldet "fullscreen".
+-- Wunsch einer App (Maximieren-/Wiederherstellen-Knopf, Doppelklick auf ihre Titelleiste) entscheiden. want: true/false.
+-- Gezählt wird er nur nach einem echten Klick und wenn kein Minimieren unterwegs ist. Entschieden wird nach 45 ms: Brave schickt beim
+-- Minimieren zuerst "maximieren" und gleich danach "minimieren" – so wird dabei nie sichtbar maximiert.
+local function appWants(address, want)
+    noAnimFor(address, 800)
+    local function decide()
+        pcall(function()
+            local t = now()
+            local ww = winByAddr(address)
+            if ww == nil or parked(ww) then return end
+            local byUser = (t - lastPressT) < 1.0 and (quietUntil[address] or 0) < t and quietAll < t
+            if not byUser then                                     -- kein Klick dahinter: unser Zustand bleibt
+                tellApp(address, maxed[address] == true)
+                if maxed[address] and not nearArea(ww) then applyArea(ww) end
                 return
             end
-            local wasMax = (maxState[w.address] == true) or M.isMaxed(w)     -- Zustand VOR dem Knopfdruck
-            -- Ohne Animation und sofort: sonst sieht man erst Hyprlands Maximieren, dann die kleine App-Größe, dann unser Ergebnis (Flackern)
-            hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "1" }))
-            hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
-            if wasMax then M.unMax(w) else M.setMax(w) end
-            hl.timer(function() pcall(function() hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "0" })) end) end, { timeout = 800, type = "oneshot" })
-            -- Die App (z. B. Brave über XWayland) reagiert auf das Zurücknehmen mit einer eigenen Größenänderung.
-            -- Erst danach das eigene Maximieren/Wiederherstellen anwenden, sonst springt das Fenster wieder klein.
-            local addr = w.address
-            local function apply()
-                for _, ww in ipairs(hl.get_windows()) do
-                    if ww.address == addr then
-                        if parked(ww) then return end
-                        if wasMax then if M.isMaxed(ww) then M.unMax(ww) end else M.setMax(ww) end   -- nicht doppelt wiederherstellen
-                        return
+            if want and not maxed[address] then M.setMax(ww)
+            elseif not want and maxed[address] then M.unMax(ww)
+            else tellApp(address, maxed[address] == true) end
+            -- Manche Apps ändern danach noch einmal selbst ihre Größe: unseren Zustand kurz darauf erneut durchsetzen
+            local function reassert()
+                pcall(function()
+                    local w3 = winByAddr(address)
+                    if w3 == nil or parked(w3) then return end
+                    if maxed[address] then
+                        if not nearArea(w3) then applyArea(w3) end
+                        if (w3.fullscreen_client or 0) ~= 1 or (w3.fullscreen or 0) ~= 0 then tellApp(address, true) end
+                    elseif (w3.fullscreen or 0) ~= 0 or (w3.fullscreen_client or 0) ~= 0 then
+                        tellApp(address, false)
                     end
-                end
+                end)
             end
-            hl.timer(apply, { timeout = 140, type = "oneshot" })
-            hl.timer(function() pcall(function()
-                for _, ww in ipairs(hl.get_windows()) do
-                    if ww.address == addr then
-                        if parked(ww) then return end
-                        if wasMax then if M.isMaxed(ww) then M.unMax(ww) end else if not M.isMaxed(ww) then M.setMax(ww) end end
-                        return
-                    end
-                end
-            end) end, { timeout = 420, type = "oneshot" })
-        end
+            hl.timer(reassert, { timeout = 150, type = "oneshot" })
+            hl.timer(reassert, { timeout = 450, type = "oneshot" })
+        end)
+    end
+    hl.timer(decide, { timeout = 45, type = "oneshot" })
+end
+
+-- X11-Apps: Hyprland soll ihre Maximieren-Wünsche gar nicht erst selbst ausführen (Fensterregel suppress_event, siehe hyprland.lua);
+-- der X11-Wächter (dx-x11-iconify) liest sie mit und meldet sie hierher. action: "add" | "remove" | "toggle"
+function M.appRequest(address, action)
+    pcall(function()
+        local want = (action == "add") or (action == "toggle" and not maxed[address])
+        appWants(address, want)
+    end)
+    return hl.dsp.no_op()
+end
+
+-- Wayland-Apps (xdg set/unset_maximized): Hyprland meldet "fullscreen"
+hl.on("window.fullscreen", function(w)
+    pcall(function()
+        if w == nil then return end
+        local address = w.address
+        local fi, fc = w.fullscreen or 0, w.fullscreen_client or 0
+        if fi == 2 or fi == 3 then return end                       -- echtes Vollbild: Sache von Hyprland und der App
+        local want
+        if fi == 1 then want = true                                  -- App will maximiert werden
+        elseif fc == 0 and maxed[address] then want = false           -- App will nicht mehr maximiert sein (ihr Wiederherstellen-Knopf)
+        elseif fc == 1 and not maxed[address] then want = nil         -- App behauptet maximiert, ist es bei uns aber nicht
+        else return end                                               -- passt zu unserem Zustand (z. B. unser eigenes tellApp)
+        -- Hyprland hat bei fi == 1 schon selbst maximiert: sofort zurücknehmen (Hyprland stellt dabei die alte Größe wieder her)
+        noAnimFor(address, 800)
+        tellApp(address, maxed[address] == true)
+        if want ~= nil then appWants(address, want) end
     end)
 end)
-hl.on("window.destroy", function(w) pcall(function() if w ~= nil then userMax[w.address] = nil end end) end)
-hl.on("window.close", function(w) pcall(function() if w ~= nil then userMax[w.address] = nil end end) end)
+
+-- ---------- Minimieren / Zurückholen (die Shell ruft das direkt über den Hyprland-Socket auf) ----------
+local minGeo = {}    -- address -> { x, y, w, h } Geometrie beim Minimieren (nur für nicht maximierte Fenster nötig)
+function M.minimize(address)
+    pcall(function()
+        quietUntil[address] = now() + 2.0
+        local w = winByAddr(address)
+        if w == nil or parked(w) then return end
+        if not maxed[address] then minGeo[address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y } end
+        noAnimFor(address, 1000)
+        hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, workspace = "name:minimized", follow = false }))
+    end)
+    return hl.dsp.no_op()
+end
+
+function M.unminimize(address, ws)
+    pcall(function()
+        quietUntil[address] = now() + 2.0
+        noAnimFor(address, 1000)
+        hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, workspace = ws, follow = false }))
+        local g = minGeo[address]
+        M.afterRestore(address, g and g.x, g and g.y, g and g.w, g and g.h)
+    end)
+    return hl.dsp.no_op()
+end
+
+local function forget(w)
+    pcall(function()
+        if w == nil then return end
+        local a = w.address
+        userMax[a], maxed[a], normal[a], quietUntil[a], drift[a], minGeo[a] = nil, nil, nil, nil, nil, nil
+    end)
+end
+hl.on("window.destroy", forget)
+hl.on("window.close", forget)
 
 -- ---------- Tastatur: Windows-artige Ketten ----------
 function M.arrow(dir)
@@ -403,7 +565,7 @@ local function tick()
         local mon = c and monitorAt(c.x, c.y)
         if mon ~= nil and #Z.zones(mon.name) > 0 then
             local idx, z = Z.zoneAt(mon.name, c.x, c.y)
-            press.zoneIdx, press.zoneMon, press.zoneT = idx, mon.name, os.clock()
+            press.zoneIdx, press.zoneMon, press.zoneT = idx, mon.name, now()
             if idx ~= nil then
                 writePreview(string.format("zones %s %d %d %d %d %d", mon.name, idx, z.x, z.y, z.w, z.h))
             else
@@ -419,7 +581,7 @@ local function tick()
         return
     end
     -- angedocktes Fenster wird gezogen: ein anderes angedocktes Fenster unter dem Zeiger gleitet live auf dessen alten Platz
-    if press.snaps ~= nil and press.snaps[w.address] ~= nil and os.clock() - (press.lastSwap or 0) > 0.25 then
+    if press.snaps ~= nil and press.snaps[w.address] ~= nil and now() - (press.lastSwap or 0) > 0.25 then
         local c = hl.get_cursor_pos()
         if c ~= nil then
             for _, o in ipairs(hl.get_windows()) do
@@ -434,7 +596,7 @@ local function tick()
                     hl.dispatch(hl.dsp.window.move({ window = oa, x = x, y = y, relative = false }))
                     press.snaps[o.address], press.snaps[w.address] = wz, oz     -- o sitzt jetzt in w's Zone, w "gehört" zu o's alter Zone
                     zoneOf[o.address] = wz
-                    press.lastSwap = os.clock()
+                    press.lastSwap = now()
                     break
                 end
             end
@@ -448,6 +610,7 @@ local function tick()
 end
 
 local function onPress()
+    M.notePress()
     local pos = {}
     for _, w in ipairs(hl.get_windows()) do
         if w.mapped and w.floating then pos[w.address] = { x = w.at.x, y = w.at.y, ws = w.workspace and w.workspace.id } end
@@ -483,7 +646,7 @@ local function finish()
     press = nil
     if w == nil then return end
     -- losgelassen über einer eigenen Zone (Shift war beim Ziehen gedrückt): einrasten
-    if Z ~= nil and p.zoneIdx ~= nil and p.zoneT ~= nil and os.clock() - p.zoneT < 0.45 then
+    if Z ~= nil and p.zoneIdx ~= nil and p.zoneT ~= nil and now() - p.zoneT < 0.45 then
         if tiling ~= nil and tiling.isTiled(w) then tiling.release(w) end
         Z.place(w, p.zoneIdx)
         return
@@ -512,6 +675,7 @@ end
 
 local function onRelease()
     markRelease()
+    M.afterClick()
     -- Hyprland beendet das Ziehen erst nach dem Loslassen: kurz warten, dann auswerten
     hl.timer(finish, { timeout = 40, type = "oneshot" })
 end

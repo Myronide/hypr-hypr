@@ -704,82 +704,28 @@ Singleton {
         for (const h of Hyprland.toplevels.values) if (addressOf(h) === a) return h;
         return null;
     }
-    // Zustand (Desktop, Position, Größe, maximiert?) kommt live von Hyprland, nicht aus dem evtl. veralteten Shell-Cache
-    property var minQueue: []
-    Process {
-        id: minProbe
-        property string addr: ""
-        command: ["hyprctl", "-j", "clients"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const a = minProbe.addr;
-                try {
-                    for (const c of JSON.parse(text)) {
-                        if (c.address !== a) continue;
-                        if (c.workspace && c.workspace.name !== root.minWsName) {
-                            const all = Object.assign({}, root.minState);
-                            all[a] = { ws: c.workspace.id, x: c.at[0], y: c.at[1], w: c.size[0], h: c.size[1], fs: c.fullscreen || 0 };
-                            root.minState = all;
-                        }
-                        break;
-                    }
-                } catch (e) {}
-                root.doMinimize(a);
-                nextMinTimer.restart();
-            }
-        }
-    }
-    Timer { id: nextMinTimer; interval: 60; onTriggered: root.nextMin() }
-    function nextMin() {
-        if (minQueue.length === 0 || minProbe.running) return;
-        minProbe.addr = minQueue.shift();
-        minProbe.running = true;
-    }
-    function doMinimize(a) {
-        noAnim(a);
-        hypr("hl.dsp.window.move({ window = \"address:" + a + "\", workspace = \"" + minWs + "\", follow = false })");
-    }
+    // Minimieren macht die Hyprland-Konfiguration selbst (DXSnap.minimize: merkt sich Größe und Zustand, verschiebt ohne Animation) –
+    // direkt über den Hyprland-Socket, ohne vorher hyprctl zu starten. Die Shell merkt sich nur den Desktop für das Zurückholen.
     function minimizeAddr(a) {
-        hyprEval("DXSnap.noteMinimize('" + a + "')");     // Maximieren-Meldungen der App während des Minimierens ignorieren (kein Maximieren-Flackern)
-        if (minQueue.indexOf(a) < 0) minQueue.push(a);
-        nextMin();
+        const h = toplevelByAddr(a);
+        const o = h ? (h.lastIpcObject || {}) : {};
+        if (o.workspace && o.workspace.name !== root.minWsName) {
+            const all = Object.assign({}, root.minState);
+            all[a] = { ws: o.workspace.id };
+            root.minState = all;
+        }
+        hypr("DXSnap.minimize('" + a + "')");
     }
 
-    // Nach dem Zurückholen maximieren manche Apps (z. B. Steam) sich von selbst. War das Fenster vorher nicht
-    // maximiert, wird das für ein paar Sekunden wieder zurückgenommen; war es maximiert, wird es wiederhergestellt.
-    property var guardUntil: ({})        // address -> Zeitstempel (ms)
-    property var guardGeo: ({})          // address -> gemerkte Geometrie
-    function unmaximizeGuarded() {
-        const now = Date.now();
-        for (const a of Object.keys(guardUntil)) {
-            if (guardUntil[a] < now) { delete guardUntil[a]; delete guardGeo[a]; continue; }
-            hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"unset\" })");
-            const st = guardGeo[a];
-            if (st) {
-                hypr("hl.dsp.window.resize({ window = \"address:" + a + "\", x = " + st.w + ", y = " + st.h + ", relative = false })");
-                hypr("hl.dsp.window.move({ window = \"address:" + a + "\", x = " + st.x + ", y = " + st.y + ", relative = false })");
-            }
-        }
-    }
-    Timer { id: guardTimer; interval: 150; onTriggered: root.unmaximizeGuarded() }
+    // Zurückholen: nur Desktop, Fokus und Reihenfolge macht die Shell. Größe und Maximiert-Zustand setzt die Hyprland-Konfiguration
+    // (DXSnap.afterRestore) nach IHREM eigenen Zustand – was die App beim Minimieren mit ihrer Größe gemacht hat, spielt keine Rolle.
     function restoreAddr(a) {
         const st = root.minState[a];
         // Zurück auf den alten Desktop nur, wenn er gerade auf einem Monitor sichtbar ist – sonst auf den aktiven
         let ws = Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : 1;
         if (st) for (const m of Hyprland.monitors.values) if (m.activeWorkspace && m.activeWorkspace.id === st.ws) ws = st.ws;
-        console.log("EV restore " + a + " ws=" + ws + " wasMax=" + (st ? st.fs : "?"));
-        noAnim(a);
-        hypr("hl.dsp.window.move({ window = \"address:" + a + "\", workspace = " + ws + ", follow = false })");
-        if (st && st.fs === 0) {
-            // war nicht maximiert: hat die App sich im Versteck selbst maximiert (Steam), zuerst zurücknehmen
-            hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"unset\" })");
-            hypr("hl.dsp.window.resize({ window = \"address:" + a + "\", x = " + st.w + ", y = " + st.h + ", relative = false })");
-            hypr("hl.dsp.window.move({ window = \"address:" + a + "\", x = " + st.x + ", y = " + st.y + ", relative = false })");
-            root.guardUntil[a] = Date.now() + 8000;      // 8 s: ungewollte Selbst-Maximierung zurücknehmen
-            root.guardGeo[a] = st;
-        } else if (st && st.fs === 1) {
-            hypr("hl.dsp.window.fullscreen({ window = \"address:" + a + "\", mode = \"maximized\", action = \"set\" })");
-        }
+        console.log("EV restore " + a + " ws=" + ws);
+        hypr("DXSnap.unminimize('" + a + "', " + ws + ")");
         hypr("hl.dsp.focus({ window = \"address:" + a + "\" })");
         raise(a);
     }
@@ -814,9 +760,12 @@ Singleton {
 
     property string lastIconify: ""
     property double lastIconifyAt: 0
+    Timer { id: x11Restart; interval: 1500; onTriggered: x11Watch.running = true }
     Process {
+        id: x11Watch
         running: true
         command: [Theme.home + "/.local/bin/dx-x11-iconify"]
+        onExited: (code, status) => { console.log("EV x11-Wächter beendet (" + code + "), starte neu"); x11Restart.restart(); }   // nie ohne Wächter bleiben
         stdout: SplitParser {
             onRead: line => {
                 const m = line.match(/^iconify (0x[0-9a-f]+)/);
@@ -836,7 +785,6 @@ Singleton {
             // Fehlersuche: Ablauf rund ums Minimieren/Maximieren im Shell-Log festhalten (qs -c draconyx log | grep EV)
             if (["minimized", "fullscreen", "movewindowv2", "openwindow", "changefloatingmode", "windowtitlev2"].indexOf(event.name) >= 0)
                 console.log("EV " + event.name + " " + event.data);
-            if (event.name === "fullscreen" && String(event.data) === "1") guardTimer.restart();
             // Sobald die Engine ihre Fläche öffnet, liegt sie über dem Desktop -> sofort den Desktop neu darüberlegen
             if (event.name === "openlayer" && String(event.data) === "linux-wallpaperengine") weRemapStart.restart();
             // Nie auf dem Versteck-Desktop landen: Hyprland fokussiert nach dem Minimieren manchmal das versteckte Fenster
