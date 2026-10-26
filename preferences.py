@@ -29,7 +29,7 @@ def save_preferences(p):
  n=lambda key,lo,hi:max(lo,min(hi,int(p[key])))
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p['blur'] else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))
- source+='hl.config({input={follow_mouse=%d}})\n'%(1 if p.get('focus_follows_mouse',False) else 0)
+ if p.get('focus_follows_mouse'):source+='hl.config({input={follow_mouse=1}})\n'   # nur wenn ausdrücklich gewählt; sonst gilt follow_mouse aus hyprland.lua (Hover soll in jedem Fenster ankommen)
 
  try:mo=float(p.get('motion',1) or 0)
  except (TypeError,ValueError):mo=1.0

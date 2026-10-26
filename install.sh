@@ -261,6 +261,11 @@ for f in settings-app preferences.py monitors.py settings.css; do
   [ -L "$A/$f" ] && { rm -f "$A/$f"; echo "    Verknüpfung durch Kopie ersetzt: $f"; CHANGED=$((CHANGED+1)); }
   put "$REPO/$f" "$A/$f" $([ "$f" = settings-app ] && echo 755 || echo 644)
 done
+# Ältere Aurora-Versionen schrieben "follow_mouse=0" in preferences.lua und überstimmten damit hyprland.lua (follow_mouse=2):
+# Danach kam in unfokussierten Fenstern kein Hover mehr an (Schaltflächen reagieren nicht, Spiele sehen die Maus nicht).
+if grep -q 'follow_mouse=0' "$A/preferences.lua" 2>/dev/null; then
+  sed -i '/follow_mouse=0/d' "$A/preferences.lua"; echo "    follow_mouse=0 aus preferences.lua entfernt (Hover in allen Fenstern)"; CHANGED=$((CHANGED+1))
+fi
 # Läuft noch eine alte Einstellungen-App, würde ein neuer Start nur zu ihr zurückspringen: beenden
 for p in $(pgrep -x python3 || true); do
   tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'aurora/settings-app' && kill "$p" 2>/dev/null || true
