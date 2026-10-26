@@ -76,6 +76,8 @@ for f in "$CONF/draconyx/terminal" "$CONF/draconyx/window-mode" "$CONF/draconyx/
   backup_file "$f"
 done
 [ -d "$BACKUP" ] && say "Einstellungen gesichert in ${BACKUP/#$HOME/~}"
+# Zusätzlich die Shell-Einstellungen als Ganzes festhalten: nach dem Neustart der Shell wird alles Abweichende zurückgeschrieben
+python3 -I "$HERE/bin/dx-settings-guard" snapshot >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 1. Pakete
 # Jeder Eintrag: "Name" oder "Name|Alternative|…" (je nach Distribution heißt ein Paket anders, z. B. ttf-inter / inter-font).
@@ -397,9 +399,11 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
       for _ in $(seq 1 20); do qs -c draconyx ipc show >/dev/null 2>&1 && break; sleep 0.5; done
       if qs -c draconyx ipc show >/dev/null 2>&1; then
         say "Shell läuft"
+        sleep 6; r="$(python3 -I "$HERE/bin/dx-settings-guard" restore 2>&1 || true)"; [ -n "$r" ] && [ "$r" != "nichts zurückzusetzen" ] && warn "$r"
         sleep 3; qs -c draconyx ipc call shell weReapply >/dev/null 2>&1 || true    # Wallpaper Engine mit den gespeicherten Wallpapern neu starten
       else
         warn "Die Shell ist nicht angesprungen – prüfe:  dx-doctor"
+        python3 -I "$HERE/bin/dx-settings-guard" restore >/dev/null 2>&1 || true
       fi
     fi
   else

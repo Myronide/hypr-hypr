@@ -122,7 +122,7 @@ PanelWindow {
     // ---------- Icons ----------
     FolderListModel {
         id: folder
-        folder: "file://" + Global.desktopDirEffective
+        folder: Global.desktopDirReady ? "file://" + Global.desktopDirEffective : "file:///nonexistent-dx"
         showDirs: true
         showDotAndDotDot: false
         showHidden: false
@@ -164,6 +164,7 @@ PanelWindow {
         id: placeTimer
         interval: 350
         onTriggered: {
+            if (!Global.desktopDirReady || folder.status !== FolderListModel.Ready) return;     // Ordner noch nicht aufgelöst: nichts anfassen (sonst würden alle Plätze verworfen)
             if (!desk.showIcons || desk.mon !== ((Global.desktopMonitors || [])[0] || desk.mon)) return;
             const names = [];
             for (let i = 0; i < folder.count; i++) names.push(folder.get(i, "fileName"));

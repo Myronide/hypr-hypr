@@ -123,8 +123,13 @@ Singleton {
         path: Theme.home + "/.local/state/draconyx/settings.json"
         watchChanges: true
         onFileChanged: reload()
-        onAdapterUpdated: writeAdapter()
-        onLoadFailed: writeAdapter()
+        // Schutz vor dem Zurücksetzen der Einstellungen: nie vor dem ersten erfolgreichen Laden schreiben, und bei einem Ladefehler
+        // einer vorhandenen Datei (halb geschrieben, kurz weg) NICHT die Standardwerte darüberschreiben – nur anlegen, wenn sie fehlt.
+        property bool everLoaded: false
+        onLoaded: everLoaded = true
+        onAdapterUpdated: if (everLoaded) writeAdapter()
+        onLoadFailed: error => { if (error === FileViewError.FileNotFound) { everLoaded = true; writeAdapter(); } else retryTimer.restart(); }
+        Timer { id: retryTimer; interval: 800; onTriggered: settingsFile.reload() }
 
         JsonAdapter {
             id: settings
@@ -150,7 +155,7 @@ Singleton {
             property bool groupApps: true
             property bool showSeconds: false
             property var monitors: ({})          // { "DP-1": { enabled: true, autohide: null } }
-            property var desktopMonitors: ["DP-2"]   // Desktop-Icons nur auf diesen Monitoren
+            property var desktopMonitors: []   // Desktop-Icons nur auf diesen Monitoren (leer = der erste Bildschirm)
             property string wallpaper: ""
             property var barItems: ({})            // { start, search, taskview, code, wallpaper, desktops, apps, tray, system, notifications, clock, showDesktop, mode, settings } an/aus
             property bool showDate: true            // Datum unter der Uhrzeit
@@ -282,7 +287,8 @@ Singleton {
     }
 
     // Desktop-Ordner: eingestellter Ordner, sonst der des Systems (Schreibtisch / Desktop)
-    property string desktopDirAuto: Theme.home + "/Desktop"
+    property string desktopDirAuto: ""
+    readonly property bool desktopDirReady: desktopDir !== "" || desktopDirAuto !== ""
     readonly property string desktopDirEffective: desktopDir !== "" ? desktopDir : desktopDirAuto
     Process {
         id: desktopDirProbe
@@ -1053,6 +1059,12 @@ Singleton {
     function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/dx-update", "apply"]); }
     Timer { interval: 60 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
     Timer { interval: 20000; running: true; onTriggered: root.checkUpdate(false) }      // 20 Sekunden nach dem Start
+
+    // ---------- Einstellungen sichern ----------
+    // Alle 10 Minuten (und kurz nach dem Start) eine Kopie der gültigen settings.json: Notfall-Wiederherstellung (dx-settings-guard restore DATEI).
+    Process { id: settingsSnap; command: [Theme.home + "/.local/bin/dx-settings-guard", "snapshot", Theme.home + "/.local/share/draconyx-backups/settings-auto.json"] }
+    Timer { interval: 10 * 60 * 1000; running: true; repeat: true; onTriggered: { settingsSnap.running = false; settingsSnap.running = true; } }
+    Timer { interval: 60000; running: true; onTriggered: { settingsSnap.running = false; settingsSnap.running = true; } }
 
     // ---------- Terminal-Wächter ----------
     // Es soll immer mindestens ein Terminal installiert sein (auch wenn Ghostty/Kitty deinstalliert wurden). dx-terminal-ensure
