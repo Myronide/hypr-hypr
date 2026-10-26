@@ -460,6 +460,7 @@ hl.window_rule({
 hl.layer_rule({ match = { namespace = "waybar" },                       blur = true, ignore_alpha = 0.2 })
 hl.layer_rule({ match = { namespace = "^draconyx-(bar|start|control|calendar|alttab|taskview|code|windowmenu|grid|notif.*|settings|conn|clipboard|shortcuts|osd|preview)$" }, blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "^draconyx-bar$" },               no_anim = true })   -- Leiste animiert sich selbst
+hl.layer_rule({ match = { namespace = "^draconyx-titlebar$" },          no_anim = true })   -- Titelleisten sitzen fest am Fenster: nicht von unten einfahren
 hl.layer_rule({ match = { namespace = "nwg-drawer" },                   blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "launcher" },                     blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "swaync-control-center" },        blur = true, ignore_alpha = 0.3 })

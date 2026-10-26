@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+# Draconyx: meldet der Shell die Fenster und Bildschirme von Hyprland – jede Änderung als eine JSON-Zeile {"c": [...], "m": [...]}.
+# Wird ungefähr 60 Mal pro Sekunde geprüft, damit die Titelleisten der Shell auch bei schnellen Bewegungen (Ziehen, Andocken,
+# Animationen) fest am Fenster kleben. Läuft nur, solange die Shell es braucht (stirbt mit ihr).
+import json, os, signal, socket, sys, time
+
+def call(cmd):
+    s = socket.socket(socket.AF_UNIX)
+    s.settimeout(1.0)
+    s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
+    s.sendall(cmd.encode())
+    out = b""
+    while True:
+        d = s.recv(65536)
+        if not d:
+            break
+        out += d
+    s.close()
+    return out.decode()
+
+try:
+    import ctypes
+    ctypes.CDLL("libc.so.6").prctl(1, int(signal.SIGTERM))       # PR_SET_PDEATHSIG
+except OSError:
+    pass
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+KEEP = ("address", "class", "title", "at", "size", "floating", "fullscreen", "workspace", "monitor", "pid", "mapped", "hidden", "focusHistoryID")
+last, n = "", 0
+while True:
+    try:
+        cl = [{k: c.get(k) for k in KEEP} for c in json.loads(call("j/clients"))]
+        for c in cl:
+            ws = c.get("workspace") or {}
+            c["workspace"] = {"id": ws.get("id"), "name": ws.get("name")}
+        mo = []
+        cache = globals().get("cache", [])
+        if n % 15 == 0 or not last:       # Bildschirme ändern sich selten
+            mo = [{"id": m["id"], "name": m["name"], "x": m["x"], "y": m["y"], "ws": (m.get("activeWorkspace") or {}).get("id"),
+                   "top": (m.get("reserved") or [0, 0, 0, 0])[1]} for m in json.loads(call("j/monitors"))]
+            cache = mo
+        else:
+            mo = cache
+        line = json.dumps({"c": cl, "m": mo}, separators=(",", ":"))
+        if line != last:
+            print(line, flush=True)
+            last = line
+    except (OSError, ValueError):
+        time.sleep(0.5)
+    n += 1
+    time.sleep(0.007)

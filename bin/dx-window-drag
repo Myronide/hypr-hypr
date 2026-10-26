@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+# Draconyx: verschiebt ein Fenster mit dem Mauszeiger (für die Titelleisten der Shell). dx-window-drag 0x<adresse>
+# Läuft, bis die Shell den Prozess beendet (Maustaste losgelassen). Gibt bei jeder Bewegung "x y" (neue Fensterposition) aus,
+# damit die Leiste live mitgeht. Das Andocken (dx_snap) bemerkt die Bewegung wie bei jedem anderen Ziehen.
+import json, os, signal, socket, sys, time
+
+def call(cmd):
+    s = socket.socket(socket.AF_UNIX)
+    s.settimeout(1.0)
+    s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
+    s.sendall(cmd.encode())
+    out = b""
+    while True:
+        d = s.recv(4096)
+        if not d:
+            break
+        out += d
+    s.close()
+    return out.decode()
+
+try:
+    import ctypes
+    ctypes.CDLL("libc.so.6").prctl(1, int(signal.SIGTERM))       # stirbt mit der Shell
+except OSError:
+    pass
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+addr = sys.argv[1] if len(sys.argv) > 1 else ""
+if not addr.startswith("0x"):
+    addr = "0x" + addr
+win = next((c for c in json.loads(call("j/clients")) if c["address"] == addr), None)
+if not win or not win.get("floating") or win.get("fullscreen"):
+    sys.exit(0)
+cur = json.loads(call("j/cursorpos"))
+ox, oy = int(cur["x"]) - win["at"][0], int(cur["y"]) - win["at"][1]
+last, end = None, time.time() + 120
+while time.time() < end:
+    cur = json.loads(call("j/cursorpos"))
+    pos = (int(cur["x"]) - ox, int(cur["y"]) - oy)
+    if pos != last:
+        call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, pos[0], pos[1]))
+        print(pos[0], pos[1], flush=True)
+        last = pos
+    time.sleep(0.008)

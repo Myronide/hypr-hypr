@@ -12,6 +12,11 @@ Scope {
     id: tb
     readonly property int bh: 30
     readonly property bool enabled: Global.titleBars
+    property int rounding: 12          // Eckenradius der Fenster (Aurora → Fenster)
+    FileView {
+        path: Theme.home + "/.config/hypr/aurora/preferences.json"; watchChanges: true; onFileChanged: reload()
+        onLoaded: { try { const r = parseInt(JSON.parse(text()).rounding); if (r >= 0 && r <= 40) tb.rounding = r; } catch (e) {} }
+    }
 
     // ---------- Apps mit eigener Titelleiste ----------
     property var csd: ({})
@@ -54,37 +59,29 @@ Scope {
     property var wins: []          // Fenster mit Leiste (Live-Daten)
     property var addrs: []         // nur die Adressen: ändert sich nur, wenn Fenster dazukommen/wegfallen (Leisten bleiben bestehen)
     property var byAddr: ({})
-    property var lastPos: ({})      // Adresse -> "x,y,w,h" beim letzten Durchlauf
-    property var movingUntil: ({})  // Adresse -> Zeitpunkt (ms), bis zu dem das Fenster als "in Bewegung" gilt
     function rectsOverlap(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }
+    property var snap: ({ c: [], m: [] })          // letzter Stand von dx-window-watch
     function recompute() {
         if (!enabled) { if (wins.length > 0) wins = []; return; }
         const mons = {};
-        for (const m of Hyprland.monitors.values) {
-            const o = m.lastIpcObject || {};
-            mons[m.name] = { ws: m.activeWorkspace ? m.activeWorkspace.id : -999, top: (o.reserved || [0, 0, 0, 0])[1] || 0, y: o.y || 0 };
-        }
+        for (const m of snap.m) mons[m.id] = { name: m.name, ws: m.ws, top: m.top || 0, y: m.y || 0 };
         const all = [];
-        for (const t of Hyprland.toplevels.values) {
-            const o = t.lastIpcObject || {};
+        for (const o of snap.c) {
             if (!o.mapped || o.hidden || !o.at || !o.size || !o.workspace) continue;
+            const mi = mons[o.monitor];
             all.push({ addr: String(o.address), cls: o.class || "", title: o.title || "", x: o.at[0], y: o.at[1], w: o.size[0], h: o.size[1], floating: !!o.floating,
-                       pid: o.pid, fs: o.fullscreen || 0, ws: o.workspace.id, wsName: o.workspace.name || "", mon: t.monitor ? t.monitor.name : "", focus: o.focusHistoryID === 0, fh: o.focusHistoryID === undefined ? 99 : o.focusHistoryID });
+                       pid: o.pid, fs: o.fullscreen || 0, ws: o.workspace.id, wsName: o.workspace.name || "", mon: mi ? mi.name : "", focus: o.focusHistoryID === 0,
+                       fh: o.focusHistoryID === undefined ? 99 : o.focusHistoryID });
         }
-        const now = Date.now();
-        for (const w of all) {
-            const k = w.x + "," + w.y + "," + w.w + "," + w.h;
-            if (lastPos[w.addr] !== undefined && lastPos[w.addr] !== k) movingUntil[w.addr] = now + 260;
-            lastPos[w.addr] = k;
-        }
+        const monsByName = {};
+        for (const id in mons) monsByName[mons[id].name] = mons[id];
         const out = [];
         for (const w of all) {
-            if ((movingUntil[w.addr] || 0) > now && Global.tbDrag !== w.addr) continue;
             if (!w.floating || w.fs !== 0 || w.ws < 1 || w.wsName === "minimized" || w.cls === "" || w.title === "") continue;
             if (tb.csd[w.cls.toLowerCase()] || w.cls.startsWith("steam_app_")) continue;
             if (tb.kind[w.pid] === undefined) { tb.wantKind(w.pid); continue; }          // noch nicht geprüft
             if (tb.kind[w.pid] === "gtk" && !tb.force[w.cls.toLowerCase()]) continue;     // zeichnet die Leiste selbst
-            const mi = mons[w.mon]; if (!mi || mi.ws !== w.ws) continue;
+            const mi = monsByName[w.mon]; if (!mi || mi.ws !== w.ws) continue;
             if (w.w < 120 || w.h < 80) continue;
             const bar = { x: w.x, y: w.y - bh, w: w.w, h: bh };
             if (bar.y < mi.y + mi.top) continue;                                  // kein Platz über dem Fenster
@@ -103,7 +100,14 @@ Scope {
             if (keys.length !== addrs.length || keys.some((k, i) => k !== addrs[i])) addrs = keys;
         }
     }
-    Timer { interval: 110; repeat: true; running: tb.enabled; triggeredOnStart: true; onTriggered: { Hyprland.refreshToplevels(); Hyprland.refreshMonitors(); tb.recompute(); } }
+    // Fenster und Bildschirme in Echtzeit von Hyprland (dx-window-watch): so kleben die Leisten auch bei schnellen Bewegungen am Fenster
+    Process {
+        running: tb.enabled
+        command: [Theme.home + "/.local/bin/dx-window-watch"]
+        stdout: SplitParser {
+            onRead: line => { try { tb.snap = JSON.parse(line); } catch (e) { return; } tb.recompute(); }
+        }
+    }
     onEnabledChanged: recompute()
 
     // ---------- Eine Leiste je Fenster ----------
@@ -113,9 +117,8 @@ Scope {
         PanelWindow {
             id: win
             required property string modelData
-            property var frozen: null
             readonly property var live: tb.byAddr[modelData] || ({ addr: modelData, x: 0, y: 0, w: 100, h: 100, mon: "", title: "", cls: "", focus: false })
-            readonly property var d: frozen || live
+            readonly property var d: live
             readonly property var scr: Quickshell.screens.find(s => s.name === d.mon) || null
             screen: scr
             visible: scr !== null
@@ -124,7 +127,8 @@ Scope {
             margins.left: scr ? d.x - scr.x : 0
             margins.top: scr ? d.y - tb.bh - scr.y : 0
             implicitWidth: d.w
-            implicitHeight: tb.bh
+            implicitHeight: tb.bh + tb.rounding
+            mask: Region { item: barRect }                // nur die Leiste nimmt Mausereignisse an, nicht die Füllecken
             exclusionMode: ExclusionMode.Ignore
             color: "transparent"
             WlrLayershell.namespace: "draconyx-titlebar"
@@ -135,11 +139,26 @@ Scope {
             readonly property string sel: "window = \"address:" + addr + "\""
             readonly property bool active: d.focus
 
+            // Füllecken: schließen die Lücke zwischen der Leiste und den abgerundeten oberen Fensterecken
+            Canvas {
+                visible: tb.rounding > 0
+                x: 0; y: tb.bh; width: tb.rounding; height: tb.rounding
+                property color c: win.active ? Theme.bg2 : Theme.bg1
+                onCChanged: requestPaint()
+                onPaint: { const g = getContext("2d"); g.reset(); const r = tb.rounding; g.fillStyle = c; g.beginPath(); g.moveTo(0, 0); g.lineTo(r, 0); g.arc(r, r, r, -Math.PI / 2, -Math.PI, true); g.closePath(); g.fill(); }
+            }
+            Canvas {
+                visible: tb.rounding > 0
+                x: parent.width - tb.rounding; y: tb.bh; width: tb.rounding; height: tb.rounding
+                property color c: win.active ? Theme.bg2 : Theme.bg1
+                onCChanged: requestPaint()
+                onPaint: { const g = getContext("2d"); g.reset(); const r = tb.rounding; g.fillStyle = c; g.beginPath(); g.moveTo(r, 0); g.lineTo(0, 0); g.arc(0, r, r, -Math.PI / 2, 0, false); g.closePath(); g.fill(); }
+            }
             Rectangle {
-                anchors.fill: parent
-                opacity: Global.tbDrag === win.addr ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 80 } }
-                topLeftRadius: 12; topRightRadius: 12
+                id: barRect
+                anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                height: tb.bh
+                topLeftRadius: tb.rounding; topRightRadius: tb.rounding
                 color: win.active ? Qt.rgba(Theme.bg2.r, Theme.bg2.g, Theme.bg2.b, 0.98) : Qt.rgba(Theme.bg1.r, Theme.bg1.g, Theme.bg1.b, 0.96)
                 border.color: win.active ? Theme.border : Theme.borderSoft
                 Behavior on color { ColorAnimation { duration: Theme.durFast } }
@@ -149,32 +168,20 @@ Scope {
                     id: drag
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    property bool going: false
-                    property real gx: 0; property real gy: 0       // Zeigerposition beim Drücken (global)
-                    property real wx: 0; property real wy: 0       // Fensterposition beim Drücken
-                    property real lastSend: 0
                     onPressed: mouse => {
                         if (mouse.button !== Qt.LeftButton) return;
                         Global.hypr("hl.dsp.focus({ " + win.sel + " })");
-                        going = false;
-                        gx = win.d.x + mouse.x; gy = win.d.y - tb.bh + mouse.y;
-                        wx = win.d.x; wy = win.d.y;
-                        win.frozen = Object.assign({}, win.d);                 // die Leiste bleibt beim Ziehen stehen, sonst verschiebt sich der Bezugspunkt mit
+                        Global.tbDrag = win.addr;
+                        dragProc.running = true;                    // der Helfer nimmt das Fenster mit dem Zeiger mit
                     }
-                    onPositionChanged: mouse => {
-                        if (!pressed || !(pressedButtons & Qt.LeftButton) || !win.frozen) return;
-                        const cx = win.frozen.x + mouse.x, cy = win.frozen.y - tb.bh + mouse.y;       // Zeiger global
-                        if (!going && Math.abs(cx - gx) + Math.abs(cy - gy) < 6) return;
-                        if (!going) { going = true; Global.tbDrag = win.addr; }
-                        const now = Date.now();
-                        if (now - lastSend < 12) return;
-                        lastSend = now;
-                        Global.hypr("hl.dsp.window.move({ " + win.sel + ", x = " + Math.round(wx + cx - gx) + ", y = " + Math.round(wy + cy - gy) + ", relative = false })");
-                    }
-                    onReleased: { win.frozen = null; going = false; dragEnd.restart(); }
-                    onCanceled: { win.frozen = null; going = false; dragEnd.restart(); }
+                    onReleased: { dragProc.running = false; dragEnd.restart(); }
+                    onCanceled: { dragProc.running = false; dragEnd.restart(); }
                     onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) Global.hyprEval("DXSnap.toggleMaxAddr('" + win.addr + "')"); }
                     onClicked: mouse => { if (mouse.button === Qt.RightButton) { Global.closeAll(); Global.winMenu = { addr: win.addr, x: win.d.x, y: win.d.y }; } }
+                }
+                Process {
+                    id: dragProc
+                    command: [Theme.home + "/.local/bin/dx-window-drag", win.addr]
                 }
                 Timer { id: dragEnd; interval: 250; onTriggered: { if (Global.tbDrag === win.addr) Global.tbDrag = ""; } }
 
