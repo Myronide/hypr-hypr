@@ -111,14 +111,14 @@ PanelWindow {
                 ToggleTile {
                     width: parent.cellW
                     iconName: "bt"; label: "Bluetooth"
-                    onClicked: { Global.controlOpen = false; Global.run("blueman-manager"); }
+                    onClicked: Global.openConn("bt")
                 }
                 ToggleTile {
                     width: parent.cellW
                     iconName: Global.netType === "ethernet" ? "ethernet" : (Global.netType === "wifi" ? "wifi" : "net-off")
                     label: Global.netType === "ethernet" ? "Ethernet" : (Global.netType === "wifi" ? "WLAN" : "Offline")
                     checked: Global.netType !== "none"
-                    onClicked: { Global.controlOpen = false; Global.run("nm-connection-editor"); }
+                    onClicked: Global.openConn("net")
                 }
             }
 

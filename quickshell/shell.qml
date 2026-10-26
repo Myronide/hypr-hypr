@@ -42,6 +42,7 @@ ShellRoot {
     SearchOverlay {}
     SnipTool {}
     UpdateProgress {}
+    Connectivity {}
     SnipEditor { id: snipEditor }
     GitClient { id: gitClient }
     WindowMenu {}
@@ -58,6 +59,8 @@ ShellRoot {
         target: "shell"
         function toggleStart(): void { Global.toggleStart(""); }
         function toggleControl(): void { Global.toggleControl(""); }
+        function toggleConn(): void { Global.toggleConn(""); }
+        function openConn(tab: string): void { Global.openConn(tab, ""); }
         function toggleCalendar(): void { Global.toggleCalendar(""); }
         function closeAll(): void { Global.closeAll(); }
         function toggleAutohide(): void { Global.autohide = !Global.autohide; }

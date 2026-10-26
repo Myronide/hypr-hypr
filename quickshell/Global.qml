@@ -16,6 +16,8 @@ Singleton {
     // =====================================================================
     property bool startOpen: false
     property bool controlOpen: false
+    property bool connOpen: false             // Verbindungen: Netzwerk, Bluetooth, Audio
+    property string connTab: "net"
     property bool calendarOpen: false
     property bool taskViewOpen: false
     property bool codeOpen: false
@@ -37,15 +39,15 @@ Singleton {
     property bool taskPopupOpen: false
     property string taskPopupScreen: ""       // Monitor, auf dem das Fenster-Popup der Taskleiste offen ist
     property string popupScreen: ""
-    readonly property bool anyPopup: startOpen || controlOpen || calendarOpen || taskViewOpen || codeOpen || weOpen || taskPopupOpen
+    readonly property bool anyPopup: startOpen || controlOpen || connOpen || calendarOpen || taskViewOpen || codeOpen || weOpen || taskPopupOpen
 
     // Ist auf GENAU diesem Monitor ein Popup offen? (Auto-Hide darf nur die Leiste dieses Monitors offen halten)
     function popupOpenOn(mon) {
-        const big = startOpen || controlOpen || calendarOpen || taskViewOpen || codeOpen || weOpen;
+        const big = startOpen || controlOpen || connOpen || calendarOpen || taskViewOpen || codeOpen || weOpen;
         return (big && popupScreen === mon) || (taskPopupOpen && taskPopupScreen === mon);
     }
-    function sysPopupOn(mon) { return (controlOpen || calendarOpen) && popupScreen === mon; }
-    function closeAll() { editOpen = false; snipOpen = false; searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
+    function sysPopupOn(mon) { return (controlOpen || connOpen || calendarOpen) && popupScreen === mon; }
+    function closeAll() { connOpen = false; editOpen = false; snipOpen = false; searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
     function focusedScreenName() { return Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; }
     function _toggle(prop, screenName) {
         const open = !root[prop];
@@ -55,6 +57,8 @@ Singleton {
     }
     function toggleStart(s)    { _toggle("startOpen", s); }
     function toggleControl(s)  { _toggle("controlOpen", s); }
+    function toggleConn(s)     { _toggle("connOpen", s); }
+    function openConn(tab, s)  { connTab = tab; const was = connOpen; closeAll(); popupScreen = s || popupScreen || focusedScreenName(); connOpen = true; }
     function toggleCalendar(s) { _toggle("calendarOpen", s); }
     function toggleTaskView(s) { _toggle("taskViewOpen", s); }
     function toggleCode(s)     { _toggle("codeOpen", s); }
