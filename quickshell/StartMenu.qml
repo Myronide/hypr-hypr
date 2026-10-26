@@ -302,6 +302,7 @@ PanelWindow {
 
             // ===== Startansicht =====
             Flickable {
+                ScrollSpeed { }
                 id: home
                 anchors.fill: parent
                 visible: menu.query === "" && !menu.showAll
@@ -453,6 +454,7 @@ PanelWindow {
                     }
                 }
                 ListView {
+                    ScrollSpeed { }
                     anchors.top: allHead.bottom
                     anchors.topMargin: 8
                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -485,6 +487,7 @@ PanelWindow {
 
             // ===== Suchergebnisse =====
             ListView {
+                ScrollSpeed { }
                 id: resultList
                 anchors.fill: parent
                 visible: menu.query !== ""

@@ -115,6 +115,7 @@ PanelWindow {
         border.color: Theme.border
 
         ListView {
+            ScrollSpeed { }
             id: cards
             anchors.fill: parent
             anchors.margins: 18

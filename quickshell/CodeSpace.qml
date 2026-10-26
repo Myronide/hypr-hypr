@@ -268,6 +268,7 @@ PanelWindow {
 
         // ---------- Liste ----------
         ListView {
+            ScrollSpeed { }
             id: list
             anchors.top: searchBox.bottom; anchors.topMargin: (cs.creating || cs.cloning) ? 64 : 12
             anchors.left: parent.left; anchors.right: parent.right

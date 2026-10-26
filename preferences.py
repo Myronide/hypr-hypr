@@ -32,6 +32,7 @@ def save_preferences(p):
  source+='hl.config({input={follow_mouse=%d}})\n'%(1 if p.get('focus_follows_mouse',False) else 0)
  sf=max(0.1,min(10.0,float(p.get('scroll_speed',1.0) or 1.0)))
  source+='hl.config({input={scroll_factor=%.2f}})\n'%sf   # Mausrad-Geschwindigkeit (1.0 = Standard)
+ d_=Path.home()/'.config/draconyx';d_.mkdir(parents=True,exist_ok=True);(d_/'scroll-speed').write_text('%.2f\n'%sf)   # die Shell skaliert ihre Listen selbst (Qt ignoriert scroll_factor)
  if p.get('keymap') in KEYMAPS:
   source+='hl.config({input={kb_layout="%s"}})\n'%p['keymap']   # Tastaturbelegung (gilt sofort nach dem Neuladen)
   d=Path.home()/'.config/draconyx';d.mkdir(parents=True,exist_ok=True);(d/'keymap').write_text(p['keymap']+'\n')

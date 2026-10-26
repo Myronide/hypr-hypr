@@ -48,6 +48,7 @@ BarButton {
                     Text { text: "Update " + ub.info.latest + " verfügbar"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsL; font.weight: Font.DemiBold }
                     Text { text: "Installiert: " + ub.info.installed; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsS }
                     Flickable {
+                        ScrollSpeed { }
                         width: parent.width
                         height: Math.min(listCol.implicitHeight, 330)
                         contentHeight: listCol.implicitHeight

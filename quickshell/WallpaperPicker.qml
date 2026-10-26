@@ -193,6 +193,7 @@ PanelWindow {
         }
 
         GridView {
+            ScrollSpeed { }
             id: grid
             anchors.top: sbox.bottom; anchors.topMargin: 12
             anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom

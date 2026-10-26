@@ -525,6 +525,7 @@ PanelWindow {
                             Text { text: "Alle stagen ›"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsXs }
                             onClicked: gcl.stage(gcl.unstaged.map(f => f.path)) }
                         ListView {
+                            ScrollSpeed { }
                             anchors.fill: parent; anchors.topMargin: 30; anchors.margins: 6
                             clip: true; spacing: 1; boundsBehavior: Flickable.StopAtBounds
                             model: gcl.unstaged
@@ -544,6 +545,7 @@ PanelWindow {
                             Text { text: "‹ Alle entfernen"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsXs }
                             onClicked: gcl.unstage(gcl.staged.map(f => f.path)) }
                         ListView {
+                            ScrollSpeed { }
                             anchors.fill: parent; anchors.topMargin: 30; anchors.margins: 6
                             clip: true; spacing: 1; boundsBehavior: Flickable.StopAtBounds
                             model: gcl.staged
@@ -631,6 +633,7 @@ PanelWindow {
                             color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs
                         }
                         ListView {
+                            ScrollSpeed { }
                             anchors.fill: parent; anchors.topMargin: 38; anchors.margins: 6
                             clip: true; spacing: 1; boundsBehavior: Flickable.StopAtBounds
                             model: gcl.commits
@@ -700,6 +703,7 @@ PanelWindow {
                     }
                 }
                 ListView {
+                    ScrollSpeed { }
                     id: branchList
                     anchors.top: newBranchRow.visible ? newBranchRow.bottom : sideTitle.bottom
                     anchors.topMargin: 6
@@ -784,6 +788,7 @@ PanelWindow {
             height: 112; radius: 12; color: Theme.bg0
             visible: gcl.isRepo
             Flickable {
+                ScrollSpeed { }
                 id: logFlick
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: claudeRow.top
                 anchors.margins: 8
@@ -930,6 +935,7 @@ PanelWindow {
             onClicked: gcl.showCommitDiff(gcl.lastPicked)
         }
         ListView {
+            ScrollSpeed { }
             anchors.fill: parent; anchors.topMargin: 28; anchors.margins: 8
             clip: true; boundsBehavior: Flickable.StopAtBounds
             model: gcl.diffLines

@@ -32,6 +32,7 @@ PopupWindow {
         level: 2
         radius: Theme.rM
         Flickable {
+            ScrollSpeed { }
             anchors.fill: parent
             anchors.margins: 8
             contentHeight: col.implicitHeight

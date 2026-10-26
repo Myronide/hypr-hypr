@@ -149,6 +149,7 @@ PanelWindow {
         clip: true
 
         ListView {
+            ScrollSpeed { }
             anchors.fill: parent; anchors.margins: 7
             model: so.results
             clip: true

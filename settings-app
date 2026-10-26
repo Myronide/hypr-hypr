@@ -192,7 +192,7 @@ class Settings(Gtk.Application):
   self.combo(b,'Terminal','terminal',terminals)
   self.p['keymap']=current_keymap()
   self.combo(b,'Tastaturbelegung','keymap',[('de','QWERTZ (Deutsch)'),('us','QWERTY (US)')]+([(self.p['keymap'],self.p['keymap'])] if self.p['keymap'] not in ('de','us') else []))
-  self.spin(b,'Mausrad-Geschwindigkeit','scroll_speed',0.2,6.0,0.1,'1,0 = Standard. Höher scrollt weiter pro Rastung, niedriger feiner. Gilt nach „Übernehmen“ in allen Programmen.')
+  self.spin(b,'Mausrad-Geschwindigkeit','scroll_speed',0.2,6.0,0.1,'1,0 = Standard. Höher scrollt weiter pro Rastung, niedriger feiner. Gilt nach „Übernehmen“: für Programme über Hyprland, für die Listen der Shell (Wallpaper, Startmenü, Suche …) direkt.')
   self.toggle(b,'Fokus folgt der Maus','focus_follows_mouse','Ausgeschaltet bleibt der Tastaturfokus beim zuletzt angeklickten Fenster.')
  def windows(self):
   b=self.page('Fenster','Größe und Erscheinung der Titelleisten, Fensterkanten und Effekte.')

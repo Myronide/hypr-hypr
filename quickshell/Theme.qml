@@ -69,6 +69,14 @@ Singleton {
     // Nicht installierte Schrift: auf Inter bzw. die Systemschrift für Festbreite ausweichen (sonst wäre alles Standardschrift)
     readonly property string font: Qt.fontFamilies().indexOf(fontFamily) >= 0 ? fontFamily : "Inter"
     readonly property string fontMono: Qt.fontFamilies().indexOf(fontCodeFamily) >= 0 ? fontCodeFamily : "monospace"
+    // Mausrad-Geschwindigkeit (Aurora → Übersicht schreibt ~/.config/draconyx/scroll-speed): 1.0 = Standard
+    property real scrollSpeed: 1.0
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/draconyx/scroll-speed"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: { const v = parseFloat(text().trim()); if (!isNaN(v) && v > 0.05 && v < 20) scrollSpeed = v; }
+    }
     FileView {
         path: Quickshell.env("HOME") + "/.config/draconyx/font"
         watchChanges: true
