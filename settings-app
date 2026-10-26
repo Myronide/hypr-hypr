@@ -109,28 +109,63 @@ class Settings(Gtk.Application):
   if any('Inter' in l for l in subprocess.run(['fc-list',':family=Inter'],capture_output=True,text=True).stdout.splitlines()[:1]):st.set_property('gtk-font-name','Inter 10')
   self.p=load_preferences();self.p.setdefault('shortcuts',{});self.monitor_names=[m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
   self.window=Gtk.ApplicationWindow(application=self);self.window.set_default_size(1050,780);self.window.set_title('Aurora Einstellungen');self.window.set_icon_name('preferences-system')
-  head=Gtk.HeaderBar(title='Aurora',subtitle='Desktop-Einstellungen',show_close_button=True);self.window.set_titlebar(head)
+  head=Gtk.HeaderBar(title='Einstellungen',subtitle='Aurora',show_close_button=True);self.window.set_titlebar(head)
   apply=Gtk.Button(label='Übernehmen');apply.get_style_context().add_class('suggested-action');apply.connect('clicked',self.apply);head.pack_end(apply)
-  self.status=Gtk.Label();self.status.get_style_context().add_class('subtitle');root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.window.add(root);body=Gtk.Box();root.pack_start(body,True,True,0)
-  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);sidebar=Gtk.StackSidebar();sidebar.set_stack(self.stack);sidebar.set_size_request(215,-1);body.pack_start(sidebar,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
+  self.status=Gtk.Label(xalign=0);self.status.get_style_context().add_class('status-bar');root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.window.add(root);body=Gtk.Box();root.pack_start(body,True,True,0)
+  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);self.side=Gtk.ListBox();self.side.set_selection_mode(Gtk.SelectionMode.SINGLE);self.side.get_style_context().add_class('sidebar');sc_side=Gtk.ScrolledWindow();sc_side.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);sc_side.add(self.side);sc_side.set_size_request(250,-1);body.pack_start(sc_side,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
   self.general();self.windows();self.displays()
   if not SHELL:self.dock()   # Dock- und Schreibtisch-Seite gehören zum alten Aurora-Dock; mit der Shell gibt es sie nicht (Taskleiste-Seite stattdessen)
   self.taskbar();self.codespace();self.apps();self.windowmode();self.colors()
   if not SHELL:self.desktop()
   self.wallpaper();self.engine();self.shortcuts();self.system()
+  self.build_sidebar()
   css=Gtk.CssProvider();css.load_from_path(str(BASE/'settings.css'))
   Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+  self.apply_font()
   self.window.show_all();self.window.present();self.status.set_text('')
-  if os.environ.get('AURORA_SETTINGS_PAGE'):self.stack.set_visible_child_name(os.environ['AURORA_SETTINGS_PAGE'])
+  if os.environ.get('AURORA_SETTINGS_PAGE'):self.goto(os.environ['AURORA_SETTINGS_PAGE'])
+  else:self.goto('Übersicht')
  def page(self,title,description):
-  scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=12,margin=26)
+  scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8,margin=30);box.set_margin_top(26)
   heading=Gtk.Label(label=title,xalign=0);heading.get_style_context().add_class('page-title');box.pack_start(heading,False,False,0)
-  l=Gtk.Label(label=description,xalign=0);l.set_line_wrap(True);l.set_max_width_chars(80);l.get_style_context().add_class('subtitle');box.pack_start(l,False,False,8);scroll.add(box);self.stack.add_titled(scroll,title,title);return box
+  l=Gtk.Label(label=description,xalign=0);l.set_line_wrap(True);l.set_max_width_chars(100);l.get_style_context().add_class('page-desc');box.pack_start(l,False,False,0);box.pack_start(Gtk.Box(),False,False,6)
+  scroll.add(box);self.stack.add_titled(scroll,title,title);return box
+  # ---- Seitenleiste: Gruppen mit Symbol und Name (statt der schlichten Standardliste) ----
+ SIDE=[('ALLGEMEIN',[('Übersicht',['preferences-system-symbolic']),('Fenster',['window-new-symbolic','focus-windows-symbolic']),('Bildschirme',['video-display-symbolic','computer-symbolic']),('Taskleiste',['view-list-symbolic','view-continuous-symbolic'])]),
+       ('PROGRAMME',[('Coding Space',['utilities-terminal-symbolic']),('Apps',['view-app-grid-symbolic','application-x-executable-symbolic'])]),
+       ('DARSTELLUNG',[('Fenstermodus',['view-dual-symbolic','view-grid-symbolic']),('Farben & Schrift',['applications-graphics-symbolic','color-select-symbolic']),('Hintergrund',['preferences-desktop-wallpaper-symbolic','image-x-generic-symbolic']),('Wallpaper Engine',['video-x-generic-symbolic','camera-video-symbolic']),('Dock',['user-desktop-symbolic']),('Schreibtisch',['user-desktop-symbolic'])]),
+       ('SYSTEM',[('Tastenkombinationen',['input-keyboard-symbolic']),('System',['emblem-system-symbolic','system-run-symbolic'])])]
+ def build_sidebar(self):
+  have={self.stack.child_get_property(c,'title') for c in self.stack.get_children()};theme=Gtk.IconTheme.get_default();self.side_rows={}
+  for head,items in self.SIDE:
+   items=[i for i in items if i[0] in have]
+   if not items:continue
+   hr=Gtk.ListBoxRow();hr.set_selectable(False);hr.set_activatable(False);hl=Gtk.Label(label=head,xalign=0);hl.get_style_context().add_class('sidebar-head');hr.add(hl);self.side.add(hr)
+   for title,icons in items:
+    r=Gtk.ListBoxRow();r.get_style_context().add_class('sidebar-row');r.page=title
+    ic=next((n for n in icons if theme.has_icon(n)),'preferences-system-symbolic')
+    box=Gtk.Box(spacing=12);box.pack_start(Gtk.Image.new_from_icon_name(ic,Gtk.IconSize.MENU),False,False,0);box.pack_start(Gtk.Label(label=title,xalign=0),True,True,0);r.add(box);self.side.add(r);self.side_rows[title]=r
+  self.side.connect('row-selected',lambda lb,r:r is not None and hasattr(r,'page') and self.stack.set_visible_child_name(r.page))
+ def goto(self,title):
+  r=self.side_rows.get(title)
+  if r:self.side.select_row(r)
+  else:self.stack.set_visible_child_name(title)
+ def section(self,box,title):
+  l=Gtk.Label(label=title.upper(),xalign=0);l.get_style_context().add_class('section-title');box.pack_start(l,False,False,0);return l
  def row(self,box,title,widget,description=''):
-  row=Gtk.Box(spacing=18);row.get_style_context().add_class('setting-row');labels=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4);l=Gtk.Label(label=title,xalign=0);labels.pack_start(l,False,False,0)
+  # Schmale Bedienelemente (Schalter, Knöpfe) rechts neben dem Text; breite (Auswahlreihen, Listen) darunter, damit der Text lesbar bleibt
+  widget.show_all()   # versteckte Widgets melden Größe 0 – erst zeigen, dann messen
+  nw=widget.get_preferred_width()[1];nh=widget.get_preferred_height()[1]
+  wide=nw>380 or nh>110 or (len(description)>110 and nw>230)
+  row=Gtk.Box(orientation=Gtk.Orientation.VERTICAL if wide else Gtk.Orientation.HORIZONTAL,spacing=12 if wide else 20);row.get_style_context().add_class('setting-row')
+  labels=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=3);labels.set_valign(Gtk.Align.CENTER)
+  l=Gtk.Label(label=title,xalign=0);l.set_line_wrap(True);l.get_style_context().add_class('row-title');labels.pack_start(l,False,False,0)
   if description:
-   l=Gtk.Label(label=description,xalign=0);l.set_line_wrap(True);l.set_max_width_chars(52);l.get_style_context().add_class('subtitle');labels.pack_start(l,False,False,0)
-  row.pack_start(labels,True,True,0);row.pack_end(widget,False,False,0);box.pack_start(row,False,False,0);return widget
+   d=Gtk.Label(label=description,xalign=0);d.set_line_wrap(True);d.set_max_width_chars(86 if wide else 56);d.get_style_context().add_class('row-desc');labels.pack_start(d,False,False,0)
+  row.pack_start(labels,True,True,0)
+  if wide:widget.set_halign(Gtk.Align.START if isinstance(widget,(Choice,Select,Gtk.Button,Gtk.Switch,Gtk.Entry)) else Gtk.Align.FILL);row.pack_start(widget,False,False,0)
+  else:widget.set_valign(Gtk.Align.CENTER);row.pack_end(widget,False,False,0)
+  box.pack_start(row,False,False,0);return widget
  def toggle(self,box,title,key,description=''):
   w=Gtk.Switch(active=bool(self.p.get(key,False)));w.set_valign(Gtk.Align.CENTER);w.connect('notify::active',lambda w,_:self.p.__setitem__(key,w.get_active()));return self.row(box,title,w,description)
  def spin(self,box,title,key,minimum,maximum,step=1,description=''):
@@ -361,6 +396,55 @@ class Settings(Gtk.Application):
     self.row(lst,'%s  %s%s'%(r['name'],r['version'],state),btns,r['description'])
    lst.show_all()
   refill()
+
+ # ---------------------------------------------------------------- Schriften (10 Voreinstellungen: Oberfläche und Code)
+ def fonts_section(self,b):
+  self.section(b,'Schrift')
+  dxf=str(Path.home()/'.local/bin/dx-fonts')
+  def info():
+   try:return json.loads(subprocess.run([dxf,'list','--json'],capture_output=True,text=True,timeout=20).stdout)
+   except (OSError,ValueError,subprocess.SubprocessError):return {'presets':[],'ui':'inter','code':'krypton'}
+  data=info();by={p['id']:p for p in data['presets']}
+  def sample(fam):return '<span font_family="%s" size="13000">Der schnelle braune Fuchs · 0123456789 · {} ( ) =&gt;</span>'%GLib.markup_escape_text(fam)
+  def make(kind,title,desc):
+   sel=Select()
+   for p in data['presets']:sel.append(p['id'],p['name']+('' if p['installed'] else '  (nicht installiert)'))
+   sel.set_active_id(data[kind]);prev=Gtk.Label(xalign=0);prev.set_use_markup(True);prev.set_selectable(False)
+   inst=Gtk.Button(label='Installieren');inst.set_no_show_all(True)
+   def refresh():
+    p=by[sel.get_active_id()];prev.set_markup(sample(p['family']));inst.set_visible(not p['installed'])
+   def changed(w):
+    pid=w.get_active_id()
+    if not pid:return
+    subprocess.run([dxf,'set',kind,pid]);data[kind]=pid;refresh()
+    if kind=='ui':self.apply_font();self.message('Schrift: '+by[pid]['name']+' – Shell sofort, Aurora jetzt auch')
+    else:self.message('Code-Schrift: '+by[pid]['name'])
+   def do_inst(*_):
+    pid=sel.get_active_id();inst.set_sensitive(False);self.message('Installiere '+by[pid]['name']+' …')
+    def work():
+     r=subprocess.run([dxf,'install',pid],capture_output=True,text=True)
+     def done():
+      inst.set_sensitive(True);d2=info()
+      for p in d2['presets']:by[p['id']]['installed']=p['installed']
+      sel_labels(d2);refresh();self.message('Installiert' if r.returncode==0 else 'Installation fehlgeschlagen: '+((r.stderr.strip().splitlines() or ['?'])[-1]));return False
+     GLib.idle_add(done)
+    threading.Thread(target=work,daemon=True).start()
+   def sel_labels(d2):
+    cur=sel.get_active_id();sel.clear()
+    for p in d2['presets']:sel.append(p['id'],p['name']+('' if p['installed'] else '  (nicht installiert)'))
+    sel.set_active_id(cur)
+   sel.connect('changed',changed);inst.connect('clicked',do_inst);refresh()
+   box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=10);top=Gtk.Box(spacing=10);top.pack_start(sel,False,False,0);top.pack_start(inst,False,False,0);box.pack_start(top,False,False,0);box.pack_start(prev,False,False,0)
+   self.row(b,title,box,desc)
+  make('ui','Oberflächen-Schrift','Für Taskleiste, Menüs, Startmenü und Aurora. Die Shell übernimmt sie sofort. Nicht installierte Schriften holt „Installieren“ (Passwortfenster).')
+  make('code','Code-Schrift','Für den Git-Client, Diffs und Protokolle. Am schönsten mit einer Programmierschrift wie Monaspace Krypton, JetBrains Mono oder Fira Code.')
+ def apply_font(self):
+  try:fam=subprocess.run([str(Path.home()/'.local/bin/dx-fonts'),'family','ui'],capture_output=True,text=True,timeout=10).stdout.strip() or 'Inter'
+  except (OSError,subprocess.SubprocessError):fam='Inter'
+  css=Gtk.CssProvider();css.load_from_data(('* { font-family: "%s", "Inter", "Sans"; }'%fam.replace('"','')).encode())
+  scr=Gdk.Screen.get_default()
+  if getattr(self,'font_css',None):Gtk.StyleContext.remove_provider_for_screen(scr,self.font_css)
+  self.font_css=css;Gtk.StyleContext.add_provider_for_screen(scr,css,Gtk.STYLE_PROVIDER_PRIORITY_USER)
  def dock(self):
   b=self.page('Dock','Angeheftete Apps, gruppierte Fenster und Vorschauen direkt am jeweiligen Icon.')
   self.combo(b,'Bildschirm','dock_monitor',[(m,m) for m in self.monitor_names]);self.spin(b,'Icon-Größe','dock_icon_size',20,42)
@@ -393,10 +477,11 @@ class Settings(Gtk.Application):
    p=w.get_filename() or '';shell_set('desktopDir',p)
    if p:Path(p).mkdir(parents=True,exist_ok=True)
    self.message('Desktop-Ordner: '+(p or 'automatisch'))
-  dpb.connect('file-set',dset);self.row(b,'Desktop-Ordner',dpb,'Aus diesem Ordner zeigt der Desktop seine Symbole. Leer = automatisch (Schreibtisch bzw. Desktop deines Systems).')
+  dpb.connect('file-set',dset)
   def dreset(*_):
    shell_set('desktopDir','');dpb.unselect_all();self.message('Desktop-Ordner: automatisch')
-  self.button(b,'Desktop-Ordner','Automatisch erkennen',dreset)
+  dbox=Gtk.Box(spacing=8);dbox.pack_start(dpb,False,False,0);dauto=Gtk.Button(label='Automatisch');dauto.connect('clicked',dreset);dbox.pack_start(dauto,False,False,0)
+  self.row(b,'Desktop-Ordner',dbox,'Aus diesem Ordner zeigt der Desktop seine Symbole. Leer = automatisch (Schreibtisch bzw. Desktop deines Systems).')
   self.chooser(b,'Hintergrundbild','wallpaper');self.combo(b,'Bildschirm','wallpaper_monitor',[('','Alle Bildschirme')]+[(m,m) for m in self.monitor_names])
   self.combo(b,'Darstellung','wallpaper_fit',[('cover','Bildschirm ausfüllen'),('contain','Ganzes Bild zeigen'),('fill','Strecken'),('tile','Kacheln')])
   self.button(b,'Ausgewähltes Bild','Als Hintergrund verwenden',lambda:self.background(False))
@@ -508,7 +593,7 @@ class Settings(Gtk.Application):
    for line in conf.read_text().splitlines():
     if '=' in line:k,v=line.split('=',1);over[k.strip()]=v.strip()
   except OSError:pass
-  head=Gtk.Label(label='Alle Tastenkombinationen',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
+  head=Gtk.Label(label='ALLE TASTENKOMBINATIONEN',xalign=0);head.get_style_context().add_class('section-title');b.pack_start(head,False,False,6)
   if not rows:
    hint=Gtk.Label(label='Die Liste entsteht, sobald Hyprland die Konfiguration geladen hat (hyprctl reload oder neu anmelden).',xalign=0);hint.set_line_wrap(True);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,0);return
   search=Gtk.SearchEntry();search.set_placeholder_text('Aktion suchen …');b.pack_start(search,False,False,4)
@@ -580,7 +665,7 @@ class Settings(Gtk.Application):
   return out
  def layout_editor(self,b):
   style=shell_get('barStyle','bar') or 'bar'
-  head=Gtk.Label(label='Anordnung ('+('Schwebendes Dock' if style=='dock' else 'Durchgehende Leiste')+')',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
+  head=Gtk.Label(label='ANORDNUNG ('+('SCHWEBENDES DOCK' if style=='dock' else 'DURCHGEHENDE LEISTE')+')',xalign=0);head.get_style_context().add_class('section-title');b.pack_start(head,False,False,6)
   hint=Gtk.Label(label='Jeder Teil sitzt links, mittig oder rechts. Beim Dock wird jeder Bereich zu einer eigenen schwebenden Insel; leere Bereiche verschwinden. Reihenfolge mit den Pfeilen. Bei Stilwechsel diese Seite neu öffnen.',xalign=0);hint.set_line_wrap(True);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,0)
   box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4);b.pack_start(box,False,False,0)
   names=dict(self.BAR_ITEMS);secnames={'left':'Links','center':'Mitte','right':'Rechts'}
@@ -616,7 +701,7 @@ class Settings(Gtk.Application):
   self.sw(b,'Oben statt unten','barTop',False)
   self.shell_combo(b,'Bei Vollbild (Spiele, Videos)','fullscreenBar',[('hover','Ausblenden, am Rand einblendbar'),('hide','Ganz ausblenden'),('show','Sichtbar lassen')],'hover','Gilt auch für eine feste Leiste (ohne Auto-Hide): im Vollbild verschwindet sie und erscheint, wenn die Maus den Bildschirmrand berührt.')
   # Taskleiste je Bildschirm an/aus
-  head0=Gtk.Label(label='Bildschirme',xalign=0);head0.get_style_context().add_class('page-title');b.pack_start(head0,False,False,6)
+  head0=Gtk.Label(label='BILDSCHIRME',xalign=0);head0.get_style_context().add_class('section-title');b.pack_start(head0,False,False,6)
   for name in self.monitor_names:
    w=Gtk.Switch(active=bool(((shell_get('monitors',{}) or {}).get(name,{}) or {}).get('enabled',True)));w.set_valign(Gtk.Align.CENTER)
    def mon_changed(w,_,name=name):
@@ -630,7 +715,7 @@ class Settings(Gtk.Application):
   self.sw(b,'Fenster einer App gruppieren','groupApps',True)
   self.shell_spin(b,'Höhe','barHeight',40,90,1,58);self.shell_spin(b,'Symbolgröße','iconSize',20,48,1,34);self.shell_spin(b,'Deckkraft','barOpacity',0.4,1.0,0.05,0.9)
   self.layout_editor(b)
-  head=Gtk.Label(label='Bestandteile',xalign=0);head.get_style_context().add_class('page-title');b.pack_start(head,False,False,6)
+  head=Gtk.Label(label='BESTANDTEILE',xalign=0);head.get_style_context().add_class('section-title');b.pack_start(head,False,False,6)
   for key,title,default,desc in [('start','Startknopf',True,'Rechtsklick auf den Knopf: Symbol wählen (Draconyx, Arch, eigenes Bild).'),('search','Suche',True,''),('taskview','Fensterübersicht',True,''),
     ('code','Coding Space',True,''),('wallpaper','Wallpaper Engine',True,''),('mode','Fenstermodus-Knopf (Schweben / Kacheln)',True,''),('desktops','Desktop-Punkte',True,''),('apps','App-Symbole',True,''),
     ('tray','Tray',True,''),('system','Netzwerk und Lautstärke',True,''),('notifications','Benachrichtigungen',True,''),('clock','Uhr',True,''),('settings','Einstellungen (Aurora)',True,''),('showDesktop','Streifen „Desktop anzeigen“',True,''),('update','Update-Anzeige (nur bei neuer Version sichtbar)',True,'Zeigt in der Taskleiste, was in einem Update steckt, und aktualisiert per Klick.')]:
@@ -642,9 +727,9 @@ class Settings(Gtk.Application):
   current=shell_get('codeRoot','') or ''
   if current and Path(current).is_dir():chooser.set_filename(current)
   chooser.connect('file-set',lambda w:(shell_set('codeRoot',w.get_filename() or ''),self.message('Coding-Space-Ordner gesetzt: '+(w.get_filename() or 'automatisch'))))
-  self.row(b,'Coding-Space-Ordner',chooser,'Leer = automatisch: der Ordner „Code Space“ auf einem eingehängten Laufwerk.')
-  reset=Gtk.Button(label='Automatisch erkennen');reset.connect('clicked',lambda *_:(shell_set('codeRoot',''),chooser.unselect_all(),self.message('Coding Space: automatisch.')))
-  self.row(b,'Zurücksetzen',reset)
+  reset=Gtk.Button(label='Automatisch');reset.connect('clicked',lambda *_:(shell_set('codeRoot',''),chooser.unselect_all(),self.message('Coding Space: automatisch.')))
+  cbox=Gtk.Box(spacing=8);cbox.pack_start(chooser,False,False,0);cbox.pack_start(reset,False,False,0)
+  self.row(b,'Coding-Space-Ordner',cbox,'Leer = automatisch: der Ordner „Code Space“ auf einem eingehängten Laufwerk.')
   # ---- weitere Ordner ----
   more=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
   def refill():
@@ -732,7 +817,7 @@ class Settings(Gtk.Application):
   w.connect('changed',changed);self.row(b,'Standard für neue Fenster',w,'Auch per Knopf in der Taskleiste umschaltbar. „Kacheln“ ordnet alle offenen Fenster sofort in dein Raster.')
 
  def colors(self):
-  b=self.page('Farben','Gemeinsame Farbwelt für Aurora und die Shell. Änderungen gelten sofort für die Shell; Aurora-Fenster übernehmen sie beim nächsten Öffnen.')
+  b=self.page('Farben & Schrift','Gemeinsame Farbwelt und Schrift für Aurora und die Shell. Änderungen gelten sofort für die Shell; Aurora-Fenster übernehmen die Farben beim nächsten Öffnen.')
   import subprocess,json
   tool=str(Path.home()/'.local/bin/dx-colors')
   try:current=json.loads(subprocess.check_output([tool,'show'],text=True))
@@ -743,6 +828,7 @@ class Settings(Gtk.Application):
   def picked(btn):
    r=btn.get_rgba();subprocess.run([tool,'accent','#%02x%02x%02x'%(round(r.red*255),round(r.green*255),round(r.blue*255))]);self.message('Akzentfarbe geändert.')
   c.connect('color-set',picked);self.row(b,'Akzentfarbe',c,'Hell- und Dunkelvarianten werden daraus abgeleitet.')
+  self.fonts_section(b)
  def system(self):
   b=self.page('System','Weitere Geräteeinstellungen ohne Konfigurationsdateien öffnen.')
   # ---- Draconyx-Update: alles in EINER Zeile (Version, Stand, Knopf – der Knopf erscheint nur, wenn es ein Update gibt) ----

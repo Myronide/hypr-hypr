@@ -63,7 +63,24 @@ Singleton {
     readonly property color textOn:  "#ffffff"
 
     // ---------- Typografie ----------
-    readonly property string font: "Inter"
+    // Schriften: Voreinstellungen aus Aurora (dx-fonts). ~/.config/draconyx/font = Oberfläche, font-code = Git-Client und Diffs.
+    property string fontFamily: "Inter"
+    property string fontCodeFamily: "Monaspace Krypton"
+    // Nicht installierte Schrift: auf Inter bzw. die Systemschrift für Festbreite ausweichen (sonst wäre alles Standardschrift)
+    readonly property string font: Qt.fontFamilies().indexOf(fontFamily) >= 0 ? fontFamily : "Inter"
+    readonly property string fontMono: Qt.fontFamilies().indexOf(fontCodeFamily) >= 0 ? fontCodeFamily : "monospace"
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/draconyx/font"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: { const s = text().trim(); if (s !== "") fontFamily = s; }
+    }
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/draconyx/font-code"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: { const s = text().trim(); if (s !== "") fontCodeFamily = s; }
+    }
     readonly property int fsXs: 11
     readonly property int fsS:  12
     readonly property int fsM:  13

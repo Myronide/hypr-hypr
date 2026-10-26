@@ -6,32 +6,40 @@
 window { background:shade(@shell_bg,0.86); color:@shell_text; }
 
 /* ---------- Kopfleiste ---------- */
-headerbar { background:shade(@shell_bg,0.86); color:@shell_text; border:0; box-shadow:none; min-height:54px; padding:0 10px; }
-headerbar .title { font-size:15px; font-weight:700; letter-spacing:0.4px; }
+window { background:shade(@shell_bg,0.80); }
+headerbar { background:shade(@shell_bg,0.80); color:@shell_text; border:0; box-shadow:none; min-height:56px; padding:0 14px; }
+headerbar .title { font-size:14px; font-weight:700; letter-spacing:0.2px; }
 headerbar .subtitle { font-size:11px; color:@shell_muted; }
-headerbar button.titlebutton { background:transparent; border:0; border-radius:99px; min-width:34px; min-height:34px; padding:0; margin:0 2px; color:@shell_muted; }
-headerbar button.titlebutton:hover { background:@shell_hover; color:@shell_text; }
+headerbar button.titlebutton { background:transparent; border:0; border-radius:99px; min-width:32px; min-height:32px; padding:0; margin:0 2px; color:@shell_muted; }
+headerbar button.titlebutton:hover { background:alpha(white,0.08); color:@shell_text; }
 headerbar button.titlebutton.close:hover { background:alpha(#ff6b6b,0.85); color:white; }
-headerbar button.suggested-action { margin-right:8px; }
+headerbar button.suggested-action { margin-right:10px; padding:6px 18px; }
 
-/* ---------- Seitenleiste ---------- */
-stacksidebar { background:shade(@shell_bg,0.92); border-right:1px solid alpha(white,0.05); padding:12px 8px; }
-stacksidebar list { background:transparent; padding:14px 12px; }
-stacksidebar separator { background:transparent; min-height:0; margin:0; }
-stacksidebar row { color:@shell_muted; border-radius:10px; margin:2px 0; padding:11px 16px; font-weight:500; transition:all 120ms ease; }
-stacksidebar row:hover { background:alpha(white,0.06); color:@shell_text; }
-stacksidebar row:selected { background:alpha(@shell_accent,0.22); color:@shell_text; box-shadow:inset 3px 0 0 @shell_accent; font-weight:700; }
+/* ---------- Seitenleiste (eigene Liste mit Symbolen und Gruppen) ---------- */
+.sidebar { background:shade(@shell_bg,0.72); border-right:1px solid alpha(white,0.045); padding:10px 12px 14px 12px; min-width:230px; }
+.sidebar-head { color:alpha(@shell_muted,0.75); font-size:10.5px; font-weight:700; letter-spacing:1.4px; padding:18px 12px 6px 12px; }
+.sidebar-row { color:@shell_muted; border-radius:10px; margin:1px 0; padding:9px 12px; transition:background 120ms ease, color 120ms ease; }
+.sidebar-row:hover { background:alpha(white,0.05); color:@shell_text; }
+.sidebar-row:selected { background:alpha(@shell_accent,0.20); color:@shell_text; }
+.sidebar-row image { color:@shell_muted; -gtk-icon-style:symbolic; }
+.sidebar-row:selected image { color:@shell_accent; }
+.sidebar-row label { font-weight:500; }
+.sidebar-row:selected label { font-weight:700; }
 
 /* ---------- Seiten ---------- */
-.page-title { font-size:26px; font-weight:700; color:@shell_text; margin-bottom:2px; }
-.subtitle { color:@shell_muted; font-size:12.5px; }
-.setting-row { background:@shell_bg; border:1px solid alpha(white,0.06); border-radius:14px; padding:14px 18px; margin-bottom:4px; transition:border-color 140ms ease; }
-.setting-row:hover { border-color:alpha(@shell_accent,0.45); }
+.page-title { font-size:28px; font-weight:800; color:@shell_text; letter-spacing:-0.3px; margin-bottom:0; }
+.page-desc, .subtitle { color:@shell_muted; font-size:12.5px; }
+.section-title { color:alpha(@shell_muted,0.9); font-size:11px; font-weight:700; letter-spacing:1.4px; margin-top:14px; margin-bottom:0; }
+.setting-row { background:alpha(white,0.035); border:1px solid alpha(white,0.055); border-radius:14px; padding:16px 20px; transition:border-color 140ms ease, background 140ms ease; }
+.setting-row:hover { border-color:alpha(@shell_accent,0.40); background:alpha(white,0.05); }
+.row-title { font-size:13.5px; font-weight:600; color:@shell_text; }
+.row-desc { font-size:12px; color:@shell_muted; }
+.status-bar { padding:8px 22px; border-top:1px solid alpha(white,0.05); color:@shell_muted; font-size:12px; }
 
 /* ---------- Bedienelemente ---------- */
-button { background:@shell_hover; color:@shell_text; border:1px solid alpha(white,0.07); border-radius:10px; padding:7px 16px; box-shadow:none; text-shadow:none; transition:all 120ms ease; }
-button:hover { background:shade(@shell_hover,1.18); border-color:alpha(@shell_accent,0.6); }
-button:active { background:shade(@shell_hover,0.9); }
+button { background:alpha(white,0.07); color:@shell_text; border:1px solid alpha(white,0.08); border-radius:10px; padding:7px 16px; min-height:20px; box-shadow:none; text-shadow:none; transition:all 120ms ease; }
+button:hover { background:alpha(white,0.12); border-color:alpha(@shell_accent,0.65); }
+button:active { background:alpha(white,0.05); }
 button:focus { border-color:@shell_accent; }
 button.suggested-action { background:@shell_accent; border-color:@shell_accent; color:white; font-weight:700; }
 button.suggested-action:hover { background:shade(@shell_accent,1.15); }

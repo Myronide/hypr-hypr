@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Draconyx Schriften: 10 Voreinstellungen für die Oberfläche (Shell + Aurora) und für Code-Anzeigen (Git-Client, Diffs).
+  dx-fonts list [--json]        Voreinstellungen mit Stand (installiert?) und aktueller Wahl
+  dx-fonts set ui|code ID       Schrift wählen (Shell und Aurora übernehmen sie sofort bzw. beim nächsten Öffnen)
+  dx-fonts install ID           fehlende Schrift installieren (pacman, sonst AUR über paru/yay; Passwort per Dialog)
+Gespeichert in ~/.config/draconyx/font (Oberfläche) und ~/.config/draconyx/font-code (Code)."""
+import json, os, subprocess, sys
+from pathlib import Path
+
+HOME = Path.home()
+CFG = HOME / ".config/draconyx"
+# id, Name, Familie (fontconfig), Paketkandidaten (pacman), Art
+PRESETS = [
+    ("inter", "Inter", "Inter", ["inter-font", "ttf-inter"], "sans"),
+    ("noto", "Noto Sans", "Noto Sans", ["noto-fonts"], "sans"),
+    ("plex", "IBM Plex Sans", "IBM Plex Sans", ["ttf-ibm-plex"], "sans"),
+    ("roboto", "Roboto", "Roboto", ["ttf-roboto"], "sans"),
+    ("krypton", "Monaspace Krypton", "Monaspace Krypton", ["ttf-monaspace", "otf-monaspace"], "mono"),
+    ("neon", "Monaspace Neon", "Monaspace Neon", ["ttf-monaspace", "otf-monaspace"], "mono"),
+    ("argon", "Monaspace Argon", "Monaspace Argon", ["ttf-monaspace", "otf-monaspace"], "mono"),
+    ("jetbrains", "JetBrains Mono", "JetBrains Mono", ["ttf-jetbrains-mono"], "mono"),
+    ("fira", "Fira Code", "Fira Code", ["ttf-fira-code"], "mono"),
+    ("cascadia", "Cascadia Code", "Cascadia Code", ["ttf-cascadia-code"], "mono"),
+]
+DEFAULTS = {"ui": "inter", "code": "krypton"}
+FILES = {"ui": CFG / "font", "code": CFG / "font-code"}
+
+
+def installed(family):
+    r = subprocess.run(["fc-list", ":family=" + family, "family"], capture_output=True, text=True)
+    return bool(r.stdout.strip())
+
+
+def current(kind):
+    try:
+        fam = FILES[kind].read_text().strip()
+    except OSError:
+        fam = ""
+    for p in PRESETS:
+        if p[2] == fam:
+            return p[0]
+    return DEFAULTS[kind]
+
+
+def effective_family(kind):
+    """Familienname, den die Oberfläche wirklich nutzt: die Wahl, sonst eine Rückfallschrift."""
+    pid = current(kind)
+    p = next(x for x in PRESETS if x[0] == pid)
+    if installed(p[2]):
+        return p[2]
+    return "Inter" if kind == "ui" and installed("Inter") else ("monospace" if kind == "code" else "Sans")
+
+
+def do_install(pid):
+    p = next((x for x in PRESETS if x[0] == pid), None)
+    if not p:
+        print("Unbekannte Schrift:", pid, file=sys.stderr); return 1
+    env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"))
+    for pkg in p[3]:
+        if subprocess.run(["pacman", "-Si", pkg], capture_output=True).returncode == 0:
+            if subprocess.run(["sudo", "-A", "pacman", "-S", "--needed", "--noconfirm", pkg], env=env).returncode == 0:
+                subprocess.run(["fc-cache", "-f"]); return 0
+    for helper in ("paru", "yay"):
+        if subprocess.run(["sh", "-c", "command -v " + helper], capture_output=True).returncode == 0:
+            for pkg in p[3]:
+                if subprocess.run([helper, "-S", "--needed", "--noconfirm", pkg]).returncode == 0:
+                    subprocess.run(["fc-cache", "-f"]); return 0
+    print("Konnte %s nicht installieren (Pakete: %s)" % (p[1], ", ".join(p[3])), file=sys.stderr)
+    return 1
+
+
+def main():
+    a = sys.argv[1:]
+    cmd = a[0] if a else "list"
+    if cmd == "list":
+        rows = [{"id": p[0], "name": p[1], "family": p[2], "kind": p[4], "installed": installed(p[2])} for p in PRESETS]
+        out = {"presets": rows, "ui": current("ui"), "code": current("code")}
+        if "--json" in a:
+            print(json.dumps(out, ensure_ascii=False))
+        else:
+            for r in rows:
+                print("%-10s %-20s %-5s %s%s%s" % (r["id"], r["name"], r["kind"], "installiert" if r["installed"] else "fehlt",
+                      "  ← Oberfläche" if r["id"] == out["ui"] else "", "  ← Code" if r["id"] == out["code"] else ""))
+    elif cmd == "set" and len(a) == 3 and a[1] in FILES:
+        p = next((x for x in PRESETS if x[0] == a[2]), None)
+        if not p:
+            print("Unbekannte Schrift:", a[2], file=sys.stderr); sys.exit(1)
+        CFG.mkdir(parents=True, exist_ok=True)
+        FILES[a[1]].write_text(p[2] + "\n")
+    elif cmd == "install" and len(a) == 2:
+        sys.exit(do_install(a[1]))
+    elif cmd == "family" and len(a) == 2 and a[1] in FILES:
+        print(effective_family(a[1]))
+    else:
+        print(__doc__); sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

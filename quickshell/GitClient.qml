@@ -646,7 +646,7 @@ PanelWindow {
                                     Text { width: parent.width; elide: Text.ElideRight; text: crow.modelData.subject; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsS }
                                     Row {
                                         spacing: 8
-                                        Text { text: crow.modelData.short; color: Theme.accentBright; font.family: "monospace"; font.pixelSize: Theme.fsXs }
+                                        Text { text: crow.modelData.short; color: Theme.accentBright; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
                                         Text { text: crow.modelData.author + " · " + crow.modelData.when; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs }
                                         Text { visible: crow.modelData.refs !== ""; text: crow.modelData.refs.replace(/HEAD -> /, "● "); color: Theme.green; font.family: Theme.font; font.pixelSize: Theme.fsXs }
                                     }
@@ -792,7 +792,7 @@ PanelWindow {
                 Text { id: logTxt; width: logFlick.width; wrapMode: Text.Wrap
                     text: gcl.busy ? gcl.logText + "\n…" : (gcl.logText !== "" ? gcl.logText : "Bereit")
                     color: gcl.logText.indexOf("✗") >= 0 ? Theme.red : Theme.textDim
-                    font.family: "monospace"; font.pixelSize: 11 }
+                    font.family: Theme.fontMono; font.pixelSize: 11 }
             }
             Rectangle {
                 id: claudeRow
@@ -859,7 +859,7 @@ PanelWindow {
                 width: 14; horizontalAlignment: Text.AlignHCenter
                 text: fr.modelData.kind === "?" ? "U" : fr.modelData.kind
                 color: fr.modelData.kind === "D" ? gcl.delColor : (fr.modelData.kind === "M" ? Theme.amber : gcl.addColor)
-                font.family: "monospace"; font.pixelSize: 12; font.weight: Font.Bold
+                font.family: Theme.fontMono; font.pixelSize: 12; font.weight: Font.Bold
             }
             Text { width: 380; elide: Text.ElideMiddle; text: fr.modelData.path; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsS }
         }
@@ -940,7 +940,7 @@ PanelWindow {
                 color: modelData.startsWith("+") && !modelData.startsWith("+++") ? gcl.addColor
                      : modelData.startsWith("-") && !modelData.startsWith("---") ? gcl.delColor
                      : modelData.startsWith("@@") ? Theme.accentBright : Theme.textDim
-                font.family: "monospace"; font.pixelSize: 12
+                font.family: Theme.fontMono; font.pixelSize: 12
                 wrapMode: Text.NoWrap; elide: Text.ElideRight
             }
         }
