@@ -1044,8 +1044,8 @@ Singleton {
     }
     function checkUpdate(manual) { updateManual = !!manual; updCheck.running = false; updCheck.running = true; }
     function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/dx-update", "apply"]); }
-    Timer { interval: 30 * 60 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
-    Timer { interval: 120000; running: true; onTriggered: root.checkUpdate(false) }      // zwei Minuten nach dem Start
+    Timer { interval: 60 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
+    Timer { interval: 20000; running: true; onTriggered: root.checkUpdate(false) }      // 20 Sekunden nach dem Start
 
     // ---------- Terminal-Wächter ----------
     // Es soll immer mindestens ein Terminal installiert sein (auch wenn Ghostty/Kitty deinstalliert wurden). dx-terminal-ensure

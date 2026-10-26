@@ -45,6 +45,18 @@ def check():
         out["error"] = "noch nicht mit install.sh eingerichtet – im Repo einmal  sudo ./install.sh  ausführen" if not info else "Repo-Ordner nicht mehr vorhanden – install.sh aus dem neuen Repo starten"
     else:
         try:
+            # Billige Vorprüfung (jede Minute): stimmt der Stand des Remotes mit dem lokalen origin/... überein, nichts holen
+            up0 = git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").stdout.strip() or "origin/master"
+            br = up0.split("/", 1)[-1]
+            lr = git(repo, "ls-remote", "origin", "refs/heads/" + br, timeout=20)
+            remote_sha = lr.stdout.split()[0] if lr.returncode == 0 and lr.stdout.split() else ""
+            local_sha = git(repo, "rev-parse", up0).stdout.strip()
+            prev = read_json(STATE, {})
+            if remote_sha and remote_sha == local_sha and prev.get("installed") == out["installed"] and prev.get("latest") and not prev.get("error"):
+                prev["checked"] = int(time.time())
+                STATE.parent.mkdir(parents=True, exist_ok=True)
+                STATE.write_text(json.dumps(prev, ensure_ascii=False, indent=2))
+                return prev
             f = git(repo, "fetch", "--quiet", "origin")
             if f.returncode != 0:
                 out["error"] = (f.stderr.strip().splitlines() or ["fetch fehlgeschlagen"])[-1]
