@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.5.0
+- Neu: Zwischenablage-Verlauf mit Bildvorschau, Fokus-Zeit (Pomodoro/Timer/Stoppuhr), Lautstärke-OSD, Tastenkürzel-Übersicht (Strg+Alt+I), Datenschutz- und Leistungsanzeige in der Leiste, Schnellsuche mit Rechner/Einheiten/Fenstern/Systemaktionen, Drop-down-Terminal, Text aus Screenshots (OCR), Mikrofon-Taste, Aurora: Energie & Sperre, Bewegung & Licht (Animationen, Nachtlicht-Zeitplan), sanfte Popup-Animationen
+
 ## 1.4.0
 - Neu: Autostart-Verwaltung, Fensterregeln, Sicherung/Wiederherstellung (Aurora), Verbindungen-Fenster für WLAN/Bluetooth/Audio, Systemmonitor mit Programm-Zusammenfassung; VS Code & Co. lassen sich minimieren (XWayland); Desktop-Klick + Strg+Leertaste
 
