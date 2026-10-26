@@ -97,7 +97,6 @@ def client_for(xid):
     return cand[0] if cand else None
 
 def hypr_call(cmd):
-    """Befehl direkt an den Hyprland-Socket (viel schneller als ein hyprctl-Aufruf je Mausbewegung)"""
     s = socket.socket(socket.AF_UNIX)
     s.settimeout(1.0)
     s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
@@ -111,37 +110,67 @@ def hypr_call(cmd):
     s.close()
     return out.decode()
 
+call = hypr_call
+# Verschieben (gleiche Logik wie bin/dx-window-drag): maximiert -> alte Größe, Bildschirmwechsel, Andocken nicht überschreiben
+def window(addr):
+    return next((c for c in json.loads(call("j/clients")) if c["address"] == addr), None)
+
 def cursor():
-    """Zeigerposition im Hyprland-Layout (zuverlässig; die X-Koordinaten hinken beim Verschieben hinterher und schaukeln das Fenster auf)"""
-    c = json.loads(hypr_call("j/cursorpos"))
+    c = json.loads(call("j/cursorpos"))
     return int(c["x"]), int(c["y"])
 
-def drag_window(dpy, root, xid):
-    """Fenster mit dem Zeiger mitnehmen, bis die linke Taste losgelassen wird (höchstens 60 s)."""
-    c = client_for(xid)
-    if not c or not c.get("floating") or c.get("fullscreen"):
+def monitor_at(mons, x, y):
+    for m in mons:
+        if m["x"] <= x < m["x"] + m["width"] and m["y"] <= y < m["y"] + m["height"]:
+            return m
+    return None
+
+def drag(addr, alive, report=None):
+    """Fenster mit dem Zeiger mitnehmen, solange alive() wahr ist (höchstens 120 s)."""
+    win = window(addr)
+    if not win or not win.get("floating") or win.get("fullscreen"):
         return
-    px, py = cursor()
-    ox, oy = px - c["at"][0], py - c["at"][1]
-    addr, last, end = c["address"], None, time.time() + 60
-    while time.time() < end:
-        if not pointer(dpy, root)[2]:      # Taste ist los: sofort aufhören (das Andocken beim Loslassen darf nicht überschrieben werden)
-            break
+    cx, cy = cursor()
+    call("eval DXSnap.restoreForDrag('%s', %d, %d)" % (addr, cx, cy))        # maximiert? -> alte Größe
+    time.sleep(0.03)
+    win = window(addr) or win
+    ox, oy = cx - win["at"][0], cy - win["at"][1]
+    mons, mons_at, cur_mon = [], 0.0, win.get("monitor")
+    last, end = None, time.time() + 120
+    while time.time() < end and alive():
         cx, cy = cursor()
-        nx, ny = cx - ox, cy - oy
-        if (nx, ny) != last:
-            if last is not None:           # hat jemand anderes das Fenster bewegt? Dann nicht dagegen arbeiten
-                try:
-                    a = json.loads(hypr_call("j/activewindow"))
-                    if a.get("address") == addr and (abs(a["at"][0] - last[0]) > 3 or abs(a["at"][1] - last[1]) > 3):
-                        break
-                except (OSError, ValueError, KeyError):
-                    pass
-            if not pointer(dpy, root)[2]:  # unmittelbar vor dem Verschieben noch einmal prüfen
+        pos = (cx - ox, cy - oy)
+        if pos != last:
+            if last is not None:                      # hat jemand anderes das Fenster bewegt (Andocken beim Loslassen)? Dann nicht dagegen arbeiten
+                a = json.loads(call("j/activewindow"))
+                if a.get("address") == addr and (abs(a["at"][0] - last[0]) > 3 or abs(a["at"][1] - last[1]) > 3):
+                    break
+            if time.time() - mons_at > 0.4:
+                mons, mons_at = json.loads(call("j/monitors")), time.time()
+            m = monitor_at(mons, cx, cy)
+            if m is not None and m["id"] != cur_mon:  # Zeiger auf einem anderen Bildschirm: Fenster diesem zuordnen
+                call('dispatch hl.dsp.window.move({ window = "address:%s", monitor = "%s", follow = false })' % (addr, m["name"]))
+                cur_mon = m["id"]
+            if not alive():
                 break
-            hypr_call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, nx, ny))
-            last = (nx, ny)
+            call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, pos[0], pos[1]))
+            last = pos
+            if report:
+                report(pos)
         time.sleep(0.008)
+
+
+def drag_window(dpy, root, xid):
+    """Fenster einer X11-App mit dem Zeiger mitnehmen, solange die linke Taste gehalten wird."""
+    c = client_for(xid)
+    if not c:
+        return
+    state = {"n": 0, "down": True}
+    def alive():
+        state["n"] += 1
+        state["down"] = pointer(dpy, root)[2]       # Taste ist los: sofort aufhören (das Andocken beim Loslassen darf nicht überschrieben werden)
+        return state["down"]
+    drag(c["address"], alive)
 
 dpy = x.XOpenDisplay(None)
 if not dpy:

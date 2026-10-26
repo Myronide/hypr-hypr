@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # Draconyx: verschiebt ein Fenster mit dem Mauszeiger (für die Titelleisten der Shell). dx-window-drag 0x<adresse>
-# Läuft, bis die Shell den Prozess beendet (Maustaste losgelassen). Gibt bei jeder Bewegung "x y" (neue Fensterposition) aus,
-# damit die Leiste live mitgeht. Das Andocken (dx_snap) bemerkt die Bewegung wie bei jedem anderen Ziehen.
+# Läuft, bis die Shell den Prozess beendet (Maustaste losgelassen). Gibt bei jeder Bewegung "x y" (neue Fensterposition) aus.
+#  * Ein maximiertes Fenster wird dabei erst auf seine alte Größe zurückgesetzt (Zeiger bleibt im gleichen Verhältnis auf der Leiste).
+#  * Zieht man auf einen anderen Bildschirm, wird das Fenster diesem Bildschirm zugeordnet (sonst maximiert das Andocken danach
+#    wieder auf dem alten).
+#  * Das Andocken (dx_snap) bemerkt die Bewegung wie bei jedem anderen Ziehen; bewegt jemand anderes das Fenster, hört der Helfer auf.
 import json, os, signal, socket, sys, time
 
 def call(cmd):
@@ -18,35 +21,59 @@ def call(cmd):
     s.close()
     return out.decode()
 
-try:
-    import ctypes
-    ctypes.CDLL("libc.so.6").prctl(1, int(signal.SIGTERM))       # stirbt mit der Shell
-except OSError:
-    pass
-signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+def window(addr):
+    return next((c for c in json.loads(call("j/clients")) if c["address"] == addr), None)
 
-addr = sys.argv[1] if len(sys.argv) > 1 else ""
-if not addr.startswith("0x"):
-    addr = "0x" + addr
-win = next((c for c in json.loads(call("j/clients")) if c["address"] == addr), None)
-if not win or not win.get("floating") or win.get("fullscreen"):
-    sys.exit(0)
-cur = json.loads(call("j/cursorpos"))
-ox, oy = int(cur["x"]) - win["at"][0], int(cur["y"]) - win["at"][1]
-last, end = None, time.time() + 120
-def at_now():
-    a = json.loads(call("j/activewindow"))
-    return tuple(a["at"]) if a.get("address") == addr else None
+def cursor():
+    c = json.loads(call("j/cursorpos"))
+    return int(c["x"]), int(c["y"])
 
-while time.time() < end:
-    cur = json.loads(call("j/cursorpos"))
-    pos = (int(cur["x"]) - ox, int(cur["y"]) - oy)
-    if pos != last:
-        if last is not None:                      # hat jemand anderes das Fenster bewegt (Andocken beim Loslassen)? Dann nicht dagegen arbeiten
-            a = at_now()
-            if a is not None and (abs(a[0] - last[0]) > 3 or abs(a[1] - last[1]) > 3):
+def monitor_at(mons, x, y):
+    for m in mons:
+        if m["x"] <= x < m["x"] + m["width"] and m["y"] <= y < m["y"] + m["height"]:
+            return m
+    return None
+
+def drag(addr, alive, report=None):
+    """Fenster mit dem Zeiger mitnehmen, solange alive() wahr ist (höchstens 120 s)."""
+    win = window(addr)
+    if not win or not win.get("floating") or win.get("fullscreen"):
+        return
+    cx, cy = cursor()
+    call("eval DXSnap.restoreForDrag('%s', %d, %d)" % (addr, cx, cy))        # maximiert? -> alte Größe
+    time.sleep(0.03)
+    win = window(addr) or win
+    ox, oy = cx - win["at"][0], cy - win["at"][1]
+    mons, mons_at, cur_mon = [], 0.0, win.get("monitor")
+    last, end = None, time.time() + 120
+    while time.time() < end and alive():
+        cx, cy = cursor()
+        pos = (cx - ox, cy - oy)
+        if pos != last:
+            if last is not None:                      # hat jemand anderes das Fenster bewegt (Andocken beim Loslassen)? Dann nicht dagegen arbeiten
+                a = json.loads(call("j/activewindow"))
+                if a.get("address") == addr and (abs(a["at"][0] - last[0]) > 3 or abs(a["at"][1] - last[1]) > 3):
+                    break
+            if time.time() - mons_at > 0.4:
+                mons, mons_at = json.loads(call("j/monitors")), time.time()
+            m = monitor_at(mons, cx, cy)
+            if m is not None and m["id"] != cur_mon:  # Zeiger auf einem anderen Bildschirm: Fenster diesem zuordnen
+                call('dispatch hl.dsp.window.move({ window = "address:%s", monitor = "%s", follow = false })' % (addr, m["name"]))
+                cur_mon = m["id"]
+            if not alive():
                 break
-        call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, pos[0], pos[1]))
-        print(pos[0], pos[1], flush=True)
-        last = pos
-    time.sleep(0.008)
+            call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, pos[0], pos[1]))
+            last = pos
+            if report:
+                report(pos)
+        time.sleep(0.008)
+
+if __name__ == "__main__":
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").prctl(1, int(signal.SIGTERM))       # stirbt mit der Shell
+    except OSError:
+        pass
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    a = sys.argv[1] if len(sys.argv) > 1 else ""
+    drag(a if a.startswith("0x") else "0x" + a, lambda: True, lambda p: print(p[0], p[1], flush=True))

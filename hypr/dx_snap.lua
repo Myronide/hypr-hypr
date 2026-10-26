@@ -22,31 +22,78 @@ end
 
 -- ---------- Geometrie ----------
 -- Platz für die Titelleisten der Shell (TitleBars.qml): eine Leiste sitzt direkt ÜBER dem Fenster, also bleibt beim Andocken und
--- Maximieren oben ein Streifen frei. Aus, wenn die Shell-Einstellung "titleBars" ausgeschaltet ist (gelesen beim Laden/Neuladen).
+-- Maximieren oben ein Streifen frei – aber nur bei Fenstern, die auch eine Leiste bekommen (wie in der Shell: schwebend, Klasse nicht in
+-- csd-apps, kein GTK-Programm; ~/.config/draconyx/titlebar-force erzwingt eine Leiste). Aus, wenn "titleBars" in den Shell-Einstellungen aus ist.
 local TITLEBAR = 30
-local TB = TITLEBAR
-local function readTB()
-    local f = io.open((os.getenv("HOME") or "") .. "/.local/state/draconyx/settings.json", "r")
-    if not f then return TITLEBAR end
-    local s = f:read("*a") or ""
+local HOME = os.getenv("HOME") or ""
+local barsOn, csdSet, forceSet, csdAt = true, {}, {}, 0
+local gtkPid = {}       -- pid -> true/false (einmal je Prozess aus /proc/PID/maps)
+
+local function readSet(path, into)
+    local f = io.open(path, "r")
+    if not f then return end
+    for line in f:lines() do
+        local k = line:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+        if k ~= "" and k:sub(1, 1) ~= "#" then into[k] = true end
+    end
     f:close()
-    if s:find('"titleBars"%s*:%s*false') then return 0 end
-    return TITLEBAR
 end
-TB = readTB()
-hl.on("config.reloaded", function() TB = readTB() end)
 
-local function area(m)
+local function refreshLists()
+    local now = os.time()
+    if now - csdAt < 5 then return end
+    csdAt = now
+    csdSet, forceSet = {}, {}
+    readSet(HOME .. "/.config/hypr/csd-apps", csdSet)
+    readSet(HOME .. "/.config/hypr/aurora/csd-apps", csdSet)
+    readSet(HOME .. "/.config/draconyx/titlebar-force", forceSet)
+    local f = io.open(HOME .. "/.local/state/draconyx/settings.json", "r")
+    local s = f and f:read("*a") or ""
+    if f then f:close() end
+    barsOn = not s:find('"titleBars"%s*:%s*false')
+end
+refreshLists()
+hl.on("config.reloaded", function() csdAt = 0; refreshLists() end)
+
+local function usesGtk(pid)
+    if pid == nil then return false end
+    if gtkPid[pid] ~= nil then return gtkPid[pid] end
+    local r = false
+    local f = io.open("/proc/" .. tostring(pid) .. "/maps", "r")
+    if f then
+        for line in f:lines() do
+            if line:find("libgtk%-[34]") or line:find("libadwaita") then r = true; break end
+        end
+        f:close()
+    end
+    gtkPid[pid] = r
+    return r
+end
+
+-- Bekommt dieses Fenster eine Titelleiste der Shell? (gleiche Regeln wie in TitleBars.qml)
+local function wantsBar(w)
+    if w == nil then return false end
+    refreshLists()
+    if not barsOn then return false end
+    local cls = (w.class or ""):lower()
+    if cls == "" or cls:find("^steam_app_") then return false end
+    if forceSet[cls] then return true end
+    if csdSet[cls] then return false end
+    return not usesGtk(w.pid)
+end
+
+local function area(m, w)
     local r = m.reserved or {}
+    local tb = wantsBar(w) and TITLEBAR or 0
     local x = m.x + (r.left or 0) + GAP
-    local y = m.y + (r.top or 0) + GAP + TB
-    local w = m.width - (r.left or 0) - (r.right or 0) - 2 * GAP
-    local h = m.height - (r.top or 0) - (r.bottom or 0) - 2 * GAP - TB
-    return x, y, w, h
+    local y = m.y + (r.top or 0) + GAP + tb
+    local ww = m.width - (r.left or 0) - (r.right or 0) - 2 * GAP
+    local h = m.height - (r.top or 0) - (r.bottom or 0) - 2 * GAP - tb
+    return x, y, ww, h
 end
 
-function M.rectFor(m, zone)
-    local x0, y0, aw, ah = area(m)
+function M.rectFor(m, zone, w)
+    local x0, y0, aw, ah = area(m, w)
     local hw = math.floor((aw - GAP) / 2)
     local hh = math.floor((ah - GAP) / 2)
     local x, y, w, h = x0, y0, aw, ah
@@ -69,7 +116,7 @@ function M.snapWindow(w, zone)
     if w == nil then return end
     local m = w.monitor or hl.get_active_monitor()
     if m == nil then return end
-    local x, y, ww, wh = M.rectFor(m, zone)
+    local x, y, ww, wh = M.rectFor(m, zone, w)
     local a = "address:" .. w.address
     if w.fullscreen ~= 0 then
         hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
@@ -90,7 +137,7 @@ local userMax = {}   -- address -> { x, y, w, h } Geometrie vor dem Maximieren
 local function nearArea(w)
     local m = w.monitor or hl.get_active_monitor()
     if m == nil then return false end
-    local x, y, aw, ah = area(m)
+    local x, y, aw, ah = area(m, w)
     return math.abs(w.size.x - aw) < 12 and math.abs(w.size.y - ah) < 12
 end
 
@@ -105,9 +152,27 @@ function M.isMaxed(w)
     return w ~= nil and userMax[w.address] ~= nil and nearArea(w)
 end
 
+-- Letzte "normale" Geometrie jedes Fensters (nicht maximiert, kein Vollbild): Drückt jemand den Maximieren-Knopf einer App, hat sie
+-- die Größe oft schon geändert, bevor wir das Ereignis sehen. Dann nehmen wir diese gemerkte Größe als "vor dem Maximieren".
+local normal = {}
+local maxState = {}   -- address -> war das Fenster (vor dem Knopfdruck) maximiert? Hyprland ändert die Größe schon vor dem Ereignis
+local function noteNormal()
+    pcall(function()
+        for _, w in ipairs(hl.get_windows()) do
+            if w.mapped and w.floating and w.fullscreen == 0 then maxState[w.address] = M.isMaxed(w) end
+            if w.mapped and w.floating and w.fullscreen == 0 and w.workspace ~= nil and w.workspace.id ~= nil and w.workspace.id > 0
+               and w.monitor ~= nil and w.size.x > 100 and w.size.y > 60 and not nearArea(w) then
+                normal[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
+            end
+        end
+    end)
+end
+hl.timer(noteNormal, { timeout = 400, type = "repeat" })
+hl.on("window.destroy", function(w) pcall(function() if w ~= nil then normal[w.address] = nil end end) end)
+
 local function applyArea(w)
     local m = w.monitor or hl.get_active_monitor()
-    local x, y, aw, ah = area(m)
+    local x, y, aw, ah = area(m, w)
     local a = "address:" .. w.address
     hl.dispatch(hl.dsp.window.resize({ window = a, x = aw, y = ah, relative = false }))
     hl.dispatch(hl.dsp.window.move({ window = a, x = x, y = y, relative = false }))
@@ -120,9 +185,12 @@ function M.setMax(w)
     if w.fullscreen == 2 or w.fullscreen == 3 then return end   -- echtes Vollbild nicht anfassen
     if tiling ~= nil and tiling.isTiled(w) then tiling.setMaxed(w.address, true) end
     if userMax[w.address] == nil or not nearArea(w) then
-        userMax[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
+        local o = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
+        if nearArea(w) and normal[w.address] ~= nil then o = normal[w.address] end   -- App hat sich schon selbst vergrößert: gemerkte Größe nehmen
+        userMax[w.address] = o
     end
     if not w.floating then hl.dispatch(hl.dsp.window.float({ window = a, action = "set" })) end   -- "set" schaltet in dieser Version um: nur wenn nötig
+    maxState[w.address] = true
     applyArea(w)
 end
 
@@ -132,6 +200,7 @@ function M.unMax(w)
     if w.fullscreen == 1 then hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" })) end
     local o = userMax[w.address]
     userMax[w.address] = nil
+    maxState[w.address] = false
     if tiling ~= nil then tiling.setMaxed(w.address, false) end
     if tiling ~= nil and tiling.isTiled(w) then
         tiling.retile(w.workspace and w.workspace.id)
@@ -142,6 +211,24 @@ function M.unMax(w)
         hl.dispatch(hl.dsp.window.move({ window = a, x = o.x, y = o.y, relative = false }))
     else
         M.snapWindow(w, "restore")
+    end
+end
+
+-- Ein maximiertes Fenster wird an der Titelleiste gezogen (Shell-Leiste, XWayland-Apps): erst auf die alte Größe zurück, und zwar so,
+-- dass der Zeiger im gleichen Verhältnis auf der Leiste bleibt wie vorher (wie unter Windows). cx/cy = Zeigerposition.
+function M.restoreForDrag(address, cx, cy)
+    for _, w in ipairs(hl.get_windows()) do
+        if w.address == address then
+            if not M.isMaxed(w) then return end
+            local o = userMax[address]
+            local fx = (cx - w.at.x) / math.max(1, w.size.x)
+            local oy = cy - w.at.y
+            M.unMax(w)
+            if o ~= nil then
+                hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, x = math.floor(cx - fx * o.w), y = cy - oy, relative = false }))
+            end
+            return
+        end
     end
 end
 
@@ -163,7 +250,7 @@ hl.on("window.fullscreen", function(w)
     pcall(function()
         if w ~= nil and w.fullscreen == 1 then
             local a = "address:" .. w.address
-            local wasMax = M.isMaxed(w)
+            local wasMax = (maxState[w.address] == true) or M.isMaxed(w)     -- Zustand VOR dem Knopfdruck
             hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
             -- Die App (z. B. Brave über XWayland) reagiert auf das Zurücknehmen mit einer eigenen Größenänderung.
             -- Erst danach das eigene Maximieren/Wiederherstellen anwenden, sonst springt das Fenster wieder klein.
@@ -321,7 +408,7 @@ local function tick()
                    and o.workspace.id == w.workspace.id and o.monitor ~= nil and w.monitor ~= nil and o.monitor.name == w.monitor.name
                    and c.x >= o.at.x and c.x <= o.at.x + o.size.x and c.y >= o.at.y and c.y <= o.at.y + o.size.y then
                     local wz = press.snaps[w.address]
-                    local x, y, ww, wh = M.rectFor(o.monitor, wz)
+                    local x, y, ww, wh = M.rectFor(o.monitor, wz, o)
                     local oa = "address:" .. o.address
                     hl.dispatch(hl.dsp.window.resize({ window = oa, x = ww, y = wh, relative = false }))
                     hl.dispatch(hl.dsp.window.move({ window = oa, x = x, y = y, relative = false }))
@@ -336,7 +423,7 @@ local function tick()
     local zone, m = zoneNow()
     if zone == nil then writePreview("none"); return end
     local rz = (zone == "max") and "max" or zone
-    local x, y, ww, wh = M.rectFor(m, rz)
+    local x, y, ww, wh = M.rectFor(m, rz, w)
     writePreview(string.format("%s %d %d %d %d", m.name, x, y, ww, wh))
 end
 
@@ -351,7 +438,7 @@ local function onPress()
         local z = zoneOf[w.address]
         if z ~= nil and z ~= "max" and w.mapped and w.floating and w.workspace ~= nil and w.monitor ~= nil then
             local ok, x, y, ww, wh = pcall(function()
-                local a, b, c, d = M.rectFor(w.monitor, z); return a, b, c, d
+                local a, b, c, d = M.rectFor(w.monitor, z, w); return a, b, c, d
             end)
             if ok and x ~= nil and math.abs(w.at.x - x) + math.abs(w.at.y - y) + math.abs(w.size.x - ww) + math.abs(w.size.y - wh) < 16 then
                 press.snaps[w.address] = z
