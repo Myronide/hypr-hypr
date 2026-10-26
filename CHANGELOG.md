@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.3.3
+- Hotfix: Apps aus Startmenü und Taskleiste starten abgekoppelt (dx-launch) – verhindert den Discord-Fehler „write EPIPE“
+
 ## 1.3.2
 - Update-Prüfung jede Minute im Hintergrund (billige Vorprüfung), Meldungen weiter höchstens einmal pro Tag
 
