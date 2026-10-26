@@ -865,6 +865,12 @@ Singleton {
     }
     function hypr(lua) { Hyprland.dispatch(lua); }
     function hyprEval(lua) { Quickshell.execDetached(["hyprctl", "eval", lua]); }
+    // Klick auf den leeren Desktop: Hyprland merkt sich das Fenster, das gerade den Fokus hat. Solange sich der Fokus nicht ändert und
+    // kein Fenster angeklickt wird, gilt der Desktop als "fokussiert" (Strg+Leertaste öffnet dann die Suche). Hyprland selbst gibt den
+    // Fokus beim Klick auf leere Fläche sonst einfach an das letzte Fenster zurück.
+    function desktopClicked() {
+        hyprEval("local w = hl.get_active_window(); DX_DESK_CLICK = (w and w.address) or 'none'");
+    }
 
     PwObjectTracker { objects: [Pipewire.defaultAudioSink, Pipewire.defaultAudioSource] }
 

@@ -396,8 +396,8 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
         case "$c" in *dx-x11-iconify*|*dx-ui-bridge*|*desktop-ui\ daemon*|*settings-app*) kill "$p" 2>/dev/null || true;; esac
       done
       hyprctl dispatch "hl.dsp.exec_cmd(\"sh -c 'QS_ICON_THEME=Papirus-Dark exec qs -c draconyx'\")" >/dev/null 2>&1 || true
-      for _ in $(seq 1 20); do qs -c draconyx ipc show >/dev/null 2>&1 && break; sleep 0.5; done
-      if qs -c draconyx ipc show >/dev/null 2>&1; then
+      for _ in $(seq 1 60); do qs -c draconyx ipc show >/dev/null 2>&1 && break; sleep 0.5; done      # bis zu 30 s: unter Last startet die Shell langsam
+      if qs -c draconyx ipc show >/dev/null 2>&1 || pgrep -x qs >/dev/null 2>&1; then
         say "Shell läuft"
         sleep 6; r="$(python3 -I "$HERE/bin/dx-settings-guard" restore 2>&1 || true)"; [ -n "$r" ] && [ "$r" != "nichts zurückzusetzen" ] && warn "$r"
         sleep 3; qs -c draconyx ipc call shell weReapply >/dev/null 2>&1 || true    # Wallpaper Engine mit den gespeicherten Wallpapern neu starten

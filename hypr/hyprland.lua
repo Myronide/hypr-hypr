@@ -195,9 +195,17 @@ local B = DXB.bind
 B("start_menu", "Startmenü", mainMod .. " + space", hl.dsp.exec_cmd(startMenu))                 -- Startmenü
 -- Strg+Space öffnet die Suche NUR auf dem Desktop (kein Fenster im Fokus). Die Taste bleibt nicht verbraucht (non_consuming),
 -- Apps bekommen sie also weiter (z. B. Autovervollständigung im Editor).
+-- "Auf dem Desktop" heißt: kein Fenster aktiv, das aktive Fenster ist minimiert/versteckt, ODER der leere Desktop wurde zuletzt angeklickt
+-- (die Shell setzt dann DX_DESK_CLICK; es gilt, bis ein anderes Fenster den Fokus bekommt oder irgendwo ein Fenster angeklickt wird).
+DX_DESK_CLICK = nil
+hl.on("window.active", function(w)
+    if DX_DESK_CLICK ~= nil and (w == nil or w.address ~= DX_DESK_CLICK) then DX_DESK_CLICK = nil end
+end)
+hl.bind("mouse:272", function() DX_DESK_CLICK = nil end, { non_consuming = true })   -- jeder Linksklick löscht die Markierung (der Desktop setzt sie danach neu)
 B("desktop_search", "Suche (nur auf dem leeren Desktop)", "CTRL + space", function()
     local w = hl.get_active_window()
     local onDesktop = (w == nil) or (w.workspace == nil) or (w.mapped == false) or (w.hidden == true)
+        or (w.workspace.name == "minimized") or (DX_DESK_CLICK ~= nil)
     if onDesktop then hl.exec_cmd("qs -c draconyx ipc call shell toggleSearchBox") end
 end, { non_consuming = true })
 

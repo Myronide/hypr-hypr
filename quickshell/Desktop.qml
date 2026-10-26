@@ -90,6 +90,7 @@ PanelWindow {
         }
         onReleased: { dragging = false; desk.marquee = null; }
         onClicked: mouse => {
+            if (mouse.button === Qt.LeftButton) Global.desktopClicked();     // meldet Hyprland: leerer Desktop angeklickt (Strg+Leertaste öffnet dann die Suche)
             if (mouse.button === Qt.RightButton && desk.showIcons) {
                 desk.clearSel();
                 desk.menu = { x: mouse.x, y: mouse.y, kind: "empty" };
