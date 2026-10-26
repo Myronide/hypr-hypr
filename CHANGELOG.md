@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.3.5
+- Wichtig: Einstellungen (Taskleiste, Desktop-Symbole, Wallpaper) werden bei Updates nicht mehr zurückgesetzt – Schutz in Shell und Installer, automatische Sicherung, Wiederherstellung per dx-settings-guard
+
 ## 1.3.4
 - Hotfix: Update-Prüfung zeigte nach git pull/push einen veralteten Stand („aktuell“, obwohl es Neueres gibt); „Jetzt prüfen“ wirkt jetzt
 
