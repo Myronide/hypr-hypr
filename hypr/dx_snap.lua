@@ -362,7 +362,7 @@ local function movedWindow()
     for _, w in ipairs(hl.get_windows()) do
         local p = press.pos[w.address]
         if p ~= nil and w.mapped and w.floating and w.fullscreen == 0
-           and w.workspace ~= nil and w.workspace.id == p.ws and w.workspace.name ~= "minimized" then
+           and w.workspace ~= nil and w.workspace.id ~= nil and w.workspace.id > 0 and w.workspace.name ~= "minimized" then   -- auch nach einem Bildschirmwechsel (anderer Desktop) zählt das Fenster
             if math.abs(w.at.x - p.x) + math.abs(w.at.y - p.y) > 24 then return w end
         end
     end
@@ -486,7 +486,16 @@ local function finish()
     end
 end
 
+-- Loslassen der linken Maustaste sofort festhalten (Datei mit neuem Zeitstempel): die Verschiebe-Helfer der Shell (dx-window-drag,
+-- dx-x11-iconify) hören darauf auf, damit sie das Andocken beim Loslassen nicht überschreiben – unabhängig davon, wann die Shell es merkt.
+local MOUSEUP = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/draconyx-mouse-up"
+local function markRelease()
+    local f = io.open(MOUSEUP, "w")
+    if f then f:write(tostring(os.time()), "\n"); f:close() end
+end
+
 local function onRelease()
+    markRelease()
     -- Hyprland beendet das Ziehen erst nach dem Loslassen: kurz warten, dann auswerten
     hl.timer(finish, { timeout = 40, type = "oneshot" })
 end

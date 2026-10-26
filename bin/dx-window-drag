@@ -45,12 +45,31 @@ def drag(addr, alive, report=None):
     win = window(addr) or win
     ox, oy = cx - win["at"][0], cy - win["at"][1]
     mons, mons_at, cur_mon = [], 0.0, win.get("monitor")
-    last, end = None, time.time() + 120
-    while time.time() < end and alive():
+    last, end, n = None, time.time() + 120, 0
+    # Ohne Fensteranimation ziehen: sonst läuft das Fenster dem Zeiger hinterher (jede Bewegung würde animiert)
+    call('dispatch hl.dsp.window.set_prop({ window = "address:%s", prop = "no_anim", value = "1" })' % addr)
+    try:
+        _loop(addr, alive, report, ox, oy, mons, mons_at, cur_mon, last, end, n)
+    finally:
+        call('dispatch hl.dsp.window.set_prop({ window = "address:%s", prop = "no_anim", value = "0" })' % addr)
+
+MOUSEUP = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "draconyx-mouse-up")
+
+def mouse_up_since(t0_ns):
+    """Hat die Hyprland-Konfiguration (dx_snap) seit t0 ein Loslassen der Maustaste gemeldet?"""
+    try:
+        return os.stat(MOUSEUP).st_mtime_ns > t0_ns
+    except OSError:
+        return False
+
+def _loop(addr, alive, report, ox, oy, mons, mons_at, cur_mon, last, end, n):
+    t0 = time.time_ns() - 20_000_000
+    while time.time() < end and alive() and not mouse_up_since(t0):
         cx, cy = cursor()
         pos = (cx - ox, cy - oy)
         if pos != last:
-            if last is not None:                      # hat jemand anderes das Fenster bewegt (Andocken beim Loslassen)? Dann nicht dagegen arbeiten
+            n += 1
+            if last is not None and n % 3 == 0:       # hat jemand anderes das Fenster bewegt (Andocken beim Loslassen)? Dann nicht dagegen arbeiten
                 a = json.loads(call("j/activewindow"))
                 if a.get("address") == addr and (abs(a["at"][0] - last[0]) > 3 or abs(a["at"][1] - last[1]) > 3):
                     break
@@ -60,13 +79,14 @@ def drag(addr, alive, report=None):
             if m is not None and m["id"] != cur_mon:  # Zeiger auf einem anderen Bildschirm: Fenster diesem zuordnen
                 call('dispatch hl.dsp.window.move({ window = "address:%s", monitor = "%s", follow = false })' % (addr, m["name"]))
                 cur_mon = m["id"]
-            if not alive():
+                last = None                           # unsere eigene Verschiebung nicht als fremde Bewegung deuten
+            if not alive() or mouse_up_since(t0):
                 break
             call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, pos[0], pos[1]))
             last = pos
             if report:
                 report(pos)
-        time.sleep(0.008)
+        time.sleep(0.004)
 
 if __name__ == "__main__":
     try:
