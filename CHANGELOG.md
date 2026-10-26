@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.5.2
+- Fix: Maus-Hover in allen Fenstern (Aurora setzte follow_mouse=0, Installer räumt auf); Titelleisten-Helfer sparsamer und das Andocken beim Ziehen zwischen Bildschirmen wird nicht mehr überschrieben
+
 ## 1.5.1
 - Titelleisten (Minimieren/Maximieren/Schließen, Ziehen, Doppelklick) für Apps ohne eigene Leiste wie Dolphin; Fenster von XWayland-Apps (Brave, VS Code, Discord, Aurora) lassen sich an ihrer Titelleiste ziehen, ohne Alt oder Strg+Alt; Andocken lässt oben Platz für die Leisten
 
