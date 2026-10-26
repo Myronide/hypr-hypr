@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.4.0
+- Neu: Autostart-Verwaltung, Fensterregeln, Sicherung/Wiederherstellung (Aurora), Verbindungen-Fenster für WLAN/Bluetooth/Audio, Systemmonitor mit Programm-Zusammenfassung; VS Code & Co. lassen sich minimieren (XWayland); Desktop-Klick + Strg+Leertaste
+
 ## 1.3.9
 - Snip-Werkzeug (Druck) schließt Code Space, Startmenü, Suche und andere Fenster der Shell nicht mehr
 
