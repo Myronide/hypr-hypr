@@ -51,13 +51,8 @@ def check():
             lr = git(repo, "ls-remote", "origin", "refs/heads/" + br, timeout=20)
             remote_sha = lr.stdout.split()[0] if lr.returncode == 0 and lr.stdout.split() else ""
             local_sha = git(repo, "rev-parse", up0).stdout.strip()
-            prev = read_json(STATE, {})
-            if remote_sha and remote_sha == local_sha and prev.get("installed") == out["installed"] and prev.get("latest") and not prev.get("error"):
-                prev["checked"] = int(time.time())
-                STATE.parent.mkdir(parents=True, exist_ok=True)
-                STATE.write_text(json.dumps(prev, ensure_ascii=False, indent=2))
-                return prev
-            f = git(repo, "fetch", "--quiet", "origin")
+            skip_fetch = bool(remote_sha) and remote_sha == local_sha        # nichts Neues am Remote: nicht holen (die Auswertung unten läuft trotzdem)
+            f = git(repo, "fetch", "--quiet", "origin") if not skip_fetch else subprocess.CompletedProcess([], 0, "", "")
             if f.returncode != 0:
                 out["error"] = (f.stderr.strip().splitlines() or ["fetch fehlgeschlagen"])[-1]
             else:
