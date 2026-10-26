@@ -16,7 +16,7 @@ PanelWindow {
     margins.top: Math.round(Global.barHeight + Global.barMargin * 2 + 4)
     margins.right: Global.popupRightMargin()
     implicitWidth: 360
-    implicitHeight: 420
+    implicitHeight: 470
     exclusionMode: ExclusionMode.Ignore      // Abstand zur Leiste kommt aus den Rändern; die Leisten-Reservierung nicht doppelt rechnen
     color: "transparent"
     WlrLayershell.namespace: "draconyx-calendar"
@@ -29,7 +29,8 @@ PanelWindow {
     }
 
     property int monthOffset: 0
-    onVisibleChanged: if (visible) monthOffset = 0
+    readonly property string tab: Global.calTab
+    onVisibleChanged: if (visible) { monthOffset = 0; if (Focus.started) Global.calTab = "focus"; }
 
     readonly property date today: clock.date
     readonly property date shownMonth: new Date(today.getFullYear(), today.getMonth() + monthOffset, 1)
@@ -45,7 +46,7 @@ PanelWindow {
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
 
-    Rectangle {
+    PopCard {
         anchors.fill: parent
         radius: 22
         color: Theme.panelStrong
@@ -70,68 +71,91 @@ PanelWindow {
 
             Rectangle { width: parent.width; height: 1; color: Theme.borderSoft }
 
-            Item {
-                width: parent.width
-                height: 30
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: cal.shownMonth.toLocaleDateString(cal.deLocale, "MMMM yyyy")
-                    color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
-                }
-                Row {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
+            Row {
+                spacing: 6
+                Repeater {
+                    model: [{ k: "cal", t: "Kalender", i: "desktop" }, { k: "focus", t: "Fokus", i: "timer" }]
                     BarButton {
-                        minWidth: 30; implicitHeight: 30
-                        Icon { name: "chevron-left"; size: 14 }
-                        onClicked: cal.monthOffset--
-                    }
-                    BarButton {
-                        minWidth: 30; implicitHeight: 30
-                        Icon { name: "chevron-right"; size: 14 }
-                        onClicked: cal.monthOffset++
+                        required property var modelData
+                        implicitHeight: 32; padding: 14; radiusSize: 16
+                        active: cal.tab === modelData.k
+                        color: active ? Theme.accent : (hovered ? Theme.tileHover : Theme.tile)
+                        Row { spacing: 6
+                            Icon { name: modelData.i; size: 14; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: modelData.t; color: "white"; font.family: Theme.font; font.pixelSize: Theme.fsS; font.weight: Font.DemiBold; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        onClicked: Global.calTab = modelData.k
                     }
                 }
             }
-
-            Grid {
-                columns: 7
+            Column {
+                visible: cal.tab === "cal"
                 width: parent.width
-                readonly property real cell: width / 7
-
-                Repeater {
-                    model: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-                    delegate: Text {
-                        required property var modelData
-                        width: parent.cell; height: 26
-                        horizontalAlignment: Text.AlignHCenter
-                        text: modelData
-                        color: Theme.textDim; font.family: Theme.font; font.pixelSize: 11
+                spacing: 14
+                Item {
+                    width: parent.width
+                    height: 30
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: cal.shownMonth.toLocaleDateString(cal.deLocale, "MMMM yyyy")
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    }
+                    Row {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        BarButton {
+                            minWidth: 30; implicitHeight: 30
+                            Icon { name: "chevron-left"; size: 14 }
+                            onClicked: cal.monthOffset--
+                        }
+                        BarButton {
+                            minWidth: 30; implicitHeight: 30
+                            Icon { name: "chevron-right"; size: 14 }
+                            onClicked: cal.monthOffset++
+                        }
                     }
                 }
-                Repeater {
-                    model: cal.days
-                    delegate: Item {
-                        required property var modelData
-                        readonly property bool inMonth: modelData.getMonth() === cal.shownMonth.getMonth()
-                        readonly property bool isToday: modelData.toDateString() === cal.today.toDateString()
-                        width: parent.cell; height: 38
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 34; height: 34; radius: 17
-                            color: isToday ? Theme.accent : (dayArea.containsMouse ? Theme.tileHover : "transparent")
+
+                Grid {
+                    columns: 7
+                    width: parent.width
+                    readonly property real cell: width / 7
+
+                    Repeater {
+                        model: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+                        delegate: Text {
+                            required property var modelData
+                            width: parent.cell; height: 26
+                            horizontalAlignment: Text.AlignHCenter
+                            text: modelData
+                            color: Theme.textDim; font.family: Theme.font; font.pixelSize: 11
                         }
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.getDate()
-                            color: isToday ? "#ffffff" : (inMonth ? Theme.text : Qt.rgba(1, 1, 1, 0.28))
-                            font.family: Theme.font; font.pixelSize: 13
-                            font.weight: isToday ? Font.DemiBold : Font.Normal
+                    }
+                    Repeater {
+                        model: cal.days
+                        delegate: Item {
+                            required property var modelData
+                            readonly property bool inMonth: modelData.getMonth() === cal.shownMonth.getMonth()
+                            readonly property bool isToday: modelData.toDateString() === cal.today.toDateString()
+                            width: parent.cell; height: 38
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 34; height: 34; radius: 17
+                                color: isToday ? Theme.accent : (dayArea.containsMouse ? Theme.tileHover : "transparent")
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.getDate()
+                                color: isToday ? "#ffffff" : (inMonth ? Theme.text : Qt.rgba(1, 1, 1, 0.28))
+                                font.family: Theme.font; font.pixelSize: 13
+                                font.weight: isToday ? Font.DemiBold : Font.Normal
+                            }
+                            MouseArea { id: dayArea; anchors.fill: parent; hoverEnabled: true }
                         }
-                        MouseArea { id: dayArea; anchors.fill: parent; hoverEnabled: true }
                     }
                 }
             }
+            FocusPane { visible: cal.tab === "focus"; width: parent.width }
         }
     }
 }

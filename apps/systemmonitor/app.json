@@ -1,7 +1,7 @@
 {
   "id": "systemmonitor",
   "name": "Systemmonitor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Alles über deinen Rechner auf einen Blick: Auslastung von Prozessor, Speicher, Grafikkarte, Datenträgern und Netzwerk, eine Zusammenfassung der Programme mit ihrem Verbrauch, alle Prozesse, Sensoren und Systeminfos.",
   "icon": "utilities-system-monitor",
   "exec": "python3 {dir}/sysmon.py",

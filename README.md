@@ -52,5 +52,13 @@ Jeder Teil der Taskleiste (Start, Suche, Apps, Tray, Uhr …) lässt sich in den
 ## Snip-Werkzeug und Foto-Editor
 **Druck** (oder Strg+Alt+Umschalt+S) friert alle Bildschirme ein, dann Bereich aufziehen. **Übernehmen** (Enter) öffnet den Foto-Editor: Stift, Marker, Pfeil, Rechteck, Ellipse, Text, Verpixeln, Rückgängig (Strg+Z), dann Kopieren (Strg+C), Speichern (Strg+S) oder Beides. Strg+C / Strg+S direkt in der Auswahl kopieren/speichern ohne Editor. **Umschalt+Druck** kopiert und speichert den ganzen Bildschirm. Gespeichert wird in `~/Bilder/Screenshots/`.
 
+## Kleine Helfer (1.5)
+- **Zwischenablage** (Strg+Alt+V): Verlauf mit Suche und Bildvorschau. **Tastenkürzel** (Strg+Alt+I): alle wirksamen Kombinationen, durchsuchbar.
+- **Fokus-Zeit** (Kalender → Fokus, Strg+Alt+P): Pomodoro, Timer, Stoppuhr; die Uhr zeigt die Restzeit, Pomodoro schaltet „Nicht stören“ ein.
+- **Schnellsuche**: rechnet (auch Prozent, sqrt, sin …), rechnet Einheiten um („5 km in mi“), findet offene Fenster und Systemaktionen (sperren, Standby …).
+- **Anzeigen**: Lautstärke-/Mikrofon-OSD, Datenschutz-Punkt in der Leiste (Mikrofon, Bildschirmfreigabe), optional Prozessor/Speicher in der Leiste.
+- **Drop-down-Terminal** (Strg+Alt+Ö), **Mikrofon stumm** (Strg+Alt+U), **Text aus Screenshot** (Snip → „Text“, Strg+T).
+- **Aurora**: „Energie & Sperre“ (hypridle), „Bewegung & Licht“ (Animationen, Nachtlicht mit Zeitplan).
+
 ## Bewusst NICHT drin
 - Auroras Plugins (hyprbars, `aurora-native`): Sie lagen in einem Test im Weg und haben beim Laden in eine laufende Sitzung Hyprland zum Absturz gebracht. Nicht per Live-Reload laden. Wer sie nutzt, lädt sie nur beim Login.

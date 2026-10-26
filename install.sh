@@ -87,7 +87,7 @@ PKGS=(hyprland quickshell fuzzel jq python python-gobject python-pillow python-p
       qt6-wayland qt6-svg qt6-5compat qt6-imageformats qt6-multimedia
       pipewire pipewire-pulse wireplumber playerctl networkmanager nm-connection-editor bluez bluez-utils blueman pavucontrol
       power-profiles-daemon libnotify glib2 xdg-utils xdg-user-dirs xdg-desktop-portal-hyprland polkit procps-ng pciutils
-      dolphin swaync hypridle hyprlock cliphist plocate)
+      dolphin swaync hypridle hyprlock cliphist plocate hyprsunset hyprpicker tesseract tesseract-data-eng tesseract-data-deu)
 WE_PKGS=(base-devel cmake make gcc pkgconf glm sdl2 wayland wayland-protocols libxkbcommon ffmpeg mpv glfw glew freeglut lz4 zlib
          libpulse libcups at-spi2-core nss libxcomposite libxdamage nspr libxrandr libxss libxi libxcursor libxinerama libglvnd mesa)
 

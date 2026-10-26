@@ -30,6 +30,13 @@ def save_preferences(p):
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p['blur'] else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))
  source+='hl.config({input={follow_mouse=%d}})\n'%(1 if p.get('focus_follows_mouse',False) else 0)
+
+ try:mo=float(p.get('motion',1) or 0)
+ except (TypeError,ValueError):mo=1.0
+ if mo<=0:source+='hl.config({animations={enabled=false}})\n'
+ elif abs(mo-1)>0.01:   # Animationen schneller/weicher: Geschwindigkeit der wichtigsten Übergänge skalieren (Hyprland: größer = langsamer)
+  for leaf,sp,bez,extra in (('windows',4.5,'easeOutQuint',''),('windowsIn',4.1,'easeOutQuint',',style="popin 90%"'),('windowsOut',1.8,'quick',',style="popin 90%"'),('fade',3,'quick',''),('layers',3.8,'easeOutQuint',''),('workspaces',3,'easeOutQuint',',style="slide"')):
+   source+='hl.animation({leaf="%s",enabled=true,speed=%.2f,bezier="%s"%s})\n'%(leaf,sp*mo,bez,extra)
  sf=max(0.1,min(10.0,float(p.get('scroll_speed',1.0) or 1.0)))
  source+='hl.config({input={scroll_factor=%.2f}})\n'%sf   # Mausrad-Geschwindigkeit (1.0 = Standard)
  d_=Path.home()/'.config/draconyx';d_.mkdir(parents=True,exist_ok=True);(d_/'scroll-speed').write_text('%.2f\n'%sf)   # die Shell skaliert ihre Listen selbst (Qt ignoriert scroll_factor)

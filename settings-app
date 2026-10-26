@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import gi,json,subprocess,os,threading,copy,math
+import sys,gi,json,subprocess,os,threading,copy,math,re,shutil,time
 from pathlib import Path
 gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
 from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango,GObject
@@ -119,12 +119,13 @@ class Settings(Gtk.Application):
   self.window=Gtk.ApplicationWindow(application=self);self.window.set_default_size(1050,780);self.window.set_title('Aurora Einstellungen');self.window.set_icon_name('preferences-system')
   head=Gtk.HeaderBar(title='Einstellungen',subtitle='Aurora',show_close_button=True);self.window.set_titlebar(head)
   self.status=Gtk.Label(xalign=0);self.status.get_style_context().add_class('status-bar');root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.window.add(root);body=Gtk.Box();root.pack_start(body,True,True,0)
-  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);self.side=Gtk.ListBox();self.side.set_selection_mode(Gtk.SelectionMode.SINGLE);self.side.get_style_context().add_class('sidebar');sc_side=Gtk.ScrolledWindow();sc_side.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);sc_side.add(self.side);sc_side.set_size_request(250,-1);body.pack_start(sc_side,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
-  self.general();self.windows();self.displays()
-  if not SHELL:self.dock()   # Dock- und Schreibtisch-Seite gehören zum alten Aurora-Dock; mit der Shell gibt es sie nicht (Taskleiste-Seite stattdessen)
-  self.taskbar();self.codespace();self.apps();self.autostart();self.windowmode();self.rules();self.colors()
-  if not SHELL:self.desktop()
-  self.wallpaper();self.engine();self.shortcuts();self.backup();self.system()
+  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE,transition_duration=150);self.side=Gtk.ListBox();self.side.set_selection_mode(Gtk.SelectionMode.SINGLE);self.side.get_style_context().add_class('sidebar');sc_side=Gtk.ScrolledWindow();sc_side.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);sc_side.add(self.side);sc_side.set_size_request(250,-1);body.pack_start(sc_side,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
+  # Jede Seite einzeln aufbauen: eine kaputte Seite (fehlendes Programm, Lesefehler) darf nicht die ganzen Einstellungen verhindern
+  self._safe(self.general,self.windows,self.displays)
+  if not SHELL:self._safe(self.dock)   # Dock- und Schreibtisch-Seite gehören zum alten Aurora-Dock; mit der Shell gibt es sie nicht (Taskleiste-Seite stattdessen)
+  self._safe(self.taskbar,self.codespace,self.apps,self.autostart,self.windowmode,self.rules,self.colors)
+  if not SHELL:self._safe(self.desktop)
+  self._safe(self.wallpaper,self.engine,self.comfort,self.power,self.shortcuts,self.backup,self.system)
   self.build_sidebar()
   self.p.on_change=self.touch   # ab jetzt wird jede Änderung automatisch gespeichert und angewendet
   css=Gtk.CssProvider();css.load_from_path(str(BASE/'settings.css'))
@@ -141,8 +142,12 @@ class Settings(Gtk.Application):
   # ---- Seitenleiste: Gruppen mit Symbol und Name (statt der schlichten Standardliste) ----
  SIDE=[('ALLGEMEIN',[('Übersicht',['preferences-system-symbolic']),('Fenster',['window-new-symbolic','focus-windows-symbolic']),('Bildschirme',['video-display-symbolic','computer-symbolic']),('Taskleiste',['view-list-symbolic','view-continuous-symbolic'])]),
        ('PROGRAMME',[('Coding Space',['utilities-terminal-symbolic']),('Apps',['view-app-grid-symbolic','application-x-executable-symbolic']),('Autostart',['system-run-symbolic','media-playback-start-symbolic']),('Fensterregeln',['view-restore-symbolic','window-new-symbolic'])]),
-       ('DARSTELLUNG',[('Fenstermodus',['view-dual-symbolic','view-grid-symbolic']),('Farben & Schrift',['applications-graphics-symbolic','color-select-symbolic']),('Hintergrund',['preferences-desktop-wallpaper-symbolic','image-x-generic-symbolic']),('Wallpaper Engine',['video-x-generic-symbolic','camera-video-symbolic']),('Dock',['user-desktop-symbolic']),('Schreibtisch',['user-desktop-symbolic'])]),
-       ('SYSTEM',[('Tastenkombinationen',['input-keyboard-symbolic']),('Sicherung',['document-save-symbolic','drive-harddisk-symbolic']),('System',['emblem-system-symbolic','system-run-symbolic'])])]
+       ('DARSTELLUNG',[('Fenstermodus',['view-dual-symbolic','view-grid-symbolic']),('Farben & Schrift',['applications-graphics-symbolic','color-select-symbolic']),('Bewegung & Licht',['weather-clear-night-symbolic','display-brightness-symbolic']),('Hintergrund',['preferences-desktop-wallpaper-symbolic','image-x-generic-symbolic']),('Wallpaper Engine',['video-x-generic-symbolic','camera-video-symbolic']),('Dock',['user-desktop-symbolic']),('Schreibtisch',['user-desktop-symbolic'])]),
+       ('SYSTEM',[('Energie & Sperre',['system-shutdown-symbolic','battery-symbolic']),('Tastenkombinationen',['input-keyboard-symbolic']),('Sicherung',['document-save-symbolic','drive-harddisk-symbolic']),('System',['emblem-system-symbolic','system-run-symbolic'])])]
+ def _safe(self,*fns):
+  for fn in fns:
+   try:fn()
+   except Exception as e:print('Seite konnte nicht aufgebaut werden:',getattr(fn,'__name__','?'),repr(e),file=sys.stderr)
  def build_sidebar(self):
   have={self.stack.child_get_property(c,'title') for c in self.stack.get_children()};theme=Gtk.IconTheme.get_default();self.side_rows={}
   for head,items in self.SIDE:
@@ -430,7 +435,9 @@ class Settings(Gtk.Application):
    sel.set_active_id(data[kind]);prev=Gtk.Label(xalign=0);prev.set_use_markup(True);prev.set_selectable(False)
    inst=Gtk.Button(label='Installieren');inst.set_no_show_all(True)
    def refresh():
-    p=by[sel.get_active_id()];prev.set_markup(sample(p['family']));inst.set_visible(not p['installed'])
+    p=by.get(sel.get_active_id())
+    if not p:return
+    prev.set_markup(sample(p['family']));inst.set_visible(not p['installed'])
    def changed(w):
     pid=w.get_active_id()
     if not pid:return
@@ -845,9 +852,10 @@ class Settings(Gtk.Application):
  # ---- Anordnung der Taskleisten-Teile: jeder Teil links, mittig oder rechts, Reihenfolge per Pfeile ----
  BAR_ITEMS=[('start','Startknopf'),('search','Suche'),('taskview','Fensterübersicht'),('code','Coding Space'),('wallpaper','Wallpaper Engine'),
             ('mode','Fenstermodus-Knopf'),('desktops','Desktop-Punkte'),('apps','App-Symbole'),('tray','Tray'),('system','Netzwerk und Lautstärke'),
-            ('notifications','Benachrichtigungen'),('clock','Uhr'),('settings','Einstellungen'),('showDesktop','Desktop-anzeigen-Streifen'),('update','Update-Anzeige')]
+            ('notifications','Benachrichtigungen'),('clock','Uhr'),('settings','Einstellungen'),('showDesktop','Desktop-anzeigen-Streifen'),('update','Update-Anzeige'),('privacy','Datenschutz-Anzeige (Mikrofon, Bildschirmfreigabe)'),('stats','Leistungsanzeige (Prozessor, Speicher)')]
+ BAR_OFF=('stats',)   # standardmäßig aus (Shell: Global.item)
  def default_layout(self,style):
-  tools=['start','search','taskview','code','wallpaper','mode','desktops'];sysi=['update','tray','system','notifications','clock','settings','showDesktop']
+  tools=['start','search','taskview','code','wallpaper','mode','desktops'];sysi=['update','privacy','stats','tray','system','notifications','clock','settings','showDesktop']
   return {'left':[],'center':tools+['apps'],'right':sysi} if style=='dock' else {'left':tools,'center':['apps'],'right':sysi}
  def current_layout(self,style):
   saved=(shell_get('barLayouts',{}) or {}).get(style);default=self.default_layout(style)
@@ -867,7 +875,7 @@ class Settings(Gtk.Application):
   'desktops':['view-pin-symbolic','radio-symbolic'],'apps':['view-app-grid-symbolic','application-x-executable-symbolic'],'tray':['view-more-horizontal-symbolic','view-more-symbolic'],
   'system':['network-wireless-symbolic','audio-volume-high-symbolic'],'notifications':['preferences-system-notifications-symbolic','user-available-symbolic'],
   'clock':['preferences-system-time-symbolic','appointment-symbolic'],'settings':['emblem-system-symbolic','preferences-system-symbolic'],
-  'showDesktop':['user-desktop-symbolic','window-minimize-symbolic'],'update':['software-update-available-symbolic','view-refresh-symbolic']}
+  'showDesktop':['user-desktop-symbolic','window-minimize-symbolic'],'update':['software-update-available-symbolic','view-refresh-symbolic'],'privacy':['camera-web-symbolic','audio-input-microphone-symbolic'],'stats':['utilities-system-monitor-symbolic','speedometer-symbolic']}
  def layout_editor(self,b):
   self.section(b,'Anordnung')
   hint=Gtk.Label(label='So sieht deine Leiste aus: Zieh die Teile einfach dorthin, wo sie hin sollen – nach links, in die Mitte oder nach rechts, und innerhalb eines Bereichs in die gewünschte Reihenfolge. In „Ausgeblendet“ ablegen schaltet ein Teil aus; von dort lässt es sich wieder zurückziehen. Beim schwebenden Dock wird jeder Bereich eine eigene Insel, leere Bereiche verschwinden.',xalign=0)
@@ -878,7 +886,7 @@ class Settings(Gtk.Application):
   def icon_for(i):
    n=next((x for x in self.ITEM_ICONS.get(i,[]) if theme.has_icon(x)),'preferences-system-symbolic');return Gtk.Image.new_from_icon_name(n,Gtk.IconSize.MENU)
   def hidden_ids():
-   items=shell_get('barItems',{}) or {};return [i for i,_ in self.BAR_ITEMS if items.get(i,True) is False]
+   items=shell_get('barItems',{}) or {};return [i for i,_ in self.BAR_ITEMS if items.get(i,i not in self.BAR_OFF) is False]
   def save_layout(lay):
    m=dict(shell_get('barLayouts',{}) or {});m[state['style']]=lay;shell_set('barLayouts',m)
   def drop(item,zone,index):
@@ -976,6 +984,7 @@ class Settings(Gtk.Application):
   self.sw(b,'Apps mittig','barCenter',True,'Aus: die Apps folgen direkt hinter den Knöpfen links.')
   self.sw(b,'Automatisch ausblenden','autohide',False,'Die Leiste fährt ein, wenn sie nicht benutzt wird.')
   self.sw(b,'Schwebende Leiste überall öffnen','barRevealAnywhere',False,'Nur bei Stil „schwebend“ mit automatischem Ausblenden: die Leiste öffnet sich, wenn die Maus irgendwo am unteren Rand ist – nicht nur dort, wo die Kapseln sind.')
+  self.sw(b,'Anzeige bei Lautstärke und Mikrofon','osdOn',True,'Eine kurze Anzeige am unteren Bildschirmrand, wenn Lautstärke oder Mikrofon sich ändern (Tasten, Regler, andere Programme).')
   self.sw(b,'Quickinfos zu den Knöpfen','tooltips',True,'Beim Überfahren eines Knopfs in der Taskleiste erscheint eine kurze Erklärung.')
   self.sw(b,'Fenster einer App gruppieren','groupApps',True)
   self.shell_spin(b,'Höhe','barHeight',40,90,1,58);self.shell_spin(b,'Symbolgröße','iconSize',20,48,1,34);self.shell_spin(b,'Deckkraft','barOpacity',0.4,1.0,0.05,0.9)
@@ -1064,6 +1073,83 @@ class Settings(Gtk.Application):
   new.connect('activate',create);btn=Gtk.Button(label='Anlegen');btn.connect('clicked',create)
   box=Gtk.Box(spacing=8);box.pack_start(new,False,False,0);box.pack_start(btn,False,False,0)
   self.row(b,'Neuen Workspace anlegen',box,'Dasselbe wie das „+“ im Coding Space.')
+
+ # ---------------------------------------------------------------- Bewegung & Licht
+ def entry_row(self,box,title,key,default,description='',width=7):
+  w=Gtk.Entry();w.set_width_chars(width);w.set_max_width_chars(width);w.set_text(str(shell_get(key,default)))
+  def changed(w):
+   s=w.get_text().strip()
+   if re.fullmatch(r'([01]?\d|2[0-3]):[0-5]\d',s):shell_set(key,s);w.get_style_context().remove_class('error')
+   else:w.get_style_context().add_class('error')
+  w.connect('changed',changed);return self.row(box,title,w,description)
+ def comfort(self):
+  b=self.page('Bewegung & Licht','Animationen der Shell und der Fenster, Nachtlicht und kleine Anzeigen.')
+  self.section(b,'Bewegung')
+  cur=str(self.p.get('motion','1'))
+  w=Choice()
+  for v,l in (('0','Aus'),('0.6','Schnell'),('1','Normal'),('1.6','Weich')):w.append(v,l)
+  w.set_active_id(cur if cur in ('0','0.6','1','1.6') else '1')
+  def mchanged(w):
+   v=w.get_active_id()
+   if v is None:return
+   self.p['motion']=v;shell_set('motion',float(v))     # Lua (Fenster) über die Einstellungen, Shell (Popups) direkt
+  w.connect('changed',mchanged);self.row(b,'Animationen',w,'Gilt für Fenster, Popups und Anzeigen. „Aus“ spart Leistung, „Weich“ macht alles etwas langsamer und fließender.')
+  self.section(b,'Nachtlicht')
+  self.shell_spin(b,'Farbtemperatur','nightTemp',2500,6500,100,4500,'In Kelvin: niedriger = wärmer (gelblicher). Gilt, sobald das Nachtlicht läuft.')
+  self.sw(b,'Nach Zeitplan einschalten','nightAuto',False,'Schaltet das Nachtlicht zur Startzeit ein und zur Endzeit aus. Wenn du es zwischendurch von Hand umschaltest, gilt das bis zur nächsten Zeitgrenze.')
+  self.entry_row(b,'Von','nightFrom','21:00','Uhrzeit im Format HH:MM.')
+  self.entry_row(b,'Bis','nightTo','07:00')
+ # ---------------------------------------------------------------- Energie & Sperre (hypridle)
+ IDLE=Path.home()/'.config/hypr/hypridle.conf'
+ def idle_read(self):
+  """Minuten für sperren / Bildschirm aus / Standby (0 = nie) aus hypridle.conf"""
+  out={'lock':0,'dpms':0,'sleep':0}
+  try:text=self.IDLE.read_text()
+  except OSError:return {'lock':15,'dpms':20,'sleep':0}
+  for m in re.finditer(r'listener\s*\{(.*?)\}',text,re.S):
+   body=m.group(1);t=re.search(r'timeout\s*=\s*(\d+)',body);c=re.search(r'on-timeout\s*=\s*(.*)',body)
+   if not t or not c:continue
+   mins=int(t.group(1))//60;cmd=c.group(1)
+   if 'lock-session' in cmd or 'hyprlock' in cmd:out['lock']=mins
+   elif 'dpms off' in cmd:out['dpms']=mins
+   elif 'suspend' in cmd:out['sleep']=mins
+  return out
+ def idle_write(self,v):
+  try:text=self.IDLE.read_text()
+  except OSError:text='general {\n    lock_cmd = pidof hyprlock || hyprlock\n    before_sleep_cmd = loginctl lock-session\n    after_sleep_cmd = hyprctl dispatch dpms on\n}\n'
+  def ours(m):
+   c=re.search(r'on-timeout\s*=\s*(.*)',m.group(1));return bool(c) and bool(re.search(r'lock-session|hyprlock|dpms off|suspend',c.group(1)))
+  keep=re.sub(r'\n?(?:#[^\n]*\n)*listener\s*\{(.*?)\}\n?',lambda m:'' if ours(m) else m.group(0),text,flags=re.S).rstrip('\n')+'\n'
+  add=''
+  if v['lock']>0:add+='\n# Sperren nach %d Minuten\nlistener {\n    timeout = %d\n    on-timeout = loginctl lock-session\n}\n'%(v['lock'],v['lock']*60)
+  if v['dpms']>0:add+='\n# Bildschirme aus nach %d Minuten\nlistener {\n    timeout = %d\n    on-timeout = hyprctl dispatch dpms off\n    on-resume = hyprctl dispatch dpms on\n}\n'%(v['dpms'],v['dpms']*60)
+  if v['sleep']>0:add+='\n# Standby nach %d Minuten\nlistener {\n    timeout = %d\n    on-timeout = systemctl suspend\n}\n'%(v['sleep'],v['sleep']*60)
+  if self.IDLE.exists() and not getattr(self,'_idle_backed',False):
+   shutil.copy2(self.IDLE,str(self.IDLE)+'.vor-'+time.strftime('%Y%m%d-%H%M%S'));self._idle_backed=True
+  self.IDLE.parent.mkdir(parents=True,exist_ok=True);self.IDLE.write_text(keep+add)
+  subprocess.run(['pkill','-x','hypridle'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  subprocess.Popen(['hypridle'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+ def power(self):
+  b=self.page('Energie & Sperre','Wann der Bildschirm gesperrt wird, ausgeht und der Rechner in den Standby geht – gerechnet ab der letzten Eingabe. 0 bedeutet nie. Spiele und Videos halten den Rechner von sich aus wach.')
+  v=self.idle_read();state={'id':0}
+  def save():
+   state['id']=0
+   try:self.idle_write(v);self.message('Energie-Einstellungen gespeichert.')
+   except Exception as e:self.message('Konnte nicht speichern: '+str(e))
+   return False
+  def spin(title,key,desc):
+   w=Gtk.SpinButton.new_with_range(0,600,5);w.set_value(v[key])
+   def ch(w):
+    v[key]=w.get_value_as_int()
+    if state['id']:GLib.source_remove(state['id'])
+    state['id']=GLib.timeout_add(900,save)
+   w.connect('value-changed',ch);self.row(b,title,w,desc)
+  spin('Bildschirm sperren nach (Minuten)','lock','Danach brauchst du das Passwort.')
+  spin('Bildschirme ausschalten nach (Minuten)','dpms','Die Bildschirme gehen dunkel; eine Bewegung weckt sie wieder.')
+  spin('Standby nach (Minuten)','sleep','Der Rechner schläft ein. 0 = nie (empfohlen für einen Desktop-PC, der durchlaufen soll).')
+  def status():
+   r=subprocess.run(['pgrep','-x','hypridle'],capture_output=True);return 'läuft' if r.returncode==0 else 'läuft nicht'
+  self.button(b,'Leerlauf-Dienst (hypridle): '+status(),'Neu starten',lambda:(subprocess.run(['pkill','-x','hypridle']),subprocess.Popen(['hypridle'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True),self.message('hypridle neu gestartet.')))
 
  def windowmode(self):
   b=self.page('Fenstermodus','Wie neue Fenster standardmäßig platziert werden.')

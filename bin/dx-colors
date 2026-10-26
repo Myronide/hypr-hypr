@@ -31,9 +31,9 @@ def shade(h, dl=0.0, ds=0.0):
 def icons(c):
     key = c["text"][1:] + "-" + c["accent"][1:]
     d = OUT / key
-    if not d.exists():
-        d.mkdir(parents=True)
-        for f in SRC.glob("*.svg"):
+    d.mkdir(parents=True, exist_ok=True)
+    for f in SRC.glob("*.svg"):                       # fehlende Symbole nachziehen (neue Version bringt neue Symbole mit)
+        if not (d / f.name).exists():
             (d / f.name).write_text(f.read_text().replace("@TEXT@", c["text"]).replace("@ACCENT@", c["accent"]))
     return key
 def write(c, palette=True):

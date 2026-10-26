@@ -14,6 +14,8 @@ Rectangle {
                    : (area.containsMouse ? Theme.tileHover : Theme.tile)
     border.color: checked ? "transparent" : Theme.borderSoft
     Behavior on color { ColorAnimation { duration: 150 } }
+    scale: area.pressed ? 0.97 : 1
+    Behavior on scale { NumberAnimation { duration: Theme.durFast; easing.type: Theme.easeOut } }
 
     Column {
         anchors.left: parent.left

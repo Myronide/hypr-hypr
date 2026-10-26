@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Widgets
+import "QuickAnswers.js" as QA
 
 // Schnellsuche (Strg+Leertaste): ein eigenes Feld mittig auf dem Bildschirm, darunter die Ergebnisse.
 // Apps, Rechner, Einstellungen, Dateien (plocate) und Websuche; Pfeile wählen, Enter startet, Esc schließt.
@@ -49,22 +50,32 @@ PanelWindow {
         { name: "Aurora Einstellungen", kw: "aurora einstellungen taskleiste farben tasten", icon: "settings", cmd: ["sh", "-c", "GDK_BACKEND=x11 python3 \"$HOME/.config/hypr/aurora/settings-app\""] }
     ]
 
-    function calc(q) {
-        const t = q.trim().replace(/,/g, ".");
-        if (!/^[0-9+\-*/().%\s^]+$/.test(t) || !/[+\-*/%^]/.test(t.replace(/^-/, ""))) return null;
-        try {
-            const v = Function('"use strict"; return (' + t.replace(/\^/g, "**") + ")")();
-            if (typeof v === "number" && isFinite(v)) return Math.round(v * 1e10) / 1e10;
-        } catch (e) {}
-        return null;
-    }
+    // Systemaktionen: per Stichwort auffindbar; mit "confirm" muss Enter ein zweites Mal gedrückt werden
+    readonly property var actionItems: [
+        { name: "Bildschirm sperren",     kw: "sperren lock sperre",                 icon: "lock",       run: () => Quickshell.execDetached(["hyprlock"]) },
+        { name: "Standby",                kw: "standby ruhezustand schlafen sleep suspend", icon: "sleep", run: () => Quickshell.execDetached(["systemctl", "suspend"]) },
+        { name: "Neu starten",            kw: "neustart neu starten reboot restart", icon: "restart",    confirm: true, run: () => Quickshell.execDetached(["systemctl", "reboot"]) },
+        { name: "Herunterfahren",         kw: "herunterfahren ausschalten shutdown poweroff", icon: "power", confirm: true, run: () => Quickshell.execDetached(["systemctl", "poweroff"]) },
+        { name: "Abmelden",               kw: "abmelden logout ausloggen",           icon: "logout",     confirm: true, run: () => Quickshell.execDetached(["hyprctl", "dispatch", "exit"]) },
+        { name: Global.nightLight ? "Nachtlicht ausschalten" : "Nachtlicht einschalten", kw: "nachtlicht nacht blaulicht night", icon: "night", run: () => Global.setNightLight(!Global.nightLight) },
+        { name: Global.dnd ? "Nicht stören ausschalten" : "Nicht stören einschalten", kw: "nicht stören dnd ruhe benachrichtigungen", icon: "notif-dnd", run: () => Quickshell.execDetached(["swaync-client", "-d", "-sw"]) },
+        { name: Global.gameMode ? "Game-Modus ausschalten" : "Game-Modus einschalten", kw: "game spiel modus gaming", icon: "game", run: () => Global.setGameMode(!Global.gameMode) },
+        { name: "Pomodoro starten",       kw: "pomodoro fokus timer konzentration", icon: "timer",      run: () => { Focus.setMode("pomodoro"); Focus.start(); } },
+        { name: "Zwischenablage",         kw: "zwischenablage verlauf clipboard kopiert", icon: "clipboard", run: () => Global.toggleClip("") },
+        { name: "Tastenkürzel",           kw: "tastenkürzel tastenkombination shortcuts hilfe", icon: "keyboard", run: () => Global.toggleShortcuts("") },
+        { name: "Screenshot (Bereich)",   kw: "screenshot bildschirmfoto snip", icon: "screenshot", run: () => Global.snip("region") },
+        { name: "Farbpipette",            kw: "farbe pipette picker color", icon: "picker",    run: () => Quickshell.execDetached(["sh", "-c", "sleep 0.3; hyprpicker -a"]) }
+    ]
+    property string confirmFor: ""       // Name der Aktion, die auf die zweite Bestätigung wartet
 
     readonly property var results: {
         const q = query.trim().toLowerCase();
         if (q === "") return [];
         const out = [];
-        const c = calc(query);
+        const c = QA.calc(query);
         if (c !== null) out.push({ kind: "calc", title: "= " + c, sub: "Enter kopiert das Ergebnis", value: c, icon: "add" });
+        const cv = c === null ? QA.convert(query) : null;
+        if (cv !== null) out.push({ kind: "calc", title: cv, sub: "Umrechnung – Enter kopiert das Ergebnis", value: cv, icon: "refresh" });
         const apps = [];
         for (const e of allApps) {
             const name = (e.name || "").toLowerCase();
@@ -74,6 +85,16 @@ PanelWindow {
         }
         apps.sort((a, b) => a.s - b.s || a.e.name.localeCompare(b.e.name));
         for (const a of apps.slice(0, 7)) out.push({ kind: "app", entry: a.e, title: a.e.name, sub: a.e.genericName || a.e.comment || "App" });
+        if (q.length >= 2) {
+            for (const a of actionItems.filter(a => (a.name + " " + a.kw).toLowerCase().includes(q)).slice(0, 3))
+                out.push({ kind: "action", action: a, title: a.name, sub: a.confirm ? "Aktion – Enter zweimal zum Bestätigen" : "Aktion", icon: a.icon });
+            const wins = [];
+            for (const w of ToplevelManager.toplevels.values) {
+                const hay = ((w.title || "") + " " + (w.appId || "")).toLowerCase();
+                if (hay.includes(q)) wins.push(w);
+            }
+            for (const w of wins.slice(0, 3)) out.push({ kind: "window", win: w, title: w.title || w.appId, sub: "Offenes Fenster – Enter holt es nach vorn" + (w.minimized ? " (minimiert)" : ""), icon: "window" });
+        }
         for (const s of settingsItems.filter(s => (s.name + " " + s.kw).toLowerCase().includes(q)).slice(0, 3))
             out.push({ kind: "setting", item: s, title: s.name, sub: "Einstellung", icon: s.icon });
         for (const f of fileHits.slice(0, 5))
@@ -81,14 +102,18 @@ PanelWindow {
         out.push({ kind: "web", text: query.trim(), title: "Im Web suchen: " + query.trim(), sub: "DuckDuckGo", icon: "search" });
         return out;
     }
-    onResultsChanged: sel = 0
+    onResultsChanged: { sel = 0; confirmFor = ""; }
 
     function activate(r) {
         if (!r) return;
-        Global.logLaunch("suche", r.kind + ":" + (r.path || (r.entry && r.entry.id) || r.text || r.value || ""));
+        if (r.kind === "action" && r.action.confirm && confirmFor !== r.action.name) { confirmFor = r.action.name; return; }
+        confirmFor = "";
+        Global.logLaunch("suche", r.kind + ":" + (r.path || (r.entry && r.entry.id) || r.text || r.value || (r.action && r.action.name) || ""));
         Global.searchOpen = false;
         if (r.kind === "app") Global.launch(r.entry.id, r.entry);
         else if (r.kind === "setting") Quickshell.execDetached(r.item.cmd);
+        else if (r.kind === "action") r.action.run();
+        else if (r.kind === "window") Global.focusToplevel(r.win);
         else if (r.kind === "file") Quickshell.execDetached(r.path.endsWith("/") ? ["dolphin", r.path] : ["xdg-open", r.path]);
         else if (r.kind === "calc") Quickshell.execDetached(["wl-copy", String(r.value)]);
         else if (r.kind === "web") Quickshell.execDetached(["xdg-open", "https://duckduckgo.com/?q=" + encodeURIComponent(r.text)]);
@@ -179,7 +204,7 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 1
                         Text { width: 520; elide: Text.ElideRight; text: row.modelData.title; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsM + 1 }
-                        Text { width: 520; elide: Text.ElideRight; text: row.modelData.sub || ""; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs }
+                        Text { width: 520; elide: Text.ElideRight; text: row.modelData.kind === "action" && so.confirmFor === row.modelData.title ? "Wirklich? Enter bestätigt, Esc bricht ab" : (row.modelData.sub || ""); color: row.modelData.kind === "action" && so.confirmFor === row.modelData.title ? Theme.amber : Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs }
                     }
                 }
                 MouseArea {

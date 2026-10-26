@@ -19,10 +19,10 @@ BarButton {
             color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsM; font.weight: Font.DemiBold
         }
         Text {
-            visible: Global.showDate
+            visible: Global.showDate || Focus.started
             anchors.right: parent.right
-            text: Qt.formatDateTime(clock.date, "dd.MM.yyyy")
-            color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs
+            text: Focus.started ? (Focus.running ? "⏱ " : "⏸ ") + Focus.barText : Qt.formatDateTime(clock.date, "dd.MM.yyyy")
+            color: Focus.started ? Theme.accentBright : Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs
         }
     }
     onClicked: Global.toggleCalendar(bar.mon)

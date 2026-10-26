@@ -239,6 +239,7 @@ PanelWindow {
     Surface {
         anchors.fill: parent
         level: 2
+        pop: true
         radius: Theme.rXl
 
         // ---------- Suche ----------

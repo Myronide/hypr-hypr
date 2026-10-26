@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Draconyx/Aurora: startet das gewählte Terminal.  dx-terminal [--dir ORDNER] [-- BEFEHL ...]
+# Draconyx/Aurora: startet das gewählte Terminal.  dx-terminal [--dir ORDNER] [--class KLASSE] [-- BEFEHL ...]
 # Auswahl: $DX_TERMINAL, sonst ~/.config/draconyx/terminal (eine Zeile), sonst Aurora-Einstellung, sonst erstes installiertes.
-dir=""; cmd=()
+dir=""; cls=""; cmd=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="$2"; shift 2;;
+    --class) cls="$2"; shift 2;;
     --) shift; cmd=("$@"); break;;
     *) cmd=("$@"); break;;
   esac
@@ -19,10 +20,10 @@ if [ -z "$term" ] || ! command -v "$term" >/dev/null 2>&1; then
 fi
 [ -n "$dir" ] && cd "$dir" 2>/dev/null
 case "$term" in
-  ghostty)   exec ghostty ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
-  kitty)     exec kitty ${dir:+--directory "$dir"} "${cmd[@]}";;
-  foot)      exec foot ${dir:+-D "$dir"} "${cmd[@]}";;
-  alacritty) exec alacritty ${dir:+--working-directory "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
+  ghostty)   exec ghostty ${cls:+--class="$cls"} ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
+  kitty)     exec kitty ${cls:+--class "$cls"} ${dir:+--directory "$dir"} "${cmd[@]}";;
+  foot)      exec foot ${cls:+--app-id "$cls"} ${dir:+-D "$dir"} "${cmd[@]}";;
+  alacritty) exec alacritty ${cls:+--class "$cls"} ${dir:+--working-directory "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
   wezterm)   exec wezterm start ${dir:+--cwd "$dir"} ${cmd[@]:+-- "${cmd[@]}"};;
   konsole)   exec konsole ${dir:+--workdir "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
   gnome-terminal) exec gnome-terminal ${dir:+--working-directory="$dir"} ${cmd[@]:+-- "${cmd[@]}"};;

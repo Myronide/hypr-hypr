@@ -210,9 +210,18 @@ end, { non_consuming = true })
 B("file_manager", "Dateimanager", mainMod .. " + E", hl.dsp.exec_cmd(fileManager))                 -- Explorer
 B("run_menu", "Ausführen", mainMod .. " + R", hl.dsp.exec_cmd(runMenu))                     -- Ausführen
 B("terminal", "Terminal", mainMod .. " + T", hl.dsp.exec_cmd(terminal))
+B("dropdown_terminal", "Drop-down-Terminal ein/aus", mainMod .. " + odiaeresis", function()
+    for _, w in ipairs(hl.get_windows()) do
+        if w.class == "dx.dropdown" then hl.dispatch(hl.dsp.workspace.toggle_special("dropdown")) return end
+    end
+    hl.exec_cmd(terminal .. " --class dx.dropdown")
+end)
 B("browser", "Browser", mainMod .. " + B", hl.dsp.exec_cmd(browser))
 B("lock", "Bildschirm sperren", mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))                  -- Sperren
-B("clipboard_history", "Zwischenablage-Verlauf", mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"))
+B("clipboard_history", "Zwischenablage-Verlauf", mainMod .. " + V", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell toggleClip 2>/dev/null || { cliphist list | fuzzel --dmenu | cliphist decode | wl-copy; }'"))
+B("shortcuts_help", "Tastenkürzel-Übersicht", mainMod .. " + I", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell toggleShortcuts'"))
+B("focus_timer", "Fokus-Timer starten/pausieren", mainMod .. " + P", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell focusCmd toggle'"))
+B("focus_timer_open", "Fokus-Timer anzeigen", mainMod .. " + SHIFT + P", hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call shell focusCmd open'"))
 B("notifications", "Benachrichtigungen", mainMod .. " + N", hl.dsp.exec_cmd("swaync-client -t -sw"))      -- Benachrichtigungen
 B("window_menu", "Fenstermenü (für Apps ohne Titelleiste)", "ALT + space", function()   -- Fenstermenü wie unter Windows (für Apps ohne Titelleiste, z. B. Dolphin)
     local w = hl.get_active_window()
@@ -408,6 +417,8 @@ B("media_next", "Medien: nächster Titel", "XF86AudioNext",  hl.dsp.exec_cmd("pl
 B("media_pause", "Medien: Pause", "XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 B("media_play", "Medien: Wiedergabe", "XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 B("media_prev", "Medien: voriger Titel", "XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+B("mic_mute", "Mikrofon stumm/laut", "XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
+B("mic_mute_key", "Mikrofon stumm/laut (Tastatur)", mainMod .. " + U", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"))
 
 
 --------------------------------
@@ -424,6 +435,10 @@ hl.window_rule({
 -- Terminals nie winzig öffnen (schwebende Ghostty-Fenster kamen mit ~138 px Breite)
 hl.window_rule({ name = "ghostty-size", match = { class = "^(com\\.mitchellh\\.ghostty|kitty)$" },
     min_size = { 760, 460 } })
+
+-- Drop-down-Terminal (Strg+Alt+Ö): schwebt oben auf dem Bildschirm und fährt auf Tastendruck herein/heraus (eigener "special"-Desktop)
+hl.window_rule({ name = "dx-dropdown", match = { class = "^dx\\.dropdown$" },
+    float = true, workspace = "special:dropdown", size = "(monitor_w*0.62) (monitor_h*0.46)", move = "(monitor_w*0.19) 36" })
 
 -- Spiele: echtes Vollbild auf eigenem Desktop (10) auf dem 180-Hz-Monitor.
 -- So liegt die Taskleiste nicht darüber, und Alt+Tab lässt das Spiel im Hintergrund weiterlaufen.
@@ -443,7 +458,7 @@ hl.window_rule({
 
 -- Layer: Milchglas für Taskleiste, Startmenü, Launcher, Benachrichtigungen
 hl.layer_rule({ match = { namespace = "waybar" },                       blur = true, ignore_alpha = 0.2 })
-hl.layer_rule({ match = { namespace = "^draconyx-(bar|start|control|calendar|alttab|taskview|code|windowmenu|grid|notif.*|settings)$" }, blur = true, ignore_alpha = 0.3 })
+hl.layer_rule({ match = { namespace = "^draconyx-(bar|start|control|calendar|alttab|taskview|code|windowmenu|grid|notif.*|settings|conn|clipboard|shortcuts|osd|preview)$" }, blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "^draconyx-bar$" },               no_anim = true })   -- Leiste animiert sich selbst
 hl.layer_rule({ match = { namespace = "nwg-drawer" },                   blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "launcher" },                     blur = true, ignore_alpha = 0.3 })

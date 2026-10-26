@@ -63,7 +63,7 @@ PanelWindow {
     readonly property string shownArtist: cc.player && (cc.player.trackTitle || "") !== "" ? (cc.player.trackArtist || "") : lastArtist
     readonly property string shownArt: cc.player && (cc.player.trackArtUrl || "") !== "" ? cc.player.trackArtUrl : lastArt
 
-    Rectangle {
+    PopCard {
         anchors.fill: parent
         radius: 22
         color: Theme.panelStrong
@@ -222,7 +222,7 @@ PanelWindow {
                     model: [
                         { icon: "screenshot", tip: "Screenshot",      cmd: "sleep 0.3; hyprshot -m region --clipboard-only" },
                         { icon: "picker",     tip: "Farbpipette",     cmd: "sleep 0.3; hyprpicker -a" },
-                        { icon: "clipboard",  tip: "Zwischenablage",  cmd: "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy" },
+                        { icon: "clipboard",  tip: "Zwischenablage",  cmd: "@clip" },
                         { icon: "desktop",    tip: "Monitore",        cmd: "nwg-displays" },
                         { icon: "settings",   tip: "Aussehen",        cmd: "nwg-look" },
                         { icon: "lock",       tip: "Sperren",         cmd: "hyprlock" }
@@ -233,7 +233,7 @@ PanelWindow {
                         implicitHeight: 48
                         color: hovered ? Theme.tileHover : Theme.tile
                         Icon { name: modelData.icon; size: 20 }
-                        onClicked: { Global.controlOpen = false; Global.run(modelData.cmd); }
+                        onClicked: { Global.controlOpen = false; if (modelData.cmd === "@clip") Global.toggleClip(Global.popupScreen); else Global.run(modelData.cmd); }
                     }
                 }
             }

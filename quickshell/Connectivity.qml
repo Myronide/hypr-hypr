@@ -77,7 +77,7 @@ PanelWindow {
     }
 
     // ---------- Aussehen ----------
-    Rectangle {
+    PopCard {
         anchors.fill: parent
         radius: 22
         color: Theme.panelStrong

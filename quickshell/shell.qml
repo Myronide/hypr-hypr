@@ -43,6 +43,9 @@ ShellRoot {
     SnipTool {}
     UpdateProgress {}
     Connectivity {}
+    Clipboard {}
+    Osd {}
+    Shortcuts {}
     SnipEditor { id: snipEditor }
     GitClient { id: gitClient }
     WindowMenu {}
@@ -60,8 +63,18 @@ ShellRoot {
         function toggleStart(): void { Global.toggleStart(""); }
         function toggleControl(): void { Global.toggleControl(""); }
         function toggleConn(): void { Global.toggleConn(""); }
+        function barItem(key: string, on: bool): void { Global.setItem(key, on); }
+        function toggleClip(): void { Global.toggleClip(""); }
+        function toggleShortcuts(): void { Global.toggleShortcuts(""); }
+        function osd(icon: string, label: string, value: real): void { Global.osdRequest(icon, label, value); }
         function openConn(tab: string): void { Global.openConn(tab, ""); }
         function toggleCalendar(): void { Global.toggleCalendar(""); }
+        // Fokus-Zeit: toggle | start | pause | reset | pomodoro | timer | stopwatch | open
+        function focusCmd(a: string): void {
+            if (a === "toggle") Focus.toggle(); else if (a === "start") Focus.start(); else if (a === "pause") Focus.pause(); else if (a === "reset") Focus.reset();
+            else if (a === "pomodoro" || a === "timer" || a === "stopwatch") Focus.setMode(a);
+            else if (a === "open") { Global.calTab = "focus"; if (!Global.calendarOpen) Global.toggleCalendar(""); }
+        }
         function closeAll(): void { Global.closeAll(); }
         function toggleAutohide(): void { Global.autohide = !Global.autohide; }
         function search(text: string): void { Global.testQuery = text; }

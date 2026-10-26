@@ -300,7 +300,7 @@ class AppInfo:
         if key in self.cache:
             return self.cache[key]
         a = self.by_exec.get(key.lower())
-        res = (a.get_display_name(), a.get_icon()) if a else (key, None)
+        res = (a.get_display_name(), a.get_icon()) if a else (key, Gio.ThemedIcon.new("application-x-executable"))
         self.cache[key] = res
         return res
 
@@ -498,7 +498,7 @@ class Programs(Page):
         bar_ = Gtk.Box(spacing=10); self.q = Gtk.SearchEntry(placeholder_text="Programm suchen …"); self.q.connect("search-changed", lambda *_: self.refilter())
         kill = Gtk.Button(label="Programm beenden"); kill.get_style_context().add_class("danger"); kill.connect("clicked", self.kill_selected)
         bar_.pack_start(self.q, True, True, 0); bar_.pack_end(kill, False, False, 0); self.box.pack_start(bar_, False, False, 0)
-        self.store = Gtk.ListStore(object, str, str, float, str, int, str)     # icon, name, cpu-text, cpu, mem-text, n, key
+        self.store = Gtk.ListStore(Gio.Icon, str, str, float, str, int, str)     # icon, name, cpu-text, cpu, mem-text, n, key
         self.filter = self.store.filter_new(); self.filter.set_visible_func(lambda m, i, d: self.q.get_text().lower() in (m[i][1] or "").lower())
         self.sort = Gtk.TreeModelSort(model=self.filter); self.sort.set_sort_column_id(3, Gtk.SortType.DESCENDING)
         tv = Gtk.TreeView(model=self.sort); tv.set_headers_visible(True)

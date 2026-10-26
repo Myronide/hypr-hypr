@@ -6,6 +6,8 @@ Rectangle {
     property int level: 1               // 0 = flach/leicht, 1 = Standard, 2 = Popup (dichter)
     property real opacityScale: 1.0     // z. B. aus den Einstellungen (Transparenz der Leiste)
     property bool outline: true
+    property bool pop: false            // Öffnen-Animation (für Popups)
+    Loader { active: surface.pop; sourceComponent: PopFx { card: surface } }
 
     radius: Theme.rL
     border.width: outline ? 1 : 0

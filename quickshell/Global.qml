@@ -19,10 +19,14 @@ Singleton {
     property bool connOpen: false             // Verbindungen: Netzwerk, Bluetooth, Audio
     property string connTab: "net"
     property bool calendarOpen: false
+    property string calTab: "cal"           // Reiter im Kalender: cal | focus
     property bool taskViewOpen: false
     property bool codeOpen: false
     property bool weOpen: false
     property bool searchOpen: false
+    signal osdRequest(string icon, string label, real value)    // kurze Anzeige am Bildschirmrand
+    property bool shortcutsOpen: false       // Tastenkürzel-Übersicht
+    property bool clipOpen: false             // Zwischenablage-Verlauf
     property bool snipOpen: false
     // Solange das Snip-Werkzeug aufnimmt oder offen ist (oder der Foto-Editor), dürfen Fokuswechsel andere Fenster der Shell nicht schließen
     readonly property bool snipBusy: snipOpen || editOpen || snipCap.running
@@ -47,7 +51,7 @@ Singleton {
         return (big && popupScreen === mon) || (taskPopupOpen && taskPopupScreen === mon);
     }
     function sysPopupOn(mon) { return (controlOpen || connOpen || calendarOpen) && popupScreen === mon; }
-    function closeAll() { connOpen = false; editOpen = false; snipOpen = false; searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
+    function closeAll() { connOpen = false; clipOpen = false; shortcutsOpen = false; editOpen = false; snipOpen = false; searchOpen = false; gitOpen = false; weOpen = false; startOpen = false; controlOpen = false; calendarOpen = false; taskViewOpen = false; codeOpen = false; }
     function focusedScreenName() { return Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; }
     function _toggle(prop, screenName) {
         const open = !root[prop];
@@ -64,6 +68,8 @@ Singleton {
     function toggleCode(s)     { _toggle("codeOpen", s); }
     function toggleWe(s)       { _toggle("weOpen", s); }
     function toggleSearchBox(s) { _toggle("searchOpen", s); }
+    function toggleClip(s)     { _toggle("clipOpen", s); }
+    function toggleShortcuts(s) { _toggle("shortcutsOpen", s); }
     // Hängt am Coding Space (bleibt offen); ohne ihn öffnet das Git-Feld allein am Fokus-Monitor
     function openGit(path) { if (!codeOpen) { closeAll(); popupScreen = focusedScreenName(); } gitRepo = path; gitOpen = true; }
     function screenAt(x, y) {
@@ -122,6 +128,12 @@ Singleton {
     property alias desktopDir:    settings.desktopDir
     property alias codeAppsOn:    settings.codeAppsOn
     property alias codeCustom:    settings.codeCustom
+    property alias nightTemp:     settings.nightTemp
+    property alias nightAuto:     settings.nightAuto
+    property alias nightFrom:     settings.nightFrom
+    property alias nightTo:       settings.nightTo
+    property alias osdOn:         settings.osdOn
+    property alias motion:        settings.motion
     readonly property int barMargin: 16
 
     Timer { id: retryTimer; interval: 800; onTriggered: settingsFile.reload() }
@@ -179,6 +191,12 @@ Singleton {
             property int iconGrid: 96            // Rasterbreite der Desktop-Icons
             property bool startLeft: true        // Startmenü links (Windows-10-Stil); false = mittig
             property var codeAppsOn: ["idea", "code"]   // Programme, die in der Projektliste als Knopf erscheinen (Aurora → Coding Space)
+            property int nightTemp: 4500            // Nachtlicht: Farbtemperatur in Kelvin (niedriger = wärmer)
+            property bool nightAuto: false          // Nachtlicht nach Zeitplan ein-/ausschalten
+            property string nightFrom: "21:00"
+            property string nightTo: "07:00"
+            property real motion: 1.0               // Animationen: 0 = aus, 1 = normal, <1 schneller, >1 weicher/langsamer
+            property bool osdOn: true               // Anzeige am Bildschirmrand bei Lautstärke/Mikrofon
             property var codeCustom: []             // eigene Programme: [{ id, name, cmd (mit {path}), term }]
             property string desktopDir: ""        // Ordner der Desktop-Symbole; leer = automatisch (xdg-user-dir DESKTOP)
             property var codeRoots: []              // weitere Ordner, die im Coding Space mitlaufen (zusätzlich zum Hauptordner)
@@ -846,8 +864,24 @@ Singleton {
 
     function setNightLight(on) {
         nightLight = on;
-        run(on ? "pkill -x hyprsunset; hyprsunset -t 4500" : "pkill -x hyprsunset");
+        run(on ? "pkill -x hyprsunset; hyprsunset -t " + Math.max(1500, Math.min(6500, nightTemp)) : "pkill -x hyprsunset");
     }
+    onNightTempChanged: if (nightLight) setNightLight(true)
+    // Zeitplan: schaltet nur beim Übergang um, damit ein Handgriff (an/aus per Kachel) bis zur nächsten Grenze gilt
+    property int _nightWas: -1
+    function _minutes(s) { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ""); return m ? Math.min(23, +m[1]) * 60 + Math.min(59, +m[2]) : 0; }
+    function nightWanted() {
+        const d = new Date(), now = d.getHours() * 60 + d.getMinutes();
+        const a = _minutes(nightFrom), b = _minutes(nightTo);
+        return a === b ? false : (a < b ? (now >= a && now < b) : (now >= a || now < b));
+    }
+    function nightTick() {
+        if (!nightAuto) { _nightWas = -1; return; }
+        const w = nightWanted() ? 1 : 0;
+        if (w !== _nightWas) { _nightWas = w; if ((w === 1) !== nightLight) setNightLight(w === 1); }
+    }
+    Timer { interval: 30000; repeat: true; running: root.nightAuto; triggeredOnStart: true; onTriggered: root.nightTick() }
+    onNightAutoChanged: { _nightWas = -1; nightTick(); }
     function setGameMode(on) {
         gameMode = on;
         hyprEval(on
@@ -966,10 +1000,10 @@ Singleton {
 
     // ---------- Anordnung der Taskleiste: jeder Teil sitzt links, mittig oder rechts ----------
     readonly property var barItemIds: ["start", "search", "taskview", "code", "wallpaper", "mode", "desktops", "apps",
-                                       "tray", "system", "notifications", "clock", "settings", "showDesktop", "update"]
+                                       "tray", "system", "notifications", "clock", "settings", "showDesktop", "update", "stats", "privacy"]
     function defaultLayout(style) {
         const tools = ["start", "search", "taskview", "code", "wallpaper", "mode", "desktops"];
-        const sys = ["update", "tray", "system", "notifications", "clock", "settings", "showDesktop"];
+        const sys = ["update", "privacy", "stats", "tray", "system", "notifications", "clock", "settings", "showDesktop"];
         if (style === "dock") return { left: [], center: tools.concat(["apps"]), right: sys };
         return { left: tools, center: ["apps"], right: sys };
     }
@@ -989,8 +1023,8 @@ Singleton {
     function setBarLayout(style, sections) { const m = Object.assign({}, barLayouts); m[style] = sections; barLayouts = m; }
     function resetBarLayout(style) { const m = Object.assign({}, barLayouts); delete m[style]; barLayouts = m; }
 
-    // Bestandteile der Taskleiste an/aus (Standard: an, außer "power")
-    function item(key) { const v = (barItems || {})[key]; return v === undefined ? key !== "power" : v === true; }
+    // Bestandteile der Taskleiste an/aus (Standard: an, außer "power" und "stats")
+    function item(key) { const v = (barItems || {})[key]; return v === undefined ? ["power", "stats"].indexOf(key) < 0 : v === true; }
     function setItem(key, on) { const m = Object.assign({}, barItems); m[key] = on; barItems = m; }
 
     // Fenstermodus (Standard): "floating" oder "tiling" – Datei wird von Lua (DXTiling.setDefault) geschrieben

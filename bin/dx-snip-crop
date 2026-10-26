@@ -2,9 +2,10 @@
 """Draconyx Snip: schneidet einen Bereich aus einem Bildschirmfoto aus und kopiert/speichert ihn.
   dx-snip-crop BILD X Y B H copy|save|both     (Pixel des Bildes)
   dx-snip-crop BILD X Y B H edit               (Ausschnitt als Datei für den Editor: gibt den Pfad aus)
+  dx-snip-crop BILD X Y B H ocr                (Text im Ausschnitt erkennen und kopieren; tesseract + Sprachpakete deu/eng)
   dx-snip-crop --screen MONITOR copy|save|both  (ganzer Monitor direkt)
   dx-snip-crop --deliver DATEI copy|save|both   (fertiges Bild aus dem Editor kopieren/speichern)"""
-import datetime, os, subprocess, sys
+import datetime, os, shutil, subprocess, sys
 from pathlib import Path
 from PIL import Image
 
@@ -32,6 +33,28 @@ def deliver(img, mode):
     if path: args[1:1] = ["-i", str(path)]
     subprocess.Popen(args)
 
+def ocr(img):
+    """Text im Bild erkennen (tesseract) und in die Zwischenablage legen."""
+    notify = lambda body: subprocess.Popen(["notify-send", "-a", "Draconyx", "-t", "4000", "Text erkennen", body])
+    if not shutil.which("tesseract"):
+        notify("tesseract ist nicht installiert."); return
+    have = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True).stdout.split()
+    langs = [l for l in ("deu", "eng") if l in have] or [l for l in have if l not in ("osd",) and len(l) == 3][:1]
+    if not langs:
+        notify("Keine Sprachdaten für tesseract (Paket tesseract-data-deu / tesseract-data-eng)."); return
+    tmp = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "draconyx-snip-ocr.png"
+    big = img.convert("L")
+    if big.height < 900: big = big.resize((big.width * 2, big.height * 2), Image.LANCZOS)   # kleine Schrift wird so besser erkannt
+    big.save(tmp)
+    r = subprocess.run(["tesseract", str(tmp), "stdout", "-l", "+".join(langs), "--psm", "6"], capture_output=True, text=True)
+    tmp.unlink(missing_ok=True)
+    text = r.stdout.strip()
+    if not text:
+        notify("Kein Text erkannt."); return
+    subprocess.run(["wl-copy"], input=text, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    short = " ".join(text.split())
+    notify("In die Zwischenablage kopiert:\n" + (short[:90] + "…" if len(short) > 90 else short))
+
 def main(a):
     if a and a[0] == "--deliver":
         deliver(Image.open(a[1]).convert("RGBA"), a[2] if len(a) > 2 else "both")
@@ -52,6 +75,8 @@ def main(a):
         cropped.save(out)
         print(out)
         return
+    if mode == "ocr":
+        ocr(cropped); return
     deliver(cropped, mode)
 
 main(sys.argv[1:])
