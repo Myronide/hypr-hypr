@@ -664,42 +664,107 @@ class Settings(Gtk.Application):
    for i in default[sec]:
     if i not in seen:seen.add(i);out[sec].append(i)
   return out
+
+ # ---------------------------------------------------------------- Anordnung per Ziehen (Leiste und schwebendes Dock)
+ ITEM_ICONS={'start':['start-here-symbolic','view-app-grid-symbolic'],'search':['system-search-symbolic'],'taskview':['view-app-grid-symbolic','view-grid-symbolic'],
+  'code':['utilities-terminal-symbolic'],'wallpaper':['preferences-desktop-wallpaper-symbolic','image-x-generic-symbolic'],'mode':['view-dual-symbolic','view-grid-symbolic'],
+  'desktops':['view-pin-symbolic','radio-symbolic'],'apps':['view-app-grid-symbolic','application-x-executable-symbolic'],'tray':['view-more-horizontal-symbolic','view-more-symbolic'],
+  'system':['network-wireless-symbolic','audio-volume-high-symbolic'],'notifications':['preferences-system-notifications-symbolic','user-available-symbolic'],
+  'clock':['preferences-system-time-symbolic','appointment-symbolic'],'settings':['emblem-system-symbolic','preferences-system-symbolic'],
+  'showDesktop':['user-desktop-symbolic','window-minimize-symbolic'],'update':['software-update-available-symbolic','view-refresh-symbolic']}
  def layout_editor(self,b):
-  style=shell_get('barStyle','bar') or 'bar'
-  head=Gtk.Label(label='ANORDNUNG ('+('SCHWEBENDES DOCK' if style=='dock' else 'DURCHGEHENDE LEISTE')+')',xalign=0);head.get_style_context().add_class('section-title');b.pack_start(head,False,False,6)
-  hint=Gtk.Label(label='Jeder Teil sitzt links, mittig oder rechts. Beim Dock wird jeder Bereich zu einer eigenen schwebenden Insel; leere Bereiche verschwinden. Reihenfolge mit den Pfeilen. Bei Stilwechsel diese Seite neu öffnen.',xalign=0);hint.set_line_wrap(True);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,0)
-  box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4);b.pack_start(box,False,False,0)
-  names=dict(self.BAR_ITEMS);secnames={'left':'Links','center':'Mitte','right':'Rechts'}
-  def save(lay):
-   m=dict(shell_get('barLayouts',{}) or {});m[style]=lay;shell_set('barLayouts',m)
+  self.section(b,'Anordnung')
+  hint=Gtk.Label(label='So sieht deine Leiste aus: Zieh die Teile einfach dorthin, wo sie hin sollen – nach links, in die Mitte oder nach rechts, und innerhalb eines Bereichs in die gewünschte Reihenfolge. In „Ausgeblendet“ ablegen schaltet ein Teil aus; von dort lässt es sich wieder zurückziehen. Beim schwebenden Dock wird jeder Bereich eine eigene Insel, leere Bereiche verschwinden.',xalign=0)
+  hint.set_line_wrap(True);hint.set_max_width_chars(110);hint.get_style_context().add_class('page-desc');b.pack_start(hint,False,False,0)
+  holder=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=10);b.pack_start(holder,False,False,0)
+  names=dict(self.BAR_ITEMS);theme=Gtk.IconTheme.get_default();state={'style':shell_get('barStyle','bar') or 'bar'}
+  TARGET=[Gtk.TargetEntry.new('dx-bar-item',Gtk.TargetFlags.SAME_APP,0)]
+  def icon_for(i):
+   n=next((x for x in self.ITEM_ICONS.get(i,[]) if theme.has_icon(x)),'preferences-system-symbolic');return Gtk.Image.new_from_icon_name(n,Gtk.IconSize.MENU)
+  def hidden_ids():
+   items=shell_get('barItems',{}) or {};return [i for i,_ in self.BAR_ITEMS if items.get(i,True) is False]
+  def save_layout(lay):
+   m=dict(shell_get('barLayouts',{}) or {});m[state['style']]=lay;shell_set('barLayouts',m)
+  def drop(item,zone,index):
+   """Teil item in Bereich zone ('left'|'center'|'right'|'hidden') an Stelle index legen"""
+   lay=self.current_layout(state['style']);items=dict(shell_get('barItems',{}) or {})
+   for sec in lay:
+    if item in lay[sec]:lay[sec].remove(item)
+   if zone=='hidden':
+    items[item]=False;lay['right'].append(item)       # Platz merken: beim Zurückholen landet es dort, wo man es ablegt
+   else:
+    items[item]=True
+    vis=[x for x in lay[zone] if items.get(x,True) is not False]
+    pos=len(lay[zone]) if index>=len(vis) else lay[zone].index(vis[index])
+    lay[zone].insert(pos,item)
+   shell_set('barItems',items);save_layout(lay);build()
+  def make_chip(i):
+   box=Gtk.Box(spacing=7);box.get_style_context().add_class('chip');box.pack_start(icon_for(i),False,False,0);box.pack_start(Gtk.Label(label=names[i]),False,False,0)
+   ev=Gtk.EventBox();ev.add(box);ev.set_halign(Gtk.Align.START);ev.item=i;ev.drag_source_set(Gdk.ModifierType.BUTTON1_MASK,TARGET,Gdk.DragAction.MOVE)
+   ev.connect('drag-data-get',lambda w,ctx,data,info,t,i=i:data.set_text(i,-1))
+   def begin(w,ctx):
+    try:
+     al=w.get_allocation();import cairo
+     sf=cairo.ImageSurface(cairo.FORMAT_ARGB32,al.width,al.height);cr=cairo.Context(sf);w.draw(cr);Gtk.drag_set_icon_surface(ctx,sf)
+    except Exception:pass
+   ev.connect('drag-begin',begin);ev.set_tooltip_text('Ziehen zum Verschieben – Rechtsklick für ein Menü')
+   # Rechtsklick: Menü als Popover (Alternative zum Ziehen, z. B. per Touchpad)
+   def menu(w,event,i=i):
+    if event.button!=3:return False
+    pop=Gtk.Popover.new(w);col=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=4,margin=8)
+    hid=i in hidden_ids()
+    for label,zone in (('Nach links','left'),('In die Mitte','center'),('Nach rechts','right'),('Anzeigen' if hid else 'Ausblenden','right' if hid else 'hidden')):
+     if hid and zone=='hidden':continue
+     bt=Gtk.Button(label=label);bt.connect('clicked',lambda _b,zone=zone,pop=pop:(pop.popdown(),GLib.idle_add(drop,i,zone,99)));col.pack_start(bt,False,False,0)
+    pop.add(col);col.show_all();pop.popup();return True
+   ev.connect('button-press-event',menu);return ev
+  def make_zone(key,title,items,compact=False):
+   outer=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
+   t=Gtk.Label(label=title,xalign=0);t.get_style_context().add_class('zone-title');outer.pack_start(t,False,False,0)
+   flow=Gtk.FlowBox();flow.set_selection_mode(Gtk.SelectionMode.NONE);flow.set_max_children_per_line(30);flow.set_column_spacing(6);flow.set_row_spacing(6);flow.set_homogeneous(False)
+   frame=Gtk.EventBox();frame.get_style_context().add_class('zone');frame.add(flow);frame.set_size_request(150 if compact else 200,74);flow.set_halign(Gtk.Align.FILL)
+   if state['style']=='dock' and key!='hidden':frame.get_style_context().add_class('island')
+   for i in items:flow.add(make_chip(i))
+   if not items:
+    ph=Gtk.Label(label='hierher ziehen' if key!='hidden' else 'nichts ausgeblendet');ph.get_style_context().add_class('zone-empty');flow.add(ph)
+   frame.drag_dest_set(Gtk.DestDefaults.MOTION|Gtk.DestDefaults.HIGHLIGHT|Gtk.DestDefaults.DROP,TARGET,Gdk.DragAction.MOVE)
+   def received(w,ctx,x,y,data,info,time_):
+    item=data.get_text()
+    if item not in names:Gtk.drag_finish(ctx,False,False,time_);return
+    idx=0
+    for c in flow.get_children():
+     ch=c.get_child()
+     if not hasattr(ch,'item'):continue
+     al=c.get_allocation()
+     if x>al.x+al.width/2 and y>=al.y-4:idx+=1
+    Gtk.drag_finish(ctx,True,False,time_);GLib.idle_add(drop,item,key,idx)
+   frame.connect('drag-data-received',received);outer.pack_start(frame,True,True,0);return outer
   def build():
-   for c in box.get_children():box.remove(c)
-   lay=self.current_layout(style)
-   for sec in ('left','center','right'):
-    h=Gtk.Label(label=secnames[sec]+('' if lay[sec] else '  (leer)'),xalign=0);h.get_style_context().add_class('subtitle');box.pack_start(h,False,False,4)
-    for idx,i in enumerate(lay[sec]):
-     row=Gtk.Box(spacing=8);row.get_style_context().add_class('setting-row');l=Gtk.Label(label=names[i],xalign=0);row.pack_start(l,True,True,0)
-     def move(w,i=i,sec=sec,d=0,tosec=None):
-      L=self.current_layout(style)
-      if tosec:L[sec].remove(i);L[tosec].append(i)
-      else:
-       k=L[sec].index(i);j=k+d
-       if 0<=j<len(L[sec]):L[sec][k],L[sec][j]=L[sec][j],L[sec][k]
-      save(L);build()
-     for label,kw in (('▲',{'d':-1}),('▼',{'d':1})):
-      btn=Gtk.Button(label=label);btn.connect('clicked',lambda w,kw=kw,i=i,sec=sec:move(w,i,sec,**kw));row.pack_end(btn,False,False,0)
-     for tosec in ('right','center','left'):
-      if tosec!=sec:
-       btn=Gtk.Button(label=secnames[tosec]);btn.connect('clicked',lambda w,tosec=tosec,i=i,sec=sec:move(w,i,sec,0,tosec));row.pack_end(btn,False,False,0)
-     box.pack_start(row,False,False,0)
-   reset=Gtk.Button(label='Anordnung zurücksetzen');reset.connect('clicked',lambda *_:(shell_set('barLayouts',{k:v for k,v in (shell_get('barLayouts',{}) or {}).items() if k!=style}),build()))
-   box.pack_start(reset,False,False,6);box.show_all()
-  build()
+   for c in holder.get_children():holder.remove(c)
+   lay=self.current_layout(state['style']);hid=set(hidden_ids())
+   row=Gtk.Box(spacing=14 if state['style']=='dock' else 0);row.set_homogeneous(False)
+   if state['style']!='dock':row.get_style_context().add_class('bar-strip')
+   for key,title in (('left','LINKS'),('center','MITTE'),('right','RECHTS')):
+    row.pack_start(make_zone(key,title,[i for i in lay[key] if i not in hid]),True,True,0)
+   holder.pack_start(Gtk.Label(label=('Schwebendes Dock – drei Inseln' if state['style']=='dock' else 'Durchgehende Leiste'),xalign=0),False,False,0)
+   holder.pack_start(row,False,False,0)
+   holder.pack_start(make_zone('hidden','AUSGEBLENDET',[i for i,_ in self.BAR_ITEMS if i in hid]),False,False,0)
+   bottom=Gtk.Box(spacing=8);rs=Gtk.Button(label='Anordnung zurücksetzen')
+   def reset(*_):
+    m={k:v for k,v in (shell_get('barLayouts',{}) or {}).items() if k!=state['style']};shell_set('barLayouts',m);shell_set('barItems',{});build()
+   rs.connect('clicked',reset);bottom.pack_start(rs,False,False,0);holder.pack_start(bottom,False,False,0);holder.show_all()
+  build();self._layout_drop=drop   # (auch für Tests erreichbar)
+  def watch():   # Stilwechsel (Leiste ↔ Dock) oben auf der Seite: Anordnung neu aufbauen
+   cur=shell_get('barStyle','bar') or 'bar'
+   if cur!=state['style']:state['style']=cur;build()
+   return True
+  GLib.timeout_add_seconds(1,watch)
 
  def taskbar(self):
   b=self.page('Taskleiste','Alles, was in der Taskleiste der Shell erscheint. Änderungen gelten sofort.')
   self.shell_combo(b,'Stil','barStyle',[('bar','Durchgehende Leiste'),('dock','Schwebendes Dock')],'bar')
   self.sw(b,'Oben statt unten','barTop',False)
+  self.layout_editor(b)
   self.shell_combo(b,'Bei Vollbild (Spiele, Videos)','fullscreenBar',[('hover','Ausblenden, am Rand einblendbar'),('hide','Ganz ausblenden'),('show','Sichtbar lassen')],'hover','Gilt auch für eine feste Leiste (ohne Auto-Hide): im Vollbild verschwindet sie und erscheint, wenn die Maus den Bildschirmrand berührt.')
   # Taskleiste je Bildschirm an/aus
   head0=Gtk.Label(label='BILDSCHIRME',xalign=0);head0.get_style_context().add_class('section-title');b.pack_start(head0,False,False,6)
@@ -715,12 +780,7 @@ class Settings(Gtk.Application):
   self.sw(b,'Quickinfos zu den Knöpfen','tooltips',True,'Beim Überfahren eines Knopfs in der Taskleiste erscheint eine kurze Erklärung.')
   self.sw(b,'Fenster einer App gruppieren','groupApps',True)
   self.shell_spin(b,'Höhe','barHeight',40,90,1,58);self.shell_spin(b,'Symbolgröße','iconSize',20,48,1,34);self.shell_spin(b,'Deckkraft','barOpacity',0.4,1.0,0.05,0.9)
-  self.layout_editor(b)
-  head=Gtk.Label(label='BESTANDTEILE',xalign=0);head.get_style_context().add_class('section-title');b.pack_start(head,False,False,6)
-  for key,title,default,desc in [('start','Startknopf',True,'Rechtsklick auf den Knopf: Symbol wählen (Draconyx, Arch, eigenes Bild).'),('search','Suche',True,''),('taskview','Fensterübersicht',True,''),
-    ('code','Coding Space',True,''),('wallpaper','Wallpaper Engine',True,''),('mode','Fenstermodus-Knopf (Schweben / Kacheln)',True,''),('desktops','Desktop-Punkte',True,''),('apps','App-Symbole',True,''),
-    ('tray','Tray',True,''),('system','Netzwerk und Lautstärke',True,''),('notifications','Benachrichtigungen',True,''),('clock','Uhr',True,''),('settings','Einstellungen (Aurora)',True,''),('showDesktop','Streifen „Desktop anzeigen“',True,''),('update','Update-Anzeige (nur bei neuer Version sichtbar)',True,'Zeigt in der Taskleiste, was in einem Update steckt, und aktualisiert per Klick.')]:
-   self.sw(b,title,key,default,desc,items=True)
+  self.section(b,'Uhr')
   self.sw(b,'Datum unter der Uhr','showDate',True);self.sw(b,'Sekunden anzeigen','showSeconds',False)
  def codespace(self):
   b=self.page('Coding Space','Hier liegen deine Workspaces. Workspace = Ordner mit „Workspace“ im Namen; darin liegen die Projekte. „+ Workspace“ im Coding Space legt neue Ordner genau hier an.')
