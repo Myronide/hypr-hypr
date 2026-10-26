@@ -134,6 +134,8 @@ Singleton {
     property alias nightTo:       settings.nightTo
     property alias osdOn:         settings.osdOn
     property alias motion:        settings.motion
+    property alias titleBars:     settings.titleBars
+    property string tbDrag: ""              // Fenster (Adresse), das gerade an seiner Titelleiste gezogen wird
     readonly property int barMargin: 16
 
     Timer { id: retryTimer; interval: 800; onTriggered: settingsFile.reload() }
@@ -196,6 +198,7 @@ Singleton {
             property string nightFrom: "21:00"
             property string nightTo: "07:00"
             property real motion: 1.0               // Animationen: 0 = aus, 1 = normal, <1 schneller, >1 weicher/langsamer
+            property bool titleBars: true           // eigene Titelleisten für schwebende Fenster ohne eigene Leiste (Dolphin & Co.)
             property bool osdOn: true               // Anzeige am Bildschirmrand bei Lautstärke/Mikrofon
             property var codeCustom: []             // eigene Programme: [{ id, name, cmd (mit {path}), term }]
             property string desktopDir: ""        // Ordner der Desktop-Symbole; leer = automatisch (xdg-user-dir DESKTOP)

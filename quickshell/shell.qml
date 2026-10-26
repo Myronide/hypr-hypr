@@ -45,6 +45,7 @@ ShellRoot {
     Connectivity {}
     Clipboard {}
     Osd {}
+    TitleBars {}
     Shortcuts {}
     SnipEditor { id: snipEditor }
     GitClient { id: gitClient }

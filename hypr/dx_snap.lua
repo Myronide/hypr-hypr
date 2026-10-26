@@ -21,12 +21,27 @@ function M.setup(t, o)
 end
 
 -- ---------- Geometrie ----------
+-- Platz für die Titelleisten der Shell (TitleBars.qml): eine Leiste sitzt direkt ÜBER dem Fenster, also bleibt beim Andocken und
+-- Maximieren oben ein Streifen frei. Aus, wenn die Shell-Einstellung "titleBars" ausgeschaltet ist (gelesen beim Laden/Neuladen).
+local TITLEBAR = 30
+local TB = TITLEBAR
+local function readTB()
+    local f = io.open((os.getenv("HOME") or "") .. "/.local/state/draconyx/settings.json", "r")
+    if not f then return TITLEBAR end
+    local s = f:read("*a") or ""
+    f:close()
+    if s:find('"titleBars"%s*:%s*false') then return 0 end
+    return TITLEBAR
+end
+TB = readTB()
+hl.on("config.reloaded", function() TB = readTB() end)
+
 local function area(m)
     local r = m.reserved or {}
     local x = m.x + (r.left or 0) + GAP
-    local y = m.y + (r.top or 0) + GAP
+    local y = m.y + (r.top or 0) + GAP + TB
     local w = m.width - (r.left or 0) - (r.right or 0) - 2 * GAP
-    local h = m.height - (r.top or 0) - (r.bottom or 0) - 2 * GAP
+    local h = m.height - (r.top or 0) - (r.bottom or 0) - 2 * GAP - TB
     return x, y, w, h
 end
 

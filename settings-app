@@ -229,6 +229,7 @@ class Settings(Gtk.Application):
   def mem_reset(*_):
    (Path.home()/'.config/draconyx/window-sizes.tsv').unlink(missing_ok=True);self.message('Gemerkte Fenstergrößen gelöscht.')
   self.button(b,'Gemerkte Größen','Alle vergessen',mem_reset)
+  self.sw(b,'Titelleisten für Apps ohne eigene Leiste','titleBars',True,'Eine schmale Leiste über dem Fenster (Titel, Minimieren, Maximieren, Schließen) für Programme wie Dolphin. Ziehen an der Leiste verschiebt das Fenster ohne Alt oder Strg+Alt, Doppelklick maximiert, Rechtsklick öffnet das Fenstermenü. Apps, die ihre Leiste selbst zeichnen (GTK, Browser, Discord …), bekommen keine zweite. Das Andocken lässt oben Platz dafür; nach einem Neuladen (Strg+Alt+Umschalt+R oder Aurora speichern) gilt die Änderung auch dort.')
   self.sw(b,'Alt+Tab mit der Maus bedienen','altTabMouse',True,'Aus: Die Alt+Tab-Übersicht reagiert nur auf die Tastatur (Tab, Pfeile, Alt loslassen). Antippen springt sofort zum vorigen Fenster, Alt halten und Tab weiter drücken schaltet durch.')
   self.spin(b,'Titelleistenhöhe','titlebar_height',22,48);self.spin(b,'Titelschrift','titlebar_font',8,16)
   self.spin(b,'Abgerundete Ecken','rounding',0,40);self.spin(b,'Rahmenbreite','border_size',0,6)
