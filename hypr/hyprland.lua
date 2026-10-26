@@ -55,10 +55,8 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("gsettings set org.gnome.desktop.interface cursor-theme " .. CURSOR)
     hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")
     hl.exec_cmd("gsettings set org.gnome.desktop.interface icon-theme Papirus-Dark")
-    -- optionale Zusatzprogramme: nur wenn vorhanden
-    hl.exec_cmd(ifInstalled("easyeffects", "easyeffects --hide-window --service-mode"))
-    hl.exec_cmd(ifInstalled("jamesdsp"))
-    if fileExists(HOME_ .. "/Jetbrains_Toolbox/jetbrains-toolbox") then hl.exec_cmd(HOME_ .. "/Jetbrains_Toolbox/jetbrains-toolbox --minimize") end
+    -- Eigener Autostart (Aurora → Autostart): alle eingeschalteten Programme aus ~/.config/autostart, schon laufende werden übersprungen
+    hl.exec_cmd("sh -c '[ -x \"" .. HOME_ .. "/.local/bin/dx-autostart\" ] && sleep 4 && exec \"" .. HOME_ .. "/.local/bin/dx-autostart\" run'")
 end)
 
 
@@ -330,6 +328,8 @@ DXSnap = require("dx_snap")
 DXSnap.setup(DXTiling, { minimize = minimizeWindow })
 DXSizes = require("dx_sizes")   -- Fenstergröße beim Schließen merken, beim Öffnen wiederherstellen
 DXSizes.setup(DXSnap)
+DXRules = require("dx_rules")   -- Fensterregeln (Aurora → Fensterregeln)
+DXRules.setup(DXSnap)
 
 B("snap_up", "Fenster nach oben (Snap/Maximieren)", mainMod .. " + Up",    function() DXSnap.arrow("up") end)
 B("snap_down", "Fenster nach unten (Snap/Wiederherstellen)", mainMod .. " + Down",  function() DXSnap.arrow("down") end)

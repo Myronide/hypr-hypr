@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Draconyx: Autostart verwalten und beim Anmelden ausführen.
+  dx-autostart list [--json]           Programme in ~/.config/autostart (an/aus) + eigene Einträge
+  dx-autostart enable|disable ID       einschalten / ausschalten (Datei bleibt erhalten)
+  dx-autostart add NAME BEFEHL         eigenen Eintrag anlegen
+  dx-autostart remove ID               Eintrag löschen
+  dx-autostart apps [--json]           installierte Programme (zum Hinzufügen)
+  dx-autostart addapp DESKTOP-ID       ein installiertes Programm in den Autostart aufnehmen
+  dx-autostart run                     (von Hyprland beim Start) alle eingeschalteten Einträge starten, schon laufende überspringen
+Eigene Einträge liegen als normale .desktop-Dateien in ~/.config/autostart (andere Programme verstehen sie auch)."""
+import json, os, re, shlex, shutil, subprocess, sys, time
+from pathlib import Path
+
+HOME = Path.home()
+AUTO = HOME / ".config/autostart"
+APPS = [Path("/usr/share/applications"), HOME / ".local/share/applications", Path("/var/lib/flatpak/exports/share/applications"),
+        HOME / ".local/share/flatpak/exports/share/applications"]
+SKIP_RUN = {"initial-setup.sh"}
+
+
+def parse(path):
+    d, sec = {}, None
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return d
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            sec = line; continue
+        if sec == "[Desktop Entry]" and "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1)
+            if "[" not in k:                       # lokalisierte Schlüssel (Name[de]) überspringen
+                d.setdefault(k.strip(), v.strip())
+    return d
+
+
+def enabled(d):
+    return d.get("Hidden", "false").lower() != "true" and d.get("X-GNOME-Autostart-enabled", "true").lower() != "false"
+
+
+def entries():
+    out = []
+    if AUTO.is_dir():
+        for p in sorted(AUTO.glob("*.desktop")):
+            d = parse(p)
+            if not d.get("Exec") and d.get("Type", "Application") != "Application":
+                continue
+            out.append({"id": p.name, "name": d.get("Name", p.stem), "comment": d.get("Comment", ""), "exec": d.get("Exec", ""),
+                        "icon": d.get("Icon", ""), "enabled": enabled(d), "custom": p.name.startswith("dx-")})
+    return out
+
+
+def set_keys(path, keys):
+    """Schlüssel im [Desktop Entry]-Abschnitt setzen/entfernen (Wert None = entfernen)."""
+    lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    out, sec, done = [], None, set()
+    for l in lines:
+        s = l.strip()
+        if s.startswith("["):
+            if sec == "[Desktop Entry]":
+                out += ["%s=%s" % (k, v) for k, v in keys.items() if v is not None and k not in done]
+            sec = s; out.append(l); continue
+        if sec == "[Desktop Entry]" and "=" in s and s.split("=", 1)[0].strip() in keys:
+            k = s.split("=", 1)[0].strip()
+            if keys[k] is not None and k not in done:
+                out.append("%s=%s" % (k, keys[k]))
+            done.add(k); continue
+        out.append(l)
+    if sec == "[Desktop Entry]":
+        out += ["%s=%s" % (k, v) for k, v in keys.items() if v is not None and k not in done]
+    Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def write_entry(name, cmd, icon="", comment="", fname=None):
+    AUTO.mkdir(parents=True, exist_ok=True)
+    fname = fname or "dx-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") + ".desktop"
+    (AUTO / fname).write_text("[Desktop Entry]\nType=Application\nName=%s\nExec=%s\n%s%sTerminal=false\n" % (
+        name, cmd, ("Icon=%s\n" % icon) if icon else "", ("Comment=%s\n" % comment) if comment else ""), encoding="utf-8")
+    return fname
+
+
+def installed_apps():
+    seen, out = set(), []
+    for base in APPS:
+        if not base.is_dir():
+            continue
+        for p in sorted(base.glob("*.desktop")):
+            if p.name in seen:
+                continue
+            d = parse(p)
+            if d.get("Type") != "Application" or d.get("NoDisplay", "false").lower() == "true" or not d.get("Exec"):
+                continue
+            seen.add(p.name)
+            out.append({"id": p.name, "name": d.get("Name", p.stem), "exec": d.get("Exec", ""), "icon": d.get("Icon", ""), "comment": d.get("Comment", "")})
+    return sorted(out, key=lambda x: x["name"].lower())
+
+
+def argv_of(exec_line):
+    cleaned = re.sub(r"%[a-zA-Z]", "", exec_line)
+    try:
+        return shlex.split(cleaned)
+    except ValueError:
+        return cleaned.split()
+
+
+def running(argv):
+    if not argv:
+        return False
+    name = os.path.basename(argv[0])
+    return subprocess.run(["pgrep", "-x", name[:15]], capture_output=True).returncode == 0
+
+
+def run_all():
+    launch = str(HOME / ".local/bin/dx-launch")
+    started = []
+    for e in entries():
+        if not e["enabled"] or e["id"] in SKIP_RUN:
+            continue
+        d = parse(AUTO / e["id"])
+        only = d.get("OnlyShowIn")
+        if only and not any(x in only.lower() for x in ("hyprland", "wlroots")):
+            continue
+        if d.get("NotShowIn") and "hyprland" in d["NotShowIn"].lower():
+            continue
+        if d.get("TryExec") and shutil.which(d["TryExec"]) is None:
+            continue
+        argv = argv_of(e["exec"])
+        if not argv or running(argv):
+            continue
+        try:
+            delay = float(d.get("X-GNOME-Autostart-Delay", "0") or 0)
+        except ValueError:
+            delay = 0
+        if delay > 0:
+            time.sleep(min(delay, 20))
+        subprocess.Popen([launch] + argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        started.append(e["name"])
+        time.sleep(0.4)
+    print("gestartet:", ", ".join(started) or "nichts (alles läuft schon oder ist aus)")
+
+
+def main():
+    a = sys.argv[1:]
+    cmd = a[0] if a else "list"
+    if cmd == "list":
+        L = entries()
+        if "--json" in a:
+            print(json.dumps(L, ensure_ascii=False))
+        else:
+            for e in L:
+                print("%-4s %-28s %s" % ("an" if e["enabled"] else "aus", e["name"], e["exec"]))
+    elif cmd in ("enable", "disable") and len(a) == 2:
+        p = AUTO / a[1]
+        if not p.is_file():
+            print("Eintrag nicht gefunden", file=sys.stderr); sys.exit(1)
+        if cmd == "disable":
+            set_keys(p, {"Hidden": "true", "X-GNOME-Autostart-enabled": "false"})
+        else:
+            set_keys(p, {"Hidden": None, "X-GNOME-Autostart-enabled": None})
+    elif cmd == "add" and len(a) >= 3:
+        print(write_entry(a[1], " ".join(a[2:])))
+    elif cmd == "remove" and len(a) == 2:
+        (AUTO / a[1]).unlink(missing_ok=True)
+    elif cmd == "apps":
+        L = installed_apps()
+        print(json.dumps(L, ensure_ascii=False) if "--json" in a else "\n".join(x["name"] for x in L))
+    elif cmd == "addapp" and len(a) == 2:
+        for x in installed_apps():
+            if x["id"] == a[1]:
+                print(write_entry(x["name"], re.sub(r"%[a-zA-Z]", "", x["exec"]).strip(), x["icon"], x["comment"], "dx-" + a[1])); return
+        print("Programm nicht gefunden", file=sys.stderr); sys.exit(1)
+    elif cmd == "run":
+        run_all()
+    else:
+        print(__doc__); sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

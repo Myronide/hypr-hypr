@@ -82,7 +82,7 @@ python3 -I "$HERE/bin/dx-settings-guard" snapshot >/dev/null 2>&1 || true
 # ---------------------------------------------------------------- 1. Pakete
 # Jeder Eintrag: "Name" oder "Name|Alternative|…" (je nach Distribution heißt ein Paket anders, z. B. ttf-inter / inter-font).
 # Es wird das erste Paket genommen, das es in den Paketquellen gibt; ein fehlendes Paket stoppt die anderen nicht mehr.
-PKGS=(hyprland quickshell fuzzel jq python python-gobject python-pillow gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
+PKGS=(hyprland quickshell fuzzel jq python python-gobject python-pillow python-psutil gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
       "inter-font|ttf-inter" papirus-icon-theme adw-gtk-theme fontconfig noto-fonts noto-fonts-emoji
       qt6-wayland qt6-svg qt6-5compat qt6-imageformats qt6-multimedia
       pipewire pipewire-pulse wireplumber playerctl networkmanager nm-connection-editor bluez bluez-utils blueman pavucontrol
@@ -166,7 +166,7 @@ if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55
 fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
-for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua dx_sizes.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
+for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua dx_sizes.lua dx_rules.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
 # csd-apps ist deine Liste (Einstellungen → Fenster → eigene Titelleisten): nur anlegen, wenn es sie noch nicht gibt
 if [ ! -e "$CONF/hypr/csd-apps" ]; then
   cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1))
