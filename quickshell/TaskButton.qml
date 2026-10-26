@@ -281,7 +281,7 @@ BarButton {
                         required property var modelData
                         width: menuCol.width
                         label: modelData.name
-                        onTriggered: { modelData.execute(); popup.visible = false; }
+                        onTriggered: { Global.launchEntry(modelData); popup.visible = false; }
                     }
                 }
                 MenuRow {

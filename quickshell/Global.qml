@@ -614,9 +614,16 @@ Singleton {
             return Quickshell.iconPath("steam_icon_" + id.substring(10), "steam");
         return Quickshell.iconPath((id || "").toLowerCase(), "application-x-executable");
     }
+    // Apps vollständig abgekoppelt starten (dx-launch): neue Sitzung, Ein-/Ausgabe nach /dev/null. Sonst können Apps wie Discord mit
+    // "write EPIPE" abstürzen, wenn die Pipe ihres Starters (z. B. die Shell nach einem Neustart) verschwindet.
+    function launchEntry(e) {
+        if (e && !e.runInTerminal && e.command && e.command.length > 0)
+            Quickshell.execDetached([Theme.home + "/.local/bin/dx-launch"].concat(e.command));
+        else if (e) e.execute();
+    }
     function launch(id, entry) {
         addRecent(entry ? entry.id : id);
-        if (entry) entry.execute(); else run(id);
+        if (entry) launchEntry(entry); else run(id);
     }
 
     // =====================================================================
