@@ -251,14 +251,18 @@ hl.on("window.fullscreen", function(w)
         if w ~= nil and w.fullscreen == 1 then
             local a = "address:" .. w.address
             local wasMax = (maxState[w.address] == true) or M.isMaxed(w)     -- Zustand VOR dem Knopfdruck
+            -- Ohne Animation und sofort: sonst sieht man erst Hyprlands Maximieren, dann die kleine App-Größe, dann unser Ergebnis (Flackern)
+            hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "1" }))
             hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
+            if wasMax then M.unMax(w) else M.setMax(w) end
+            hl.timer(function() pcall(function() hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "0" })) end) end, { timeout = 800, type = "oneshot" })
             -- Die App (z. B. Brave über XWayland) reagiert auf das Zurücknehmen mit einer eigenen Größenänderung.
             -- Erst danach das eigene Maximieren/Wiederherstellen anwenden, sonst springt das Fenster wieder klein.
             local addr = w.address
             local function apply()
                 for _, ww in ipairs(hl.get_windows()) do
                     if ww.address == addr then
-                        if wasMax then M.unMax(ww) else M.setMax(ww) end
+                        if wasMax then if M.isMaxed(ww) then M.unMax(ww) end else M.setMax(ww) end   -- nicht doppelt wiederherstellen
                         return
                     end
                 end
