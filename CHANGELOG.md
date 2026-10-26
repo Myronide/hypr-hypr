@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.3.7
+- Mausrad-Geschwindigkeit einstellbar (Aurora → Übersicht); Einstellungen werden bei Updates nicht mehr zurückgesetzt (seit 1.3.6)
+
 ## 1.3.6
 - Hotfix zu 1.3.5: die Shell konnte mit der Schutz-Änderung nicht laden (Timer am falschen Ort) – 1.3.5 nicht installieren, direkt 1.3.6
 
