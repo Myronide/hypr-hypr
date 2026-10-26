@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.3.1
+- Update-Prüfung alle 30 Minuten statt alle 6 Stunden; Knopf „Jetzt prüfen“ in Aurora → System
+
 ## 1.3.0
 - **Aurora im neuen Design:** Seitenleiste mit Symbolen und Gruppen, Karten-Zeilen, breite Bedienelemente unter dem Text, saubere Abschnittstitel.
 - **Bildschirme wie unter Windows:** anordnen per Ziehen, Auflösung, Wiederholrate, Skalierung, Drehung, 15-Sekunden-Rückfrage. Bildschirme bleiben nach Updates erhalten (dx-monitors sync, Sicherheitsprüfung nach dem Neuladen).
