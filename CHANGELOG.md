@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.5.3
+- Titelleisten: Verschieben ohne Animationsreste und Release-Rennen (ein gemeinsamer Helfer), Ereignisse wecken den Fensterwächter sofort, Tests
+
 ## 1.5.2
 - Fix: Maus-Hover in allen Fenstern (Aurora setzte follow_mouse=0, Installer räumt auf); Titelleisten-Helfer sparsamer und das Andocken beim Ziehen zwischen Bildschirmen wird nicht mehr überschrieben
 
