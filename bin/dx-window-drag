@@ -4,7 +4,7 @@
 #  * Ein maximiertes Fenster wird dabei erst auf seine alte Größe zurückgesetzt (Zeiger bleibt im gleichen Verhältnis auf der Leiste).
 #  * Zieht man auf einen anderen Bildschirm, wird das Fenster diesem Bildschirm zugeordnet (sonst maximiert das Andocken danach
 #    wieder auf dem alten).
-#  * Das Andocken (dx_snap) bemerkt die Bewegung wie bei jedem anderen Ziehen; bewegt jemand anderes das Fenster, hört der Helfer auf.
+#  * Das Andocken (dx_snap) sperrt weitere Bewegungen beim Loslassen direkt im Compositor.
 import json, os, signal, socket, sys, time
 
 def call(cmd):
@@ -30,63 +30,79 @@ def cursor():
 
 def monitor_at(mons, x, y):
     for m in mons:
-        if m["x"] <= x < m["x"] + m["width"] and m["y"] <= y < m["y"] + m["height"]:
+        width, height = m["width"], m["height"]
+        if m.get("transform", 0) % 2:
+            width, height = height, width
+        scale = m.get("scale", 1) or 1
+        if m["x"] <= x < m["x"] + width / scale and m["y"] <= y < m["y"] + height / scale:
             return m
     return None
-
-def drag(addr, alive, report=None):
-    """Fenster mit dem Zeiger mitnehmen, solange alive() wahr ist (höchstens 120 s)."""
-    win = window(addr)
-    if not win or not win.get("floating") or win.get("fullscreen"):
-        return
-    cx, cy = cursor()
-    call("eval DXSnap.restoreForDrag('%s', %d, %d)" % (addr, cx, cy))        # maximiert? -> alte Größe
-    time.sleep(0.03)
-    win = window(addr) or win
-    ox, oy = cx - win["at"][0], cy - win["at"][1]
-    mons, mons_at, cur_mon = [], 0.0, win.get("monitor")
-    last, end, n = None, time.time() + 120, 0
-    # Ohne Fensteranimation ziehen: sonst läuft das Fenster dem Zeiger hinterher (jede Bewegung würde animiert)
-    call('dispatch hl.dsp.window.set_prop({ window = "address:%s", prop = "no_anim", value = "1" })' % addr)
-    try:
-        _loop(addr, alive, report, ox, oy, mons, mons_at, cur_mon, last, end, n)
-    finally:
-        call('dispatch hl.dsp.window.set_prop({ window = "address:%s", prop = "no_anim", value = "0" })' % addr)
 
 MOUSEUP = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "draconyx-mouse-up")
 
 def mouse_up_since(t0_ns):
-    """Hat die Hyprland-Konfiguration (dx_snap) seit t0 ein Loslassen der Maustaste gemeldet?"""
+    """Loslassen seit Beginn des Klicks, auch während Prozessstart und IPC."""
     try:
-        return os.stat(MOUSEUP).st_mtime_ns > t0_ns
+        return os.stat(MOUSEUP).st_mtime_ns >= t0_ns
     except OSError:
         return False
 
-def _loop(addr, alive, report, ox, oy, mons, mons_at, cur_mon, last, end, n):
-    t0 = time.time_ns() - 20_000_000
-    while time.time() < end and alive() and not mouse_up_since(t0):
-        cx, cy = cursor()
-        pos = (cx - ox, cy - oy)
-        if pos != last:
-            n += 1
-            if last is not None and n % 3 == 0:       # hat jemand anderes das Fenster bewegt (Andocken beim Loslassen)? Dann nicht dagegen arbeiten
-                a = json.loads(call("j/activewindow"))
-                if a.get("address") == addr and (abs(a["at"][0] - last[0]) > 3 or abs(a["at"][1] - last[1]) > 3):
+def drag(addr, alive, report=None, start=None, started_ns=None):
+    """Ein Griffpunkt und eine Release-Grenze für die gesamte Geste."""
+    t0 = time.time_ns() if started_ns is None else started_ns
+    end = time.monotonic() + 120
+    def held():
+        return time.monotonic() < end and alive() and not mouse_up_since(t0)
+
+    if not held():
+        return
+    win = window(addr)
+    if not win or not win.get("floating") or win.get("fullscreen"):
+        return
+    cx, cy = start if start is not None else cursor()
+    # Ein Klick/Doppelklick darf ein maximiertes Fenster noch nicht wiederherstellen.
+    while held():
+        px, py = cursor()
+        if abs(px - cx) + abs(py - cy) >= 6:
+            break
+        time.sleep(0.008)
+    else:
+        return
+    if not held():
+        return
+    token = "%d-%d" % (os.getpid(), t0)
+    try:
+        call("eval DXSnap.beginDrag('%s', '%s', %d, %d)" % (addr, token, cx, cy))
+        win = window(addr)
+        if not win or not held():
+            return
+        ox, oy = cx - win["at"][0], cy - win["at"][1]
+        mons, mons_at, cur_mon, last = [], float("-inf"), win.get("monitor"), None
+        while held():
+            cx, cy = cursor()
+            pos = (cx - ox, cy - oy)
+            if pos != last:
+                if time.monotonic() - mons_at > 0.4:
+                    mons, mons_at = json.loads(call("j/monitors")), time.monotonic()
+                m = monitor_at(mons, cx, cy)
+                mon = m["name"] if m is not None and m["id"] != cur_mon else None
+                if not held():
                     break
-            if time.time() - mons_at > 0.4:
-                mons, mons_at = json.loads(call("j/monitors")), time.time()
-            m = monitor_at(mons, cx, cy)
-            if m is not None and m["id"] != cur_mon:  # Zeiger auf einem anderen Bildschirm: Fenster diesem zuordnen
-                call('dispatch hl.dsp.window.move({ window = "address:%s", monitor = "%s", follow = false })' % (addr, m["name"]))
-                cur_mon = m["id"]
-                last = None                           # unsere eigene Verschiebung nicht als fremde Bewegung deuten
-            if not alive() or mouse_up_since(t0):
-                break
-            call('dispatch hl.dsp.window.move({ window = "address:%s", x = %d, y = %d, relative = false })' % (addr, pos[0], pos[1]))
-            last = pos
-            if report:
-                report(pos)
-        time.sleep(0.004)
+                # Release und Bewegung laufen im Compositor nacheinander: ein bereits
+                # unterwegs befindlicher IPC-Aufruf darf nach Release nicht mehr bewegen.
+                call("eval DXSnap.moveDrag('%s', '%s', %d, %d, %s)" %
+                     (addr, token, pos[0], pos[1], json.dumps(mon) if mon else "nil"))
+                if m is not None:
+                    cur_mon = m["id"]
+                last = pos
+                if report:
+                    report(pos)
+            time.sleep(0.008)
+    finally:
+        try:
+            call("eval DXSnap.endDrag('%s', '%s')" % (addr, token))
+        except OSError:
+            pass                            # Fenster/Sitzung kann inzwischen beendet sein
 
 if __name__ == "__main__":
     try:
@@ -96,4 +112,7 @@ if __name__ == "__main__":
         pass
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     a = sys.argv[1] if len(sys.argv) > 1 else ""
-    drag(a if a.startswith("0x") else "0x" + a, lambda: True, lambda p: print(p[0], p[1], flush=True))
+    start = (int(float(sys.argv[2])), int(float(sys.argv[3]))) if len(sys.argv) > 3 else None
+    started_ns = int(sys.argv[4]) * 1_000_000 if len(sys.argv) > 4 else None
+    drag(a if a.startswith("0x") else "0x" + a, lambda: True,
+         lambda p: print(p[0], p[1], flush=True), start, started_ns)

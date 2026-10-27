@@ -190,11 +190,44 @@ local function tellApp(address, on)
     hl.dispatch(hl.dsp.window.fullscreen_state({ window = "address:" .. address, internal = 0, client = on and 1 or 0 }))
 end
 
+local press = nil           -- aktueller Klick; Release sperrt weitere Helfer-Bewegungen
+local dragging = {}     -- address -> Token des aktuellen Verschiebe-Helfers
+local animGeneration = {}
 local function noAnimFor(address, ms)
     local a = "address:" .. address
+    local generation = {}     -- auch nach Schließen/Adress-Wiederverwendung eindeutig
+    animGeneration[address] = generation
     hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "1" }))
-    hl.timer(function() pcall(function() hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "0" })) end) end,
-             { timeout = ms or 700, type = "oneshot" })
+    hl.timer(function()
+        if animGeneration[address] ~= generation or dragging[address] ~= nil then return end
+        pcall(function() hl.dispatch(hl.dsp.window.set_prop({ window = a, prop = "no_anim", value = "0" })) end)
+    end, { timeout = ms or 700, type = "oneshot" })
+end
+
+function M.endDrag(address, token)
+    if dragging[address] ~= token then return end
+    dragging[address] = nil
+    -- Kurze Frist für das Andocken; ältere Timer dürfen sie nicht verkürzen.
+    noAnimFor(address, 80)
+end
+
+function M.beginDrag(address, token, cx, cy)
+    local w = winByAddr(address)
+    if press == nil or press.released or w == nil or not w.floating or w.fullscreen ~= 0 then return end
+    dragging[address] = token
+    noAnimFor(address, 125000)
+    M.restoreForDrag(address, cx, cy)
+    -- Auch nach einem hart beendeten Helfer Animationen wieder freigeben.
+    hl.timer(function() M.endDrag(address, token) end, { timeout = 125000, type = "oneshot" })
+end
+
+function M.moveDrag(address, token, x, y, monitor)
+    if dragging[address] ~= token then return end
+    local a = "address:" .. address
+    if monitor ~= nil then
+        hl.dispatch(hl.dsp.window.move({ window = a, monitor = monitor, follow = false }))
+    end
+    hl.dispatch(hl.dsp.window.move({ window = a, x = x, y = y, relative = false }))
 end
 
 local function applyArea(w)
@@ -455,6 +488,7 @@ local function forget(w)
         if w == nil then return end
         local a = w.address
         userMax[a], maxed[a], normal[a], quietUntil[a], drift[a], minGeo[a] = nil, nil, nil, nil, nil, nil
+        dragging[a], animGeneration[a] = nil, nil
     end)
 end
 hl.on("window.destroy", forget)
@@ -524,7 +558,6 @@ local function monitorAt(cx, cy)
     return nil
 end
 
-local press = nil           -- { pos = { address -> {x,y} } }
 local lastText = ""
 local timer = nil
 
@@ -635,8 +668,9 @@ local function onPress()
     end
 end
 
-local function finish()
-    local p = press
+local function finish(p)
+    -- Ein verspäteter Release-Timer gehört nur zu seinem eigenen Klick.
+    if press ~= p then return end
     press = nil
     if timer ~= nil then timer:set_enabled(false) end
     writePreview("none")
@@ -674,10 +708,13 @@ local function markRelease()
 end
 
 local function onRelease()
+    if press ~= nil then press.released = true end
     markRelease()
+    for address, token in pairs(dragging) do M.endDrag(address, token) end
     M.afterClick()
     -- Hyprland beendet das Ziehen erst nach dem Loslassen: kurz warten, dann auswerten
-    hl.timer(finish, { timeout = 40, type = "oneshot" })
+    local released = press
+    hl.timer(function() finish(released) end, { timeout = 40, type = "oneshot" })
 end
 
 -- Klick-Hooks (nicht verbrauchend) für das Ziehen: ohne Modifikator (Titelleisten) und mit den Modifikatoren der

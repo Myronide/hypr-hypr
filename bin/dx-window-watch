@@ -3,7 +3,7 @@
 # Sparsam: im Ruhezustand wird nur etwa 5 Mal pro Sekunde geprüft (bei Vollbild/Spielen 2 Mal), und sobald sich etwas bewegt
 # (oder ein Hyprland-Ereignis kommt) kurz mit ~100 Prüfungen pro Sekunde, damit die Titelleisten der Shell fest am Fenster
 # kleben. Läuft nur, solange die Shell es braucht (stirbt mit ihr).
-import json, os, signal, socket, sys, time
+import json, os, select, signal, socket, sys, time
 
 def call(cmd):
     s = socket.socket(socket.AF_UNIX)
@@ -35,23 +35,25 @@ ev.setblocking(False)
 
 last, n, cache, fast_until = "", 0, [], 0.0
 while True:
-    now = time.time()
+    now = time.monotonic()
+    event_seen = False
     try:
         while True:                                   # Ereignisse leeren
             if not ev.recv(65536):
                 sys.exit(0)
+            event_seen = True
             fast_until = now + 0.6
     except BlockingIOError:
         pass
+    busy = False
     try:
         cl = [{k: c.get(k) for k in KEEP} for c in json.loads(call("j/clients"))]
-        busy = False
         for c in cl:
             ws = c.get("workspace") or {}
             c["workspace"] = {"id": ws.get("id"), "name": ws.get("name")}
             if c.get("fullscreen") in (2, 3):
                 busy = True                           # Vollbild/Spiel: so wenig Last wie möglich
-        if n % 10 == 0 or not last:                   # Bildschirme ändern sich selten
+        if event_seen or n % 10 == 0 or not last:                   # Bildschirme ändern sich selten
             cache = [{"id": m["id"], "name": m["name"], "x": m["x"], "y": m["y"], "ws": (m.get("activeWorkspace") or {}).get("id"),
                       "top": (m.get("reserved") or [0, 0, 0, 0])[1]} for m in json.loads(call("j/monitors"))]
         line = json.dumps({"c": cl, "m": cache}, separators=(",", ":"))
@@ -62,4 +64,5 @@ while True:
     except (OSError, ValueError):
         time.sleep(0.5)
     n += 1
-    time.sleep(0.5 if busy and now > fast_until else (0.01 if now < fast_until else 0.2))
+    # Ein Socket-Ereignis weckt sofort, auch während des langsamen Ruhetakts.
+    select.select([ev], [], [], 0.5 if busy and now > fast_until else (0.01 if now < fast_until else 0.2))

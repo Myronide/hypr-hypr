@@ -123,12 +123,13 @@ Scope {
             readonly property var d: live
             readonly property var scr: dragScreen || Quickshell.screens.find(s => s.name === d.mon) || null     // beim Ziehen bleibt die Leiste auf ihrem Bildschirm (Fläche neu anlegen würde das Loslassen verschlucken)
             property var dragScreen: null
+            property var dragPos: null
             screen: scr
             visible: scr !== null
             anchors.top: true
             anchors.left: true
-            margins.left: scr ? d.x - scr.x : 0
-            margins.top: scr ? d.y - tb.bh - scr.y : 0
+            margins.left: scr ? (dragPos ? dragPos.x : d.x) - scr.x : 0
+            margins.top: scr ? (dragPos ? dragPos.y : d.y) - tb.bh - scr.y : 0
             implicitWidth: d.w
             implicitHeight: tb.bh + tb.rounding
             mask: Region { item: barRect }                // nur die Leiste nimmt Mausereignisse an, nicht die Füllecken
@@ -175,6 +176,11 @@ Scope {
                     onPressed: mouse => {
                         if (mouse.button !== Qt.LeftButton) return;
                         Global.hypr("hl.dsp.focus({ " + win.sel + " })");
+                        dragEnd.stop();
+                        win.dragPos = null;
+                        dragProc.startX = win.d.x + mouse.x;
+                        dragProc.startY = win.d.y - tb.bh + mouse.y;
+                        dragProc.startedAt = String(Date.now());
                         win.dragScreen = win.scr;
                         Global.tbDrag = win.addr;
                         dragProc.running = true;                    // der Helfer nimmt das Fenster mit dem Zeiger mit
@@ -186,9 +192,20 @@ Scope {
                 }
                 Process {
                     id: dragProc
-                    command: [Theme.home + "/.local/bin/dx-window-drag", win.addr]
+                    property real startX: 0
+                    property real startY: 0
+                    property string startedAt: "0"
+                    command: [Theme.home + "/.local/bin/dx-window-drag", win.addr, String(startX), String(startY), startedAt]
+                    stdout: SplitParser {
+                        onRead: line => {
+                            const p = line.trim().split(" ").map(Number);
+                            if (dragProc.running && p.length === 2 && p.every(Number.isFinite))
+                                win.dragPos = { x: p[0], y: p[1] };
+                        }
+                    }
+                    onExited: { win.dragPos = null; dragEnd.restart(); }
                 }
-                Timer { id: dragEnd; interval: 250; onTriggered: { win.dragScreen = null; if (Global.tbDrag === win.addr) Global.tbDrag = ""; } }
+                Timer { id: dragEnd; interval: 250; onTriggered: { win.dragPos = null; win.dragScreen = null; if (Global.tbDrag === win.addr) Global.tbDrag = ""; tb.recompute(); } }
 
                 Image {
                     id: ico
