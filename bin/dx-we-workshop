@@ -17,6 +17,8 @@ SORTS = {"trend": ("trend", "7"), "new": ("mostrecent", "-1"), "top": ("toprated
 
 
 def fetch(url, timeout=25):
+    if not url.startswith("https://"):
+        raise ValueError("nur https-Adressen erlaubt: %s" % url[:60])      # urllib würde sonst auch file:// aus einer manipulierten Seite lesen
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "de,en"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
@@ -48,7 +50,9 @@ def browse(sort, search, page):
         f = CACHE / (it[0] + ".jpg")
         if not f.exists() or f.stat().st_size < 500:
             try:
-                f.write_bytes(fetch(it[2], 20))
+                tmp = f.with_suffix(".part")
+                tmp.write_bytes(fetch(it[2], 20))                           # erst fertig laden, dann umbenennen (kein halbes Bild im Zwischenspeicher)
+                tmp.replace(f)
             except Exception:
                 return ""
         return str(f)
@@ -56,7 +60,7 @@ def browse(sort, search, page):
         paths = list(ex.map(thumb, out))
     have = installed_ids()
     for (fid, title, _), p in zip(out, paths):
-        print("%s\t%s\t%s\t%d" % (fid, title.replace("\t", " "), p, 1 if fid in have else 0))
+        print("%s\t%s\t%s\t%d" % (fid, " ".join(title.split()), p, 1 if fid in have else 0))      # Tabs/Zeilenumbrüche im Titel würden die TSV-Zeile zerreißen
 
 
 def main():
@@ -67,14 +71,19 @@ def main():
         opts = {"sort": "trend", "search": "", "page": 1}
         i = 1
         while i < len(a):
+            if a[i] in ("--sort", "--search", "--page") and i + 1 >= len(a):
+                print("FEHLER\t%s braucht einen Wert" % a[i], file=sys.stderr); sys.exit(2)
             if a[i] == "--sort": opts["sort"] = a[i + 1]; i += 2
             elif a[i] == "--search": opts["search"] = a[i + 1]; i += 2
-            elif a[i] == "--page": opts["page"] = int(a[i + 1]); i += 2
+            elif a[i] == "--page":
+                try: opts["page"] = max(1, int(a[i + 1]))
+                except ValueError: print("FEHLER\t--page braucht eine Zahl", file=sys.stderr); sys.exit(2)
+                i += 2
             else: i += 1
         try:
             browse(opts["sort"], opts["search"], opts["page"])
         except Exception as e:
-            print("FEHLER\t%s" % e, file=sys.stderr); sys.exit(1)
+            print("FEHLER\tWorkshop nicht erreichbar (Netzwerk?): %s" % e, file=sys.stderr); sys.exit(1)
     elif a[0] == "open" and len(a) == 2 and a[1].isdigit():
         subprocess.Popen(["xdg-open", "steam://url/CommunityFilePage/" + a[1]], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
