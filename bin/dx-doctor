@@ -1,72 +1,255 @@
 #!/usr/bin/env bash
 # Draconyx/Aurora: Zustandsbericht für die Fehlersuche (alles in eine Datei: ~/dx-doctor.txt) und optional Aufräumen.
-#   dx-doctor          Bericht schreiben und anzeigen
-#   dx-doctor --fix    zusätzlich Doppelstarts beenden (waybar, altes Aurora-Dock) und alte Socket-Reste entfernen
-OUT="$HOME/dx-doctor.txt"; FIX=0; [ "$1" = "--fix" ] && FIX=1
+#   dx-doctor          Bericht schreiben und anzeigen (oben steht eine Zusammenfassung der gefundenen Probleme)
+#   dx-doctor --fix    zusätzlich Doppelstarts beenden (waybar, altes Aurora-Dock, doppelte Wächter/Shell) und tote Reste entfernen
+# Liest nur; ändert ohne --fix nichts. Jeder Aufruf an Hyprland/Quickshell hat ein Zeitlimit, damit der Bericht nie hängt.
+FIX=0
+case "${1:-}" in
+  --fix) FIX=1;;
+  -h|--help) sed -n '2,5p' "$0" | sed 's/^# \?//'; exit 0;;
+  "") ;;
+  *) echo "Unbekannte Option: $1 (erlaubt: --fix, --help)" >&2; exit 2;;
+esac
+OUT="${DX_DOCTOR_OUT:-$HOME/dx-doctor.txt}"
 H="$HOME/.config/hypr"
+RT="${XDG_RUNTIME_DIR:-}"
+INST="$HOME/.config/draconyx/install.json"
+STATEJ="$HOME/.local/state/draconyx/settings.json"
+BODY="$(mktemp "${TMPDIR:-/tmp}/dx-doctor.XXXXXX")" || exit 1
+trap 'rm -f "$BODY"' EXIT
+PROBLEMS=()
+problem() { PROBLEMS+=("$*"); printf '  !! %s\n' "$*"; }      # im Bericht sichtbar markieren UND in der Zusammenfassung sammeln
 sec() { printf '\n===== %s =====\n' "$1"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+T() { timeout 5 "$@"; }                                         # nie ewig warten (hängende Shell/Hyprland)
+cmdline() { tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null; }
+# Prozesse (PIDs) eines Interpreters, dessen Befehlszeile MUSTER enthält (kein pgrep -f: das Muster stünde sonst in der eigenen Befehlszeile)
+pids_with() {   # pids_with PROZESSNAME MUSTER
+  local p
+  for p in $(pgrep -x "$1" 2>/dev/null); do case "$(cmdline "$p")" in *"$2"*) echo "$p";; esac; done
+}
+count() { [ $# -eq 0 ] && echo 0 || echo $#; }
+jval() { jq -r "$1" "$2" 2>/dev/null; }
+ago() { local t; t=$(stat -c %Y "$1" 2>/dev/null) || return 1; echo "$(( ($(date +%s) - t) / 60 )) min"; }
+
 {
 echo "dx-doctor $(date '+%F %T')  user=$USER"
 sec "System"
-uname -sr; hyprctl version 2>/dev/null | head -1; qs --version 2>/dev/null | head -1; echo "Sitzung: ${XDG_CURRENT_DESKTOP:-?} / ${XDG_SESSION_TYPE:-?}  Instanz: ${HYPRLAND_INSTANCE_SIGNATURE:-keine}"
-echo "Draconyx-Version: installiert $(jq -r .version "$HOME/.config/draconyx/install.json" 2>/dev/null || echo ?)  Repo $(jq -r .repo "$HOME/.config/draconyx/install.json" 2>/dev/null)"
+uname -sr; T hyprctl version 2>/dev/null | head -1; T qs --version 2>/dev/null | head -1
+echo "Sitzung: ${XDG_CURRENT_DESKTOP:-?} / ${XDG_SESSION_TYPE:-?}  Wayland: ${WAYLAND_DISPLAY:-keins}  Instanz: ${HYPRLAND_INSTANCE_SIGNATURE:-keine}"
+[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || problem "Keine Hyprland-Sitzung erkannt (HYPRLAND_INSTANCE_SIGNATURE leer) – Angaben zu Fenstern/Monitoren fehlen unten"
+[ -n "$RT" ] && [ -d "$RT" ] || problem "XDG_RUNTIME_DIR fehlt – Sperrdateien und Wächter-Meldungen funktionieren nur in einer Anmeldesitzung"
+
+sec "Versionen"
+inst_v="$(jval .version "$INST")"; repo="$(jval .repo "$INST")"
+echo "installiert (install.json): ${inst_v:-?}   Repo: ${repo:-?}"
+if [ -z "$inst_v" ]; then
+  problem "install.json fehlt oder ist unlesbar – im Repo einmal  sudo ./install.sh  ausführen"
+elif [ -n "$repo" ] && [ -f "$repo/VERSION" ]; then
+  rv="$(tr -d '[:space:]' < "$repo/VERSION")"
+  echo "Repo-VERSION:               $rv"
+  [ "$rv" = "$inst_v" ] || problem "Repo ($rv) und installierte Version ($inst_v) weichen ab – ./install.sh erneut ausführen (ein Lauf wurde evtl. abgebrochen)"
+  # Weicht ein installiertes Skript vom Repo ab?
+  drift=""; for f in "$repo"/bin/dx-*; do
+    [ -f "$f" ] || continue; b="$(basename "$f")"
+    cmp -s "$f" "$HOME/.local/bin/$b" 2>/dev/null || drift="$drift $b"
+  done
+  [ -z "$drift" ] && echo "~/.local/bin entspricht dem Repo" || problem "Skripte in ~/.local/bin weichen vom Repo ab:$drift (./install.sh)"
+  if [ -d "$repo/quickshell" ] && have diff; then
+    dq="$(diff -rq --exclude=icons-src --exclude='logo-*.png' "$repo/quickshell" "$HOME/.config/quickshell/draconyx" 2>/dev/null | wc -l)"
+    [ "$dq" -eq 0 ] && echo "Shell-Dateien entsprechen dem Repo" || problem "$dq Shell-Datei(en) weichen vom Repo ab (./install.sh, oder bewusst geändert)"
+  fi
+elif [ -n "$repo" ]; then
+  problem "Repo-Ordner $repo existiert nicht mehr – install.sh aus dem neuen Repo-Ordner starten, sonst gehen Updates nicht"
+fi
+UPD="$HOME/.local/state/draconyx/update.json"
+if [ -f "$UPD" ]; then
+  echo "Update-Prüfung vor $(ago "$UPD"): neueste $(jval .latest "$UPD"), verfügbar: $(jval .available "$UPD")"
+  [ "$(jval .available "$UPD")" = true ] && echo "  -> Es gibt eine neuere Version ($(jval .latest "$UPD"))."
+  ue="$(jval '.error // ""' "$UPD")"; [ -n "$ue" ] && echo "  Hinweis der Update-Prüfung: $ue"
+else
+  echo "Update-Prüfung: noch nie gelaufen (dx-update check)"
+fi
+echo "Skripte: $(for t in git rsync jq python3 qs hyprctl notify-send sudo pacman flock timeout; do have $t && printf '%s=ja ' $t || printf '%s=NEIN ' $t; done)"
+
+sec "Fehlende Pakete"
+if have pacman; then
+  miss=""
+  for pkg in hyprland quickshell jq python python-gobject python-pillow rsync git grim wl-clipboard xdotool libnotify polkit procps-ng xdg-desktop-portal-hyprland cliphist; do
+    pacman -Qq "$pkg" >/dev/null 2>&1 || miss="$miss $pkg"
+  done
+  [ -z "$miss" ] && echo "Alle wichtigen Pakete sind installiert." || problem "Fehlende Pakete:$miss  (sudo pacman -S$miss)"
+else
+  echo "(kein pacman – Paketprüfung übersprungen)"
+fi
+have xdotool || problem "xdotool fehlt (Minimieren von XWayland-Apps braucht es)"
+
 sec "Laufende Prozesse (relevante)"
 for n in qs waybar swaync hypridle linux-wallpaper; do printf '%-16s %s\n' "$n" "$(pgrep -x "$n" | tr '\n' ' ')"; done
-for p in $(pgrep -x python3 2>/dev/null); do c=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null); case "$c" in *desktop-ui*|*dx-ui-bridge*|*dx-x11-iconify*|*settings-app*) echo "python3 $p: $c";; esac; done
-echo "qs-Prozesse: $(pgrep -xc qs)  (mehr als 1 = doppelt gestartet)"
-n_ic=0; n_br=0
-for p in $(pgrep -x python3 2>/dev/null); do c=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null); case "$c" in *dx-x11-iconify*) n_ic=$((n_ic+1));; *dx-ui-bridge*) n_br=$((n_br+1));; esac; done
-echo "dx-x11-iconify: $n_ic (soll 1)   dx-ui-bridge: $n_br (soll 1)"
-command -v xdotool >/dev/null && echo "xdotool: ja" || echo "xdotool: FEHLT (Minimieren von XWayland-Apps braucht es)"
+QSP=$(pids_with qs draconyx); IC=$(pids_with python3 dx-x11-iconify); BR=$(pids_with python3 dx-ui-bridge); WW=$(pids_with python3 dx-window-watch)
+OLD=$(pids_with python3 "desktop-ui daemon"); SA=$(pids_with python3 settings-app)
+n_qs=$(count $QSP); n_ic=$(count $IC); n_br=$(count $BR); n_ww=$(count $WW)
+echo "Shell (qs draconyx): $n_qs   (soll 1)"
+echo "dx-x11-iconify:      $n_ic   (soll 1)"
+echo "dx-ui-bridge:        $n_br   (soll 1)"
+echo "dx-window-watch:     $n_ww   (soll 1)"
+[ -n "$OLD" ] && echo "altes Aurora-Dock (desktop-ui daemon): $OLD"
+[ -n "$SA" ] && echo "Einstellungen-App läuft: $SA"
+[ "$n_qs" -gt 1 ] && problem "Die Shell läuft $n_qs-fach (Doppelstart) – dx-doctor --fix beendet die überzähligen"
+[ "$n_ic" -gt 1 ] && problem "dx-x11-iconify läuft $n_ic-fach – dx-doctor --fix"
+[ "$n_br" -gt 1 ] && problem "dx-ui-bridge läuft $n_br-fach – dx-doctor --fix"
+[ "$n_ww" -gt 1 ] && problem "dx-window-watch läuft $n_ww-fach – dx-doctor --fix"
+[ "$n_qs" -eq 0 ] && [ -f "$HOME/.config/quickshell/draconyx/shell.qml" ] && problem "Die Shell läuft nicht (qs -c draconyx) – dx-shell-ensure startet sie, Protokoll siehe unten"
+pgrep -x waybar >/dev/null && [ -f "$HOME/.config/quickshell/draconyx/shell.qml" ] && problem "waybar läuft neben der Shell (zwei Taskleisten) – dx-doctor --fix"
+[ -n "$OLD" ] && problem "Das alte Aurora-Dock läuft neben der Shell – dx-doctor --fix"
+
+sec "Fensterwächter und Sperrdateien"
+if [ -n "$RT" ] && [ -d "$RT" ]; then
+  stale=""
+  for f in "$RT"/dx-*.pid "$RT"/draconyx-*.pid "$RT"/aurora-*.pid; do
+    [ -f "$f" ] || continue
+    pid="$(head -1 "$f" 2>/dev/null | tr -dc '0-9')"
+    if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then stale="$stale ${f##*/}"; printf '%-40s tot (PID %s)\n' "${f##*/}" "${pid:-?}"
+    else printf '%-40s läuft (PID %s)\n' "${f##*/}" "$pid"; fi
+  done
+  [ -n "$stale" ] && echo "  (veraltete PID-Dateien:$stale – harmlos, dx-doctor --fix räumt auf)"
+fi
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -n "$RT" ]; then
+  [ -S "$RT/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" ] && echo "Hyprland-Ereignis-Socket: ok" || problem "Hyprland-Ereignis-Socket fehlt – Wächter bekommen keine Ereignisse (alte Instanz?)"
+fi
+[ -n "$IC" ] || [ ! -f "$HOME/.config/quickshell/draconyx/shell.qml" ] || echo "Hinweis: dx-x11-iconify läuft nicht (Minimieren von X11-Apps ginge nicht) – die Shell startet ihn selbst"
+XL="$HOME/.local/state/draconyx/x11-events.log"
+[ -f "$XL" ] && { echo "--- X11-Ereignisse (letzte 5, vor $(ago "$XL")) ---"; tail -5 "$XL" | cut -c1-160; }
+
+sec "Spiele / Vollbild"
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && have jq; then
+  fs="$(T hyprctl clients -j 2>/dev/null | jq -r '.[]|select(.fullscreen!=0)|"\(.class) \"\(.title|.[0:50])\" fullscreen=\(.fullscreen) ws=\(.workspace.id) pid=\(.pid)"' 2>/dev/null)"
+  if [ -n "$fs" ]; then echo "Vollbild-Fenster:"; printf '%s\n' "$fs" | sed 's/^/  /'; echo "  -> Wächter laufen im Sparbetrieb; Taskleiste: Schalter \"bei Vollbild ausblenden\" = $(jval '.fullscreenBar // "?"' "$STATEJ")"
+  else echo "Kein Fenster im Vollbild."; fi
+  nc="$(T hyprctl clients -j 2>/dev/null | jq 'length' 2>/dev/null)"; echo "Fenster insgesamt: ${nc:-?}"
+else
+  echo "(keine Hyprland-Sitzung – übersprungen)"
+fi
+gm="$(pgrep -x gamemoded 2>/dev/null | tr '\n' ' ')"; echo "gamemoded: ${gm:-läuft nicht}   gamescope: $(pgrep -x gamescope | tr '\n' ' ')"
+st="$(pgrep -x steam 2>/dev/null | head -1)"; echo "Steam: ${st:-läuft nicht}"
+
 sec "Wallpaper Engine"
 P="$HOME/.local/opt/linux-wallpaperengine"
 [ -x "$P/linux-wallpaperengine" ] && echo "Engine gebaut: ja ($(stat -c %y "$P/linux-wallpaperengine" | cut -d. -f1))" || echo "Engine gebaut: NEIN ($P)"
-echo "Gewählt (settings.json): $(jq -c .weWallpapers "$HOME/.local/state/draconyx/settings.json" 2>/dev/null)"
+echo "Gewählt (settings.json): $(jq -c .weWallpapers "$STATEJ" 2>/dev/null)"
 echo "Läuft: $(pgrep -ax linux-wallpaper | grep -v -- '--type=' | cut -c1-400)"
+we_n=$(pgrep -x linux-wallpaper | wc -l)
+[ "$we_n" -gt 8 ] && problem "Sehr viele Wallpaper-Engine-Prozesse ($we_n) – evtl. doppelt gestartet (dx-we-apply ohne Argumente beendet alle)"
 echo "Aurora-Renderer (alt): $(pgrep -f '[a]urora/native/wallpaper/aurora-wallpaper' | tr '\n' ' ')"
 echo "Andere Hintergrund-Programme: $(for n in hyprpaper swww-daemon swaybg mpvpaper wpaperd; do pgrep -x $n >/dev/null && printf '%s ' $n; done)"
 echo "we-assets-Datei: $(head -1 "$HOME/.config/draconyx/we-assets" 2>/dev/null)"
 echo "Assets in Aurora-Einstellung: $(jq -r .engine_assets "$H/aurora/preferences.json" 2>/dev/null)"
 echo "Steam-Bibliotheken:"; grep -h '"path"' "$HOME/.local/share/Steam/steamapps/libraryfolders.vdf" "$HOME/.steam/steam/steamapps/libraryfolders.vdf" 2>/dev/null | sort -u
-echo "Durchsuchte Workshop-Ordner:"; "$HOME/.local/bin/dx-we-list" --roots 2>&1 | head -12
+echo "Durchsuchte Workshop-Ordner:"; timeout 20 "$HOME/.local/bin/dx-we-list" --roots 2>&1 | head -12
 echo "GPU/OpenGL: $(lspci 2>/dev/null | grep -iE 'vga|3d' | cut -d: -f3 | tr '\n' ';')"
-echo "--- Engine-Log (letzte 25 Zeilen) ---"; tail -25 "${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.log" 2>/dev/null | cut -c1-200
+echo "--- Engine-Log (letzte 25 Zeilen) ---"; tail -25 "${RT:-/nonexistent}/draconyx-we.log" 2>/dev/null | cut -c1-200
+
 sec "Hyprland: Konfigurationsfehler / Plugins / Monitore"
-hyprctl configerrors 2>&1 | head -12
-hyprctl plugin list 2>&1 | grep -E '^Plugin' | head
-hyprctl monitors -j 2>/dev/null | jq -r '.[]|"\(.name) \(.width)x\(.height)@\(.refreshRate) pos=\(.x),\(.y) scale=\(.scale) reserved=\(.reserved)"' 2>/dev/null
+ce="$(T hyprctl configerrors 2>&1 | head -12)"; printf '%s\n' "$ce"
+case "$ce" in ""|*"no errors"*|*"Keine"*) ;; *) [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && problem "Hyprland meldet Konfigurationsfehler (siehe oben)";; esac
+T hyprctl plugin list 2>&1 | grep -E '^Plugin' | head
+T hyprctl monitors -j 2>/dev/null | jq -r '.[]|"\(.name) \(.width)x\(.height)@\(.refreshRate) pos=\(.x),\(.y) scale=\(.scale) reserved=\(.reserved)"' 2>/dev/null
 sec "Was lädt deine hyprland.lua?"
 grep -nE 'require|dofile|source|desktop\.lua|aurora|draconyx|exec_cmd\(.*(waybar|qs|desktop-ui|start-)' "$H/hyprland.lua" 2>/dev/null | head -30
+if have luac5.4 && [ -f "$H/hyprland.lua" ]; then
+  for f in "$H"/hyprland.lua "$H"/dx_*.lua "$H"/monitors_local.lua; do
+    [ -f "$f" ] || continue; luac5.4 -p "$f" 2>/dev/null || problem "Lua-Syntaxfehler in ${f/#$HOME/~} – Hyprland würde beim Neuladen abstürzen oder die Konfiguration ablehnen"
+  done
+fi
+
 sec "Dateien"
-for f in "$H/hyprland.lua" "$H/aurora/desktop.lua" "$H/monitors_local.lua" "$H/dx_binds.lua" "$H/aurora/preferences.json" "$H/aurora/preferences.lua" "$H/aurora/desktop-ui" "$H/aurora/start-desktop" "$H/aurora/start-dock" "$HOME/.config/quickshell/draconyx/shell.qml" "$HOME/.config/draconyx/modifier" "$HOME/.config/draconyx/terminal" "$HOME/.config/draconyx/colors.json" "$HOME/.config/draconyx/binds.conf" "$HOME/.local/state/draconyx/settings.json" "$HOME/.local/opt/linux-wallpaperengine/linux-wallpaperengine"; do
+for f in "$H/hyprland.lua" "$H/aurora/desktop.lua" "$H/monitors_local.lua" "$H/dx_binds.lua" "$H/aurora/preferences.json" "$H/aurora/preferences.lua" "$H/aurora/desktop-ui" "$H/aurora/start-desktop" "$H/aurora/start-dock" "$HOME/.config/quickshell/draconyx/shell.qml" "$HOME/.config/draconyx/modifier" "$HOME/.config/draconyx/terminal" "$HOME/.config/draconyx/colors.json" "$HOME/.config/draconyx/binds.conf" "$STATEJ" "$HOME/.local/opt/linux-wallpaperengine/linux-wallpaperengine"; do
   if [ -e "$f" ]; then printf '%-70s %s\n' "${f/#$HOME/~}" "$(stat -c '%y' "$f" | cut -c1-16)"; else printf '%-70s fehlt\n' "${f/#$HOME/~}"; fi
 done
+# Gültiges JSON? Eine kaputte Einstellungsdatei lässt die Shell Werte vergessen
+for f in "$STATEJ" "$HOME/.config/draconyx/colors.json" "$H/aurora/preferences.json" "$INST"; do
+  [ -f "$f" ] && { jq empty "$f" >/dev/null 2>&1 || problem "${f/#$HOME/~} ist kein gültiges JSON (dx-settings-guard restore bzw. dx-backup restore)"; }
+done
+# Dateien, die root gehören (nach einem Lauf mit sudo), kann die Shell nicht schreiben
+rootown="$(find "$HOME/.config/hypr" "$HOME/.config/quickshell" "$HOME/.config/draconyx" "$HOME/.local/state/draconyx" "$HOME/.local/bin" -maxdepth 4 -user root -print -quit 2>/dev/null)"
+[ -n "$rootown" ] && problem "Datei gehört root: ${rootown/#$HOME/~} – ./install.sh repariert die Besitzer"
+sec "Kaputte Verknüpfungen"
+broken="$(find "$H" "$HOME/.config/quickshell" "$HOME/.config/draconyx" "$HOME/.local/bin" "$HOME/.config/autostart" -maxdepth 4 -xtype l -print 2>/dev/null | head -10)"
+if [ -n "$broken" ]; then printf '%s\n' "$broken"; problem "Kaputte Verknüpfungen (siehe oben) – z. B. nach Verschieben des Repos; ./install.sh ersetzt sie durch Kopien"
+else echo "keine"; fi
+
 sec "Aurora-Einstellungen (Auszug)"
 [ -f "$H/aurora/preferences.json" ] && jq -c '{dock_monitor,workshop,engine_assets,engine_path,engine_active,terminal}' "$H/aurora/preferences.json" 2>/dev/null
 sec "Shell-Einstellungen (Auszug)"
-jq -c '{barStyle,barHeight,autohide,barPartHide,fullscreenBar,monitors,desktopMonitors,codeRoot}' "$HOME/.local/state/draconyx/settings.json" 2>/dev/null
+jq -c '{barStyle,barHeight,autohide,barPartHide,fullscreenBar,monitors,desktopMonitors,codeRoot}' "$STATEJ" 2>/dev/null
 sec "Shell-Log: Fehler und Warnungen (letzte 25)"
-qs -c draconyx log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -aE 'ERROR|WARN scene|caused by' | grep -v 'PlatformMenu\|textinput' | tail -25
+if [ "$n_qs" -ge 1 ]; then
+  shlog="$(T qs -c draconyx log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -aE 'ERROR|WARN scene|caused by|Failed to load' | grep -v 'PlatformMenu\|textinput' | tail -25)"
+  printf '%s\n' "$shlog"
+  nerr="$(printf '%s\n' "$shlog" | grep -c 'ERROR\|Failed to load')"
+  [ "$nerr" -gt 0 ] && problem "Die Shell hat $nerr Fehlerzeile(n) im Log (siehe unten im Abschnitt) – zuletzt: $(printf '%s\n' "$shlog" | grep 'ERROR\|Failed to load' | tail -1 | cut -c1-140)"
+else
+  echo "(Shell läuft nicht – kein Log abrufbar)"
+fi
 sec "Letztes Update (Protokoll)"
-tail -25 "$HOME/.cache/draconyx/update.log" 2>/dev/null | cut -c1-160 || echo "(noch kein Update über dx-update gelaufen)"
+if [ -f "$HOME/.cache/draconyx/update.log" ]; then
+  echo "(vor $(ago "$HOME/.cache/draconyx/update.log"))"; tail -25 "$HOME/.cache/draconyx/update.log" | cut -c1-160
+  tail -25 "$HOME/.cache/draconyx/update.log" | grep -q 'FEHLER' && problem "Das letzte Update meldet einen Fehler (update.log)"
+else
+  echo "(noch kein Update über dx-update gelaufen)"
+fi
+UP="$HOME/.cache/draconyx/update-progress.json"
+[ -f "$UP" ] && [ "$(jval .state "$UP")" = running ] && [ "$(ago "$UP" | cut -d' ' -f1)" -gt 30 ] && problem "Update-Anzeige steht seit über 30 min auf \"läuft\" – evtl. abgebrochen (update.log prüfen, ~/.cache/draconyx/update-progress.json löschen)"
 sec "Shell-Start (Sicherheitsnetz dx-shell-ensure)"
-[ -x "$HOME/.local/bin/dx-shell-ensure" ] && echo "dx-shell-ensure: vorhanden" || echo "dx-shell-ensure: FEHLT"
+[ -x "$HOME/.local/bin/dx-shell-ensure" ] && echo "dx-shell-ensure: vorhanden" || problem "dx-shell-ensure fehlt (./install.sh)"
 tail -8 "$HOME/.cache/draconyx/shell-start.log" 2>/dev/null || echo "(noch kein Eintrag – die Shell ist beim Start ohne Hilfe angesprungen oder das Netz lief nicht)"
 grep -n 'hyprland.start' "$H/aurora/desktop.lua" 2>/dev/null | head -3
 sec "Aurora-Logs (letzte Zeilen)"
 for l in "$HOME"/.cache/aurora/*.log; do [ -f "$l" ] && { echo "--- $l"; tail -4 "$l"; }; done 2>/dev/null
-sec "Wallpaper-Suche"
-"$HOME/.local/bin/dx-we-list" --roots 2>&1 | head -8
-} > "$OUT" 2>&1
+sec "Letzte Sicherungen"
+ls -1t "$HOME/.local/share/draconyx-backups" 2>/dev/null | head -5
+ls -1t "$HOME/Documents/Draconyx-Backups" 2>/dev/null | head -3
+} > "$BODY" 2>&1
+
+# Zusammenfassung nach oben stellen
+umask 077
+{
+  echo "dx-doctor Zusammenfassung ($(date '+%F %T'))"
+  if [ "${#PROBLEMS[@]}" -eq 0 ]; then echo "  Alles in Ordnung – keine Probleme gefunden."
+  else
+    echo "  ${#PROBLEMS[@]} Hinweis(e):"
+    i=1; for pr in "${PROBLEMS[@]}"; do printf '  %2d. %s\n' "$i" "$pr"; i=$((i+1)); done
+  fi
+  echo
+  echo "---------------- Einzelheiten ----------------"
+  cat "$BODY"
+} > "$OUT" 2>/dev/null || { echo "Konnte $OUT nicht schreiben" >&2; exit 1; }
+
 if [ "$FIX" = 1 ]; then
-  echo "== Aufräumen ==" | tee -a "$OUT"
-  pgrep -x waybar >/dev/null && { pkill -x waybar; echo "waybar beendet" | tee -a "$OUT"; }
-  for p in $(pgrep -x python3); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q 'desktop-ui daemon' && { kill "$p"; echo "altes Aurora-Dock beendet ($p)" | tee -a "$OUT"; }; done
-  # doppelte Wächter: nur den neuesten behalten
-  for n in dx-x11-iconify dx-ui-bridge; do ids=$(for p in $(pgrep -x python3); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q "$n" && echo $p; done | sort -n); keep=$(echo "$ids" | tail -1); for p in $ids; do [ "$p" != "$keep" ] && { kill "$p"; echo "doppelten $n beendet ($p)" | tee -a "$OUT"; }; done; done
-  # doppelte Shell: nur die neueste behalten
-  qsids=$(for p in $(pgrep -x qs); do tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q draconyx && echo $p; done | sort -n)
-  if [ "$(echo "$qsids" | wc -w)" -gt 1 ]; then keep=$(echo "$qsids" | tail -1); for p in $qsids; do [ "$p" != "$keep" ] && { kill "$p" 2>/dev/null; echo "doppelte Shell beendet ($p, behalten: $keep)" | tee -a "$OUT"; }; done; fi
-  rm -f "${XDG_RUNTIME_DIR:-/tmp}"/aurora-dock.lock "${XDG_RUNTIME_DIR:-/tmp}"/aurora-waybar.pid 2>/dev/null
+  echo; echo "== Aufräumen (--fix) ==" >> "$OUT"
+  pgrep -x waybar >/dev/null && { pkill -x waybar; echo "waybar beendet" >> "$OUT"; }
+  for p in $(pids_with python3 "desktop-ui daemon"); do kill "$p" && echo "altes Aurora-Dock beendet ($p)" >> "$OUT"; done
+  # Doppelte Prozesse: nur den neuesten (kürzeste Laufzeit) behalten
+  newest() { local best="" bt=999999999 p t; for p in "$@"; do t=$(ps -o etimes= -p "$p" 2>/dev/null | tr -d ' '); [ -n "$t" ] && [ "$t" -lt "$bt" ] && { bt=$t; best=$p; }; done; echo "$best"; }
+  dedupe() {   # dedupe NAME PROZESSNAME MUSTER
+    local ids keep p; ids=$(pids_with "$2" "$3")
+    [ "$(count $ids)" -gt 1 ] || return 0
+    keep=$(newest $ids)
+    for p in $ids; do [ "$p" != "$keep" ] && { kill "$p" 2>/dev/null; echo "doppelten $1 beendet ($p, behalten: $keep)" >> "$OUT"; }; done
+  }
+  dedupe dx-x11-iconify python3 dx-x11-iconify
+  dedupe dx-ui-bridge python3 dx-ui-bridge
+  dedupe dx-window-watch python3 dx-window-watch
+  dedupe Shell qs draconyx
+  # Tote PID-Dateien entfernen (die PID gehört sonst später einem fremden Programm)
+  if [ -n "$RT" ] && [ -d "$RT" ]; then
+    for f in "$RT"/dx-*.pid "$RT"/draconyx-*.pid "$RT"/aurora-*.pid; do
+      [ -f "$f" ] || continue
+      pid="$(head -1 "$f" 2>/dev/null | tr -dc '0-9')"
+      if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then rm -f "$f" && echo "veraltete PID-Datei entfernt: ${f##*/}" >> "$OUT"; fi
+    done
+    # Sperren sind flock-Dateien; sie dürfen bleiben. Nur die alte Dock-Sperre ohne laufendes Dock entfernen.
+    [ -z "$(pids_with python3 "desktop-ui daemon")" ] && rm -f "$RT/aurora-dock.lock" "$RT/aurora-waybar.pid" 2>/dev/null
+  fi
 fi
 cat "$OUT"; echo; echo ">>> Bericht gespeichert: $OUT"
