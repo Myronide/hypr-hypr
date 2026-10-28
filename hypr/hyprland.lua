@@ -417,3 +417,5 @@ do
         if not ok then io.stderr:write("[hyprland.lua] aurora/preferences.lua: ", tostring(err), "\n") end
     end
 end
+
+do local okI, mI = pcall(require, "dx_input"); if okI then DXInput = mI else io.stderr:write("[hyprland.lua] dx_input: ", tostring(mI), "\n") end end   -- Tastatur/Maus/Eingabehilfen aus ~/.config/draconyx/input.json (Aurora-Seiten); hyprctl eval "DXInput.apply()"
