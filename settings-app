@@ -1319,7 +1319,7 @@ class Settings(Gtk.Application):
   c.connect('color-set',picked);self.row(b,'Akzentfarbe',c,'Hell- und Dunkelvarianten werden daraus abgeleitet.')
   self.fonts_section(b)
  def system(self):
-  b=self.page('System','Weitere Geräteeinstellungen ohne Konfigurationsdateien öffnen.')
+  b=self.page('System','Aktualisierung von Draconyx und weitere Helfer.')
   # ---- Draconyx-Update: alles in EINER Zeile (Version, Stand, Knopf – der Knopf erscheint nur, wenn es ein Update gibt) ----
   upd=Path.home()/'.local/state/draconyx/update.json'
   def upd_info():
@@ -1352,5 +1352,5 @@ class Settings(Gtk.Application):
   GLib.timeout_add_seconds(60,lambda:(show(upd_info()),True)[1])
   self.row(b,'Draconyx-Version',uw,'Wird automatisch im Hintergrund geprüft (jede Minute, die Meldung höchstens einmal pro Tag), „Jetzt prüfen“ sofort. Bei einem Update erscheint hier der Knopf; die Aktualisierung läuft ohne Terminal (nur ein Fenster für das sudo-Passwort), deine Einstellungen bleiben unangetastet.')
   self.sw(b,'Update-Benachrichtigungen','updateNotify',True,'Höchstens eine Meldung pro Tag, solange ein Update bereitsteht („Nicht mehr erinnern“ in der Meldung gilt nur für diese Version). Aus: gar keine Meldungen mehr – die Zeile oben zeigt ein Update trotzdem an.')
-  for title,args in [('Netzwerkverbindungen',['nm-connection-editor']),('Audio-Geräte',['kcmshell6','kcm_pulseaudio']),('Bluetooth',['kcmshell6','kcm_bluetooth']),('Tastatur',['kcmshell6','kcm_keyboard']),('Maus',['kcmshell6','kcm_mouse']),('Schriften und Darstellung',['systemsettings']),('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
+  for title,args in [('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
 Settings().run(None)

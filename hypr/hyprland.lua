@@ -42,6 +42,21 @@ local CURSOR = "Adwaita"
 for _, dir in ipairs({ HOME_ .. "/.icons", HOME_ .. "/.local/share/icons", "/usr/share/icons" }) do
     if fileExists(dir .. "/Windows10Light/index.theme") then CURSOR = "Windows10Light"; break end
 end
+-- Auswahl aus Aurora → Design (~/.config/draconyx/cursor: Zeile 1 Thema, Zeile 2 Größe) hat Vorrang, wenn Thema und Wert gültig sind
+local CURSOR_SIZE = 24
+do
+    local f = io.open(HOME_ .. "/.config/draconyx/cursor", "r")
+    if f then
+        local theme = f:read("*l"); local size = tonumber(f:read("*l") or "")
+        f:close()
+        if theme and theme:match("^[%w%._%-]+$") then
+            for _, dir in ipairs({ HOME_ .. "/.icons", HOME_ .. "/.local/share/icons", "/usr/share/icons" }) do
+                if fileExists(dir .. "/" .. theme .. "/index.theme") then CURSOR = theme; break end
+            end
+        end
+        if size and size >= 16 and size <= 128 then CURSOR_SIZE = math.floor(size) end
+    end
+end
 
 hl.on("hyprland.start", function()
     -- Polkit-Agent (Passwortabfragen): der erste vorhandene
@@ -53,7 +68,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd(ifInstalled("nm-applet", "nm-applet --indicator"))
     hl.exec_cmd(ifInstalled("blueman-applet"))
     hl.exec_cmd(ifInstalled("cliphist", "wl-paste --watch cliphist store"))    -- Zwischenablage-Verlauf (Win+V)
-    hl.exec_cmd("hyprctl setcursor " .. CURSOR .. " 24")
+    hl.exec_cmd("hyprctl setcursor " .. CURSOR .. " " .. CURSOR_SIZE)
     hl.exec_cmd("gsettings set org.gnome.desktop.interface cursor-theme " .. CURSOR)
     hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")
     hl.exec_cmd("gsettings set org.gnome.desktop.interface icon-theme Papirus-Dark")
@@ -67,8 +82,8 @@ end)
 -------------------------------
 hl.env("XCURSOR_THEME", CURSOR)      -- klassischer Windows-Mauszeiger (falls vorhanden)
 hl.env("HYPRCURSOR_THEME", CURSOR)
-hl.env("XCURSOR_SIZE", "24")
-hl.env("HYPRCURSOR_SIZE", "24")
+hl.env("XCURSOR_SIZE", tostring(CURSOR_SIZE))
+hl.env("HYPRCURSOR_SIZE", tostring(CURSOR_SIZE))
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 hl.env("QT_QPA_PLATFORMTHEME", "kde")      -- KDE-Farbschema (dunkel) auch unter Hyprland, z. B. für Dolphin
 hl.env("GTK_THEME", "adw-gtk3-dark")
