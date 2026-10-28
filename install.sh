@@ -166,7 +166,7 @@ if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55
 fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
-for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua dx_sizes.lua dx_rules.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
+for f in dx_snap.lua dx_tiling.lua dx_zones.lua dx_binds.lua dx_sizes.lua dx_rules.lua dx_games.lua; do put "$HERE/hypr/$f" "$CONF/hypr/$f" 644; done
 # csd-apps ist deine Liste (Einstellungen → Fenster → eigene Titelleisten): nur anlegen, wenn es sie noch nicht gibt
 if [ ! -e "$CONF/hypr/csd-apps" ]; then
   cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1))
