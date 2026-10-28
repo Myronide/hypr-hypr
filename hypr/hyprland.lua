@@ -8,8 +8,10 @@
 -- Die Anordnung der Bildschirme liegt NICHT hier, sondern pro Rechner in monitors_local.lua (Aurora → Bildschirme).
 
 -- Monitore stehen pro Rechner in ~/.config/hypr/monitors_local.lua (Vorlage: monitors_local.lua.example)
-local okMon = pcall(require, "monitors_local")
-if not okMon then hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 }) end
+local okMon, errMon = pcall(require, "monitors_local")
+if not okMon then
+    if not tostring(errMon):find("module 'monitors_local' not found", 1, true) then io.stderr:write("[hyprland.lua] monitors_local.lua: ", tostring(errMon), "\n") end
+    hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 }) end
 
 
 ---------------------
@@ -238,98 +240,23 @@ B("screenshot_region", "Screenshot: Bereich wählen (Snip-Werkzeug)", mainMod ..
 B("screenshot_snip", "Screenshot: Bereich wählen (Druck)", "Print", hl.dsp.exec_cmd("qs -c draconyx ipc call shell snip region"))
 B("screenshot_screen", "Screenshot: ganzer Bildschirm (kopiert + speichert)", "SHIFT + Print", hl.dsp.exec_cmd("qs -c draconyx ipc call shell snip screen"))
 
--- Fenster-Snapping wie unter Windows: links/rechts halbe Seite, oben ganzer Bildschirm,
--- unten zurück auf normale Größe mittig. Lässt den Platz der Taskleiste (reserved) frei.
-local SNAP_GAP = 8
-local function snap(where)
-    local w = hl.get_active_window()
-    if w == nil then return end
-    local m = w.monitor or hl.get_active_monitor()
-    local r = m.reserved or {}
-    local x0 = m.x + (r.left or 0) + SNAP_GAP
-    local y0 = m.y + (r.top or 0) + SNAP_GAP
-    local aw = m.width  - (r.left or 0) - (r.right or 0)  - 2 * SNAP_GAP
-    local ah = m.height - (r.top or 0)  - (r.bottom or 0) - 2 * SNAP_GAP
-
-    local x, y, ww, wh = x0, y0, aw, ah
-    if where == "left" then
-        ww = math.floor((aw - SNAP_GAP) / 2)
-    elseif where == "right" then
-        ww = math.floor((aw - SNAP_GAP) / 2)
-        x  = x0 + ww + SNAP_GAP
-    elseif where == "restore" then
-        ww = math.floor(aw * 0.62)
-        wh = math.floor(ah * 0.72)
-        x  = x0 + math.floor((aw - ww) / 2)
-        y  = y0 + math.floor((ah - wh) / 2)
-    end
-
-    if w.fullscreen ~= 0 then hl.dispatch(hl.dsp.window.fullscreen({ action = "unset" })) end
-    if not w.floating then hl.dispatch(hl.dsp.window.float({ action = "set" })) end   -- "set" schaltet um: nur wenn nötig
-    hl.dispatch(hl.dsp.window.resize({ x = ww, y = wh, relative = false }))
-    hl.dispatch(hl.dsp.window.move({ x = x, y = y, relative = false }))
-end
-
 -- Fenster
 B("window_kill", "Fenster sofort beenden (kill)", "ALT + F4",         hl.dsp.window.kill())    -- sofort beenden (SIGKILL), ohne Nachfrage
 B("window_close", "Fenster schließen", mainMod .. " + Q",  hl.dsp.window.close())   -- normal schließen
--- Maximieren = echtes Hyprland-Maximieren (gleich wie der Maximieren-Knopf der Apps)
-local function toggleMax()
-    hl.dispatch(hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }))
-end
-
--- Minimieren (Hyprland hat es nicht nativ): Fenster in den versteckten Special-Workspace "minimized" legen,
--- Wiederherstellen = zurück auf den aktuellen Desktop + fokussieren.
-local MIN_WS = "name:minimized"          -- normaler, nie angezeigter Workspace (Special-Workspaces blenden sich ein)
-local minOrigin = {}   -- address -> { ws, x, y, w, h }: so kehrt ein Fenster an seinen Platz zurück
-local function noAnim(addr)
-    hl.dispatch(hl.dsp.window.set_prop({ window = "address:" .. addr, prop = "no_anim", value = "1" }))
-    hl.timer(function()
-        hl.dispatch(hl.dsp.window.set_prop({ window = "address:" .. addr, prop = "no_anim", value = "0" }))
-    end, { timeout = 900, type = "oneshot" })
-end
+-- Minimieren (Hyprland hat es nicht nativ): Fenster auf den normalen, nie angezeigten Desktop "minimized" legen. Die Zustandsführung
+-- (Geometrie, maximiert, Reihenfolge) liegt in dx_snap (DXSnap.minimize/unminimize/restoreLast), damit Shell und Tastenkürzel
+-- denselben Weg nehmen und nichts doppelt gemerkt wird.
 local function minimizeWindow(w)
-    if w == nil then return end
-    if w.workspace ~= nil and w.workspace.name ~= "minimized" then
-        minOrigin[w.address] = { ws = w.workspace.id, x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
-    end
-    noAnim(w.address)
-    hl.dispatch(hl.dsp.window.move({ window = "address:" .. w.address, workspace = MIN_WS, follow = false }))
+    if w ~= nil and DXSnap ~= nil then DXSnap.minimize(w.address) end
 end
-local function restoreWindow(w)
-    if w == nil then return end
-    local o = minOrigin[w.address]
-    local ws = hl.get_active_workspace()
-    local target = o and o.ws or (ws and ws.id or 1)
-    noAnim(w.address)
-    hl.dispatch(hl.dsp.window.move({ window = "address:" .. w.address, workspace = target, follow = false }))
-    if o then
-        hl.dispatch(hl.dsp.window.resize({ window = "address:" .. w.address, x = o.w, y = o.h, relative = false }))
-        hl.dispatch(hl.dsp.window.move({ window = "address:" .. w.address, x = o.x, y = o.y, relative = false }))
-    end
-    hl.dispatch(hl.dsp.focus({ window = "address:" .. w.address }))
-end
-local function lastMinimized()
-    for _, w in ipairs(hl.get_windows()) do
-        if w.workspace ~= nil and w.workspace.name == "minimized" then return w end
-    end
-    return nil
+local function restoreWindow()
+    if DXSnap ~= nil then DXSnap.restoreLast() end
 end
 -- Der Minimieren-Knopf von Apps (z. B. Ghostty, Brave) wird von der Draconyx Shell abgefangen
 -- (Hyprland meldet "minimized>>adresse,1" auf dem Event-Socket; Lua kennt in 0.56 kein window.minimize).
 
--- Win+Pfeil runter wie unter Windows: maximiert -> normal, normal -> minimieren
-local function restoreOrShrink()
-    local w = hl.get_active_window()
-    if w == nil then return end
-    if w.fullscreen ~= 0 then
-        hl.dispatch(hl.dsp.window.fullscreen({ action = "unset" }))
-    else
-        minimizeWindow(w)
-    end
-end
 B("window_minimize", "Fenster minimieren", mainMod .. " + M",         function() minimizeWindow(hl.get_active_window()) end)
-B("window_restore", "Minimiertes Fenster zurückholen", mainMod .. " + SHIFT + M", function() restoreWindow(lastMinimized()) end)
+B("window_restore", "Minimiertes Fenster zurückholen", mainMod .. " + SHIFT + M", function() restoreWindow() end)
 -- Draconyx Tiling (eigener Kachel-Modus) + Snap (Andocken an Ränder/Ecken, Windows-Ketten)
 DXZones = require("dx_zones")
 DXTiling = require("dx_tiling")
@@ -371,8 +298,9 @@ local function freeMouse()
     end
     if target == nil then return end
     hl.dispatch(hl.dsp.focus({ monitor = target.name }))
-    hl.dispatch(hl.dsp.cursor.move({ x = target.x + math.floor(target.width / 2),
-                                     y = target.y + math.floor(target.height / 2) }))
+    local sc = (type(target.scale) == "number" and target.scale > 0) and target.scale or 1   -- width/height sind physisch, Koordinaten logisch
+    hl.dispatch(hl.dsp.cursor.move({ x = target.x + math.floor(target.width / sc / 2),
+                                     y = target.y + math.floor(target.height / sc / 2) }))
 end
 B("free_mouse", "Maus aus Spielen/Fenstern befreien", mainMod .. " + Escape", freeMouse, { locked = true })
 
@@ -477,5 +405,9 @@ DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App schreiben
 aurora_bindings = aurora_bindings or {}
 do
     local f = io.open((os.getenv("HOME") or "") .. "/.config/hypr/aurora/preferences.lua", "r")
-    if f then f:close(); pcall(dofile, (os.getenv("HOME") or "") .. "/.config/hypr/aurora/preferences.lua") end
+    if f then
+        f:close()
+        local ok, err = pcall(dofile, (os.getenv("HOME") or "") .. "/.config/hypr/aurora/preferences.lua")   -- Fehler dort dürfen die Config nicht abbrechen, aber im Log stehen
+        if not ok then io.stderr:write("[hyprland.lua] aurora/preferences.lua: ", tostring(err), "\n") end
+    end
 end
