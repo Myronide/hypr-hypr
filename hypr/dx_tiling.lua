@@ -35,9 +35,14 @@ local function indexOf(a)
     return nil
 end
 
+local maxed = {}      -- address -> true: vom Nutzer maximiert (steigt vorübergehend aus dem Raster aus)
+local pendingAdd = {} -- address -> Token des Timers, der ein neues Fenster ins Raster setzt (Schließen/Adress-Wiederverwendung verwirft ihn)
+
 local function forget(a)
     tiled[a] = nil
     orig[a] = nil
+    maxed[a] = nil
+    pendingAdd[a] = nil
     local i = indexOf(a)
     if i then table.remove(order, i) end
 end
@@ -47,13 +52,13 @@ local function canTile(w)
     if w == nil or not w.mapped or w.hidden then return false end
     if w.fullscreen == 2 or w.fullscreen == 3 then return false end   -- echtes Vollbild bleibt unberührt
     local ws = w.workspace
-    if ws == nil or ws.id == nil or ws.id < 1 then return false end
-    return true
+    if ws == nil or ws.id == nil or ws.id < 1 or ws.name == "minimized" then return false end
+    return w.at ~= nil and w.size ~= nil
 end
 -- Liegt gerade im Raster: nur Fenster, die NICHT maximiert sind. Ein maximiertes Fenster steigt
 -- vorübergehend aus (bleibt in der Reihenfolge) und kehrt beim Wiederherstellen zurück.
-local maxed = {}      -- address -> true: vom Nutzer maximiert (steigt vorübergehend aus dem Raster aus)
 function M.setMaxed(a, on)
+    if a == nil then return end
     maxed[a] = on or nil
 end
 local function eligible(w)
@@ -66,12 +71,15 @@ local function windowMap()
     return map
 end
 
+-- Arbeitsfläche eines Monitors; width/height sind physische Pixel, x/y/reserved logische -> durch die Skalierung teilen
 local function usable(m)
     local r = m.reserved or {}
+    local sc = m.scale
+    if type(sc) ~= "number" or sc <= 0 then sc = 1 end
     local x = m.x + (r.left or 0) + GAP
     local y = m.y + (r.top or 0) + GAP
-    local w = m.width - (r.left or 0) - (r.right or 0) - 2 * GAP
-    local h = m.height - (r.top or 0) - (r.bottom or 0) - 2 * GAP
+    local w = math.max(200, m.width / sc - (r.left or 0) - (r.right or 0) - 2 * GAP)
+    local h = math.max(120, m.height / sc - (r.top or 0) - (r.bottom or 0) - 2 * GAP)
     return x, y, w, h
 end
 
@@ -106,6 +114,15 @@ local function layout(n, mode, ax, ay, aw, ah)
         end
     end
     return rects
+end
+
+-- gemerkte Geometrie auf einen sichtbaren Bereich bringen (Monitor könnte inzwischen fehlen)
+local function fit(o, w)
+    if DXSnap ~= nil and DXSnap.fitRect ~= nil then
+        local x, y, ww, wh = DXSnap.fitRect(o.x, o.y, o.w, o.h, w)
+        return { x = x, y = y, w = ww, h = wh }
+    end
+    return o
 end
 
 local function place(w, r)
@@ -148,7 +165,7 @@ function M.retile(wsId)
             for _, w in ipairs(overflow) do
                 local o = orig[w.address]
                 forget(w.address)
-                if o ~= nil then place(w, o) end
+                if o ~= nil then place(w, fit(o, w)) end
             end
             if #overflow > 0 then
                 hl.exec_cmd("notify-send -a 'Draconyx' -t 2500 'Raster voll' '" .. #zones .. " Zonen belegt – weitere Fenster bleiben frei. Raster bearbeiten: Strg+Alt+Z'")
@@ -201,7 +218,7 @@ function M.release(w)
     local o = orig[w.address]
     local wsId = w.workspace and w.workspace.id
     forget(w.address)
-    if o ~= nil and eligible(w) then place(w, o) end   -- maximiert: bleibt maximiert
+    if o ~= nil and eligible(w) then place(w, fit(o, w)) end   -- maximiert: bleibt maximiert
     M.retile(wsId)
 end
 
@@ -251,6 +268,7 @@ end
 
 -- Standardmodus umstellen: "tiling" kachelt alle passenden Fenster, "floating" gibt alle frei
 function M.setDefault(mode)
+    if mode ~= "tiling" and mode ~= "floating" then return end   -- nil/Unsinn aus einem fehlerhaften Aufruf darf die Einstellung nicht auf "floating" setzen
     local tilingNow = (mode == "tiling")
     pcall(function()
         local f = io.open(MODE_FILE, "w")
@@ -260,7 +278,7 @@ function M.setDefault(mode)
     if tilingNow then
         local seen = {}
         for _, w in ipairs(hl.get_windows()) do
-            if canTile(w) and not tiled[w.address] and w.workspace ~= nil then
+            if canTile(w) and not tiled[w.address] then
                 unmaximize(w)
                 orig[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
                 tiled[w.address] = true
@@ -301,13 +319,14 @@ end
 -- Position mit Nachbarn tauschen (dir = -1 vorheriges, +1 nächstes)
 function M.shift(dir)
     local w = hl.get_active_window()
-    if w == nil or not tiled[w.address] then return end
+    if w == nil or w.workspace == nil or not tiled[w.address] then return end
     local list = tiledOn(w.workspace.id, windowMap())
     local pos
     for i, x in ipairs(list) do if x.address == w.address then pos = i end end
     local other = pos and list[pos + dir]
     if other == nil then return end
     local i, j = indexOf(w.address), indexOf(other.address)
+    if i == nil or j == nil then return end
     order[i], order[j] = order[j], order[i]
     M.retile(w.workspace.id)
 end
@@ -325,9 +344,16 @@ end
 -- Live-Tauschen beim Ziehen: Zieht man ein gekacheltes Fenster über ein anderes, gleitet dieses sofort in den
 -- Platz des gezogenen (animiert). Das gezogene Fenster folgt weiter der Maus und rastet beim Loslassen ein.
 local lastSwap = 0
+-- Echte Uhrzeit in Sekunden (os.clock wäre die Rechenzeit von Hyprland und läuft viel langsamer)
+local function realNow()
+    local f = io.open("/proc/uptime", "r")
+    local v = f and f:read("*n")
+    if f then f:close() end
+    return v or os.time()
+end
 function M.liveSwap(w, cx, cy)
-    if w == nil or not tiled[w.address] or applying then return false end
-    local now = os.clock()
+    if w == nil or w.workspace == nil or not tiled[w.address] or applying or cx == nil or cy == nil then return false end
+    local now = realNow()
     if now - lastSwap < 0.25 then return false end
     local map = windowMap()
     local list = tiledOn(w.workspace.id, map)
@@ -339,6 +365,7 @@ function M.liveSwap(w, cx, cy)
             order[i], order[j] = order[j], order[i]
             lastSwap = now
             local m = o.monitor or hl.get_active_monitor()
+            if m == nil then return false end
             local fresh = tiledOn(w.workspace.id, map)
             -- o übernimmt den Platz, den w verlassen hat (neuer Index i in der neu sortierten Liste)
             local r
@@ -355,13 +382,13 @@ function M.liveSwap(w, cx, cy)
 end
 
 function M.dropAt(w, cx, cy)
-    if w == nil or not tiled[w.address] then return false end
+    if w == nil or w.workspace == nil or not tiled[w.address] then return false end
     local map = windowMap()
     for _, o in ipairs(tiledOn(w.workspace.id, map)) do
         if o.address ~= w.address
            and cx >= o.at.x and cx <= o.at.x + o.size.x and cy >= o.at.y and cy <= o.at.y + o.size.y then
             local i, j = indexOf(w.address), indexOf(o.address)
-            order[i], order[j] = order[j], order[i]
+            if i ~= nil and j ~= nil then order[i], order[j] = order[j], order[i] end
             break
         end
     end
@@ -370,11 +397,23 @@ function M.dropAt(w, cx, cy)
 end
 
 -- Ereignisse: Raster aktuell halten
-local function safe(fn) return function(...) pcall(fn, ...) end end
+local lastErr = nil
+local function safe(fn) return function(...)
+    local ok, err = pcall(fn, ...)
+    if not ok and tostring(err) ~= lastErr then lastErr = tostring(err); io.stderr:write("[dx_tiling] ", lastErr, "\n") end
+end end
 
 hl.on("window.open", safe(function(w)
-    if w ~= nil and w.workspace ~= nil and (wsAuto[w.workspace.id] or M.defaultTiling) then
-        hl.timer(function() M.add(w) end, { timeout = 120, type = "oneshot" })
+    if w ~= nil and w.address ~= nil and w.workspace ~= nil and (wsAuto[w.workspace.id] or M.defaultTiling) then
+        local address, token = w.address, {}
+        pendingAdd[address] = token
+        hl.timer(safe(function()
+            if pendingAdd[address] ~= token then return end        -- Fenster schon wieder weg (oder Adresse neu vergeben)
+            pendingAdd[address] = nil
+            for _, x in ipairs(hl.get_windows()) do               -- frischen Zustand holen, nicht das alte Fensterobjekt
+                if x.address == address then M.add(x); return end
+            end
+        end), { timeout = 120, type = "oneshot" })
     end
 end))
 local function gone(w)

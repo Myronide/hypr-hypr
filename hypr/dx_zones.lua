@@ -43,14 +43,15 @@ end
 
 -- Fenster in Zone idx seines Monitors setzen (wird frei schwebend)
 function M.place(w, idx)
-    if w == nil then return false end
+    if w == nil or tonumber(idx) == nil then return false end
     local m = w.monitor or hl.get_active_monitor()
     if m == nil then return false end
-    local z = M.zones(m.name)[idx]
+    local z = M.zones(m.name)[tonumber(idx)]
     if z == nil then return false end
     local a = "address:" .. w.address
     if w.fullscreen == 1 then hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" })) end
     if w.fullscreen == 2 or w.fullscreen == 3 then return false end
+    if DXSnap ~= nil and DXSnap.clearMax ~= nil then DXSnap.clearMax(w) end   -- in eine Zone gesetzt = nicht mehr maximiert
     if not w.floating then hl.dispatch(hl.dsp.window.float({ window = a, action = "set" })) end   -- "set" schaltet in dieser Version um: nur wenn nötig
     hl.dispatch(hl.dsp.window.resize({ window = a, x = z.w, y = z.h, relative = false }))
     hl.dispatch(hl.dsp.window.move({ window = a, x = z.x, y = z.y, relative = false }))
@@ -67,7 +68,7 @@ end
 function M.placePicked(idx)
     local w = pickWin and find(pickWin) or nil
     pickWin = nil
-    if w ~= nil then
+    if w ~= nil and tonumber(idx) ~= nil then
         if DXTiling ~= nil and DXTiling.isTiled(w) then DXTiling.release(w) end
         M.place(w, idx)
         hl.dispatch(hl.dsp.focus({ window = "address:" .. w.address }))

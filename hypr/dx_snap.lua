@@ -15,6 +15,23 @@ if not okZ then Z = nil end
 local function shiftDown() return hl.is_key_down(50) or hl.is_key_down(62) end
 local zoneOf = {}       -- address -> letzte Andock-Zone
 
+-- Fehler in verschluckten pcall-Blöcken nicht stumm lassen (nur Hyprland-Log, jede Meldung je Stelle nur einmal hintereinander)
+local lastErr = {}
+local function logErr(tag, err)
+    local msg = tostring(err)
+    if lastErr[tag] == msg then return end
+    lastErr[tag] = msg
+    io.stderr:write("[dx_snap] ", tag, ": ", msg, "\n")
+end
+
+-- Größe eines Monitors in logischen Pixeln (Hyprland meldet width/height physisch; Koordinaten x/y/reserved sind logisch)
+local function logical(m)
+    local s = m.scale
+    if type(s) ~= "number" or s <= 0 then s = 1 end
+    return m.width / s, m.height / s
+end
+M.logical = logical
+
 function M.setup(t, o)
     tiling = t
     opts = o or {}
@@ -83,16 +100,19 @@ local function wantsBar(w)
 end
 
 local function area(m, w)
+    if m == nil then return nil end
     local r = m.reserved or {}
     local tb = wantsBar(w) and TITLEBAR or 0
+    local mw, mh = logical(m)
     local x = m.x + (r.left or 0) + GAP
     local y = m.y + (r.top or 0) + GAP + tb
-    local ww = m.width - (r.left or 0) - (r.right or 0) - 2 * GAP
-    local h = m.height - (r.top or 0) - (r.bottom or 0) - 2 * GAP - tb
+    local ww = math.max(200, mw - (r.left or 0) - (r.right or 0) - 2 * GAP)
+    local h = math.max(120, mh - (r.top or 0) - (r.bottom or 0) - 2 * GAP - tb)
     return x, y, ww, h
 end
 
 function M.rectFor(m, zone, w)
+    if m == nil then return nil end
     local x0, y0, aw, ah = area(m, w)
     local hw = math.floor((aw - GAP) / 2)
     local hh = math.floor((ah - GAP) / 2)
@@ -117,7 +137,9 @@ function M.snapWindow(w, zone)
     local m = w.monitor or hl.get_active_monitor()
     if m == nil then return end
     local x, y, ww, wh = M.rectFor(m, zone, w)
+    if x == nil then return end
     local a = "address:" .. w.address
+    M.clearMax(w)           -- ein angedocktes Fenster gilt nicht mehr als maximiert
     if w.fullscreen ~= 0 then
         hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "maximized", action = "unset" }))
         hl.dispatch(hl.dsp.window.fullscreen({ window = a, mode = "fullscreen", action = "unset" }))
@@ -141,6 +163,8 @@ local userMax = {}   -- address -> { x, y, w, h } Geometrie vor dem Maximieren
 local maxed = {}     -- address -> true: von uns maximiert (die einzige Wahrheit)
 local normal = {}    -- address -> letzte normale Geometrie (für Apps, die sich vor unserem Ereignis schon selbst vergrößert haben)
 local quietUntil = {} -- address -> bis wann App-Wünsche ignoriert werden (Minimieren/Zurückholen)
+local maxArea = {}    -- address -> Arbeitsfläche ("x,y,b,h"), in die zuletzt maximiert wurde (Monitor-/Leistenwechsel erkennen)
+local pendingRestore, pendingWants = {}, {}   -- address -> Token des laufenden Timers (Schließen/Adress-Wiederverwendung macht ihn ungültig)
 local lastPressT = -10
 local quietAll = -10     -- bis wann App-Wünsche ALLER Fenster ignoriert werden (ein Minimieren ist unterwegs, Fenster noch unbekannt)
 
@@ -158,7 +182,7 @@ local function nearArea(w)
     local m = w.monitor or hl.get_active_monitor()
     if m == nil then return false end
     local x, y, aw, ah = area(m, w)
-    return math.abs(w.size.x - aw) < 12 and math.abs(w.size.y - ah) < 12 and math.abs(w.at.x - x) < 12 and math.abs(w.at.y - y) < 12
+    return w.size ~= nil and w.at ~= nil and math.abs(w.size.x - aw) < 12 and math.abs(w.size.y - ah) < 12 and math.abs(w.at.x - x) < 12 and math.abs(w.at.y - y) < 12
 end
 
 -- Größe vor dem Maximieren (für die Fenstergrößen-Erinnerung dx_sizes), sonst nil
@@ -233,43 +257,100 @@ end
 local function applyArea(w)
     local m = w.monitor or hl.get_active_monitor()
     local x, y, aw, ah = area(m, w)
+    if x == nil then return end
+    maxArea[w.address] = string.format("%d,%d,%d,%d", x, y, aw, ah)
     local a = "address:" .. w.address
     hl.dispatch(hl.dsp.window.resize({ window = a, x = aw, y = ah, relative = false }))
     hl.dispatch(hl.dsp.window.move({ window = a, x = x, y = y, relative = false }))
 end
 
+-- Rechteck so verschieben/verkleinern, dass es nicht außerhalb aller Bildschirme liegt (abgesteckter Monitor, geänderte Auflösung,
+-- gemerkte Geometrie von früher). Sichtbar genug = mindestens ein 100x40-Streifen auf einem Monitor. Gibt x, y, b, h zurück.
+function M.fitRect(x, y, ww, wh, w)
+    local ok, mons = pcall(hl.get_monitors)
+    if not ok or mons == nil then return x, y, ww, wh end
+    for _, m in ipairs(mons) do
+        local mw, mh = logical(m)
+        local ox = math.min(x + ww, m.x + mw) - math.max(x, m.x)
+        local oy = math.min(y + wh, m.y + mh) - math.max(y, m.y)
+        if ox >= math.min(100, ww) and oy >= math.min(40, wh) then return x, y, ww, wh end
+    end
+    local target = (w ~= nil and w.monitor) or hl.get_active_monitor() or mons[1]
+    if target == nil then return x, y, ww, wh end
+    local ax, ay, aw, ah = area(target, w)
+    ww, wh = math.min(ww, aw), math.min(wh, ah)
+    return ax + math.floor((aw - ww) / 2), ay + math.floor((ah - wh) / 2), ww, wh
+end
+
 -- Letzte normale Geometrie mitschreiben; wer ein maximiertes Fenster von Hand verkleinert/verschiebt, hat es damit "wiederhergestellt"
 local drift = {}
+local watchTicks = 0
 local function watchStates()
-    pcall(function()
+    local ok, err = pcall(function()
+        local holding = press ~= nil and not press.released        -- Maustaste unten: der Nutzer zieht gerade, nichts erzwingen
+        local pids = {}
         for _, w in ipairs(hl.get_windows()) do
+            if w.pid then pids[w.pid] = true end
             if w.mapped and w.floating and w.fullscreen == 0 and not parked(w) and w.monitor ~= nil and w.size.x > 100 and w.size.y > 60 then
+                local a = w.address
                 local near = nearArea(w)
-                if maxed[w.address] then
-                    if near then drift[w.address] = nil
-                    else
-                        drift[w.address] = (drift[w.address] or 0) + 1
-                        if drift[w.address] >= 3 then                  -- seit gut einer Sekunde nicht mehr in Maximal-Größe: gilt als normal
-                            maxed[w.address], userMax[w.address], drift[w.address] = nil, nil, nil
-                            tellApp(w.address, false)
+                if maxed[a] then
+                    if near then drift[a] = nil
+                    elseif not holding and dragging[a] == nil then
+                        local x, y, aw, ah = area(w.monitor, w)
+                        if x ~= nil and maxArea[a] ~= string.format("%d,%d,%d,%d", x, y, aw, ah) then
+                            -- Arbeitsfläche hat sich geändert (Monitor gewechselt/abgesteckt, Auflösung, Taskleiste): Maximieren mitführen
+                            drift[a] = nil
+                            applyArea(w)
+                        else
+                            drift[a] = (drift[a] or 0) + 1
+                            if drift[a] >= 3 then                  -- seit gut einer Sekunde nicht mehr in Maximal-Größe: gilt als normal
+                                maxed[a], userMax[a], drift[a], maxArea[a] = nil, nil, nil, nil
+                                if tiling ~= nil then tiling.setMaxed(a, false) end
+                                tellApp(a, false)
+                            end
                         end
                     end
                 elseif not near then
-                    normal[w.address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
+                    normal[a] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
                 end
             end
         end
+        watchTicks = watchTicks + 1
+        if watchTicks % 50 == 0 then                                -- GTK-Cache nur für noch laufende Prozesse behalten
+            for pid in pairs(gtkPid) do if not pids[pid] then gtkPid[pid] = nil end end
+        end
     end)
+    if not ok then logErr("watchStates", err) end
+end
+
+-- Maximieren/Normal-Zustand verwerfen, ohne die Geometrie anzufassen (Fenster wird gerade angedockt/in eine Zone gesetzt)
+function M.clearMax(w)
+    if w == nil then return end
+    local a = w.address
+    if maxed[a] then
+        maxed[a], userMax[a], drift[a], maxArea[a] = nil, nil, nil, nil
+        if tiling ~= nil then tiling.setMaxed(a, false) end
+        tellApp(a, false)
+    end
 end
 
 function M.setMax(w)
     if w == nil then return end
     local a = "address:" .. w.address
     if w.fullscreen == 2 or w.fullscreen == 3 then return end   -- echtes Vollbild nicht anfassen
+    if parked(w) or (w.monitor == nil and hl.get_active_monitor() == nil) then return end   -- minimiert/ohne Monitor: nichts zu maximieren
     if tiling ~= nil and tiling.isTiled(w) then tiling.setMaxed(w.address, true) end
     if not maxed[w.address] then
         local o = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y }
-        if (w.fullscreen == 1 or nearArea(w)) and normal[w.address] ~= nil then o = normal[w.address] end   -- App hat sich schon selbst vergrößert
+        if (w.fullscreen == 1 or nearArea(w)) then                   -- App hat sich schon selbst vergrößert (oder Config-Reload hat den Zustand vergessen)
+            if normal[w.address] ~= nil then o = normal[w.address]
+            else
+                local m = w.monitor or hl.get_active_monitor()
+                local rx, ry, rw, rh = M.rectFor(m, "restore", w)
+                if rx ~= nil then o = { x = rx, y = ry, w = rw, h = rh } end
+            end
+        end
         userMax[w.address] = o
     end
     maxed[w.address], drift[w.address] = true, nil
@@ -282,7 +363,7 @@ function M.unMax(w)
     if w == nil then return end
     local a = "address:" .. w.address
     local o = userMax[w.address] or normal[w.address]
-    maxed[w.address], userMax[w.address], drift[w.address] = nil, nil, nil
+    maxed[w.address], userMax[w.address], drift[w.address], maxArea[w.address] = nil, nil, nil, nil
     tellApp(w.address, false)
     if tiling ~= nil then tiling.setMaxed(w.address, false) end
     if tiling ~= nil and tiling.isTiled(w) then
@@ -290,8 +371,9 @@ function M.unMax(w)
         return
     end
     if o ~= nil then
-        hl.dispatch(hl.dsp.window.resize({ window = a, x = o.w, y = o.h, relative = false }))
-        hl.dispatch(hl.dsp.window.move({ window = a, x = o.x, y = o.y, relative = false }))
+        local ox, oy, ow, oh = M.fitRect(o.x, o.y, o.w, o.h, w)      -- Monitor könnte inzwischen fehlen/anders sein
+        hl.dispatch(hl.dsp.window.resize({ window = a, x = ow, y = oh, relative = false }))
+        hl.dispatch(hl.dsp.window.move({ window = a, x = ox, y = oy, relative = false }))
     else
         M.snapWindow(w, "restore")
     end
@@ -332,7 +414,7 @@ hl.timer(function() watchStates(); if now() - lastPressT > 1.2 then syncClient(f
 -- dass der Zeiger im gleichen Verhältnis auf der Leiste bleibt wie vorher (wie unter Windows). cx/cy = Zeigerposition.
 function M.restoreForDrag(address, cx, cy)
     local w = winByAddr(address)
-    if w == nil or not M.isMaxed(w) then return end
+    if w == nil or not M.isMaxed(w) or cx == nil or cy == nil then return end
     local o = userMax[address] or normal[address]
     local fx = (cx - w.at.x) / math.max(1, w.size.x)
     local oy = cy - w.at.y
@@ -351,7 +433,9 @@ function M.toggleMax(w)
 end
 
 function M.toggleMaxAddr(address)
-    M.toggleMax(winByAddr(address))
+    local w = type(address) == "string" and winByAddr(address) or nil
+    if w == nil then return end         -- Fenster ist weg: NICHT ersatzweise das aktive Fenster umschalten
+    M.toggleMax(w)
 end
 
 -- Minimieren/Zurückholen (von der Shell und dem X11-Wächter gemeldet). Beide geben ein leeres Dispatch-Ergebnis zurück, damit die
@@ -369,8 +453,15 @@ end
 -- Nach dem Zurückholen: Geometrie nach UNSEREM Zustand setzen – maximiert bleibt maximiert, sonst die Geometrie von vor dem Minimieren
 function M.afterRestore(address, x, y, ww, hh)
     quietUntil[address] = now() + 2.0
+    local token = {}
+    pendingRestore[address] = token
+    if x ~= nil and ww ~= nil and ww > 0 then
+        local w0 = winByAddr(address)
+        x, y, ww, hh = M.fitRect(x, y, ww, hh, w0)          -- gemerkte Geometrie kann auf einem inzwischen fehlenden Monitor liegen
+    end
     local function apply()
-        pcall(function()
+        local ok, err = pcall(function()
+            if pendingRestore[address] ~= token then return end
             local w = winByAddr(address)
             if w == nil or parked(w) then return end
             if maxed[address] then
@@ -382,10 +473,11 @@ function M.afterRestore(address, x, y, ww, hh)
                 if math.abs(w.at.x - x) > 3 or math.abs(w.at.y - y) > 3 then hl.dispatch(hl.dsp.window.move({ window = a, x = x, y = y, relative = false })) end
             end
         end)
+        if not ok then logErr("afterRestore", err) end
     end
     apply()
     hl.timer(apply, { timeout = 150, type = "oneshot" })     -- Apps ändern ihre Größe beim Wiederauftauchen manchmal selbst
-    hl.timer(apply, { timeout = 500, type = "oneshot" })
+    hl.timer(function() apply(); if pendingRestore[address] == token then pendingRestore[address] = nil end end, { timeout = 500, type = "oneshot" })
     return hl.dsp.no_op()
 end
 
@@ -395,15 +487,19 @@ end
 -- Minimieren zuerst "maximieren" und gleich danach "minimieren" – so wird dabei nie sichtbar maximiert.
 local function appWants(address, want)
     noAnimFor(address, 800)
+    local token = {}
+    pendingWants[address] = token           -- der letzte Wunsch gewinnt; Schließen verwirft ihn
     local function decide()
-        pcall(function()
+        local ok, err = pcall(function()
+            if pendingWants[address] ~= token then return end
             local t = now()
             local ww = winByAddr(address)
-            if ww == nil or parked(ww) then return end
+            if ww == nil or parked(ww) then pendingWants[address] = nil; return end
             local byUser = (t - lastPressT) < 1.0 and (quietUntil[address] or 0) < t and quietAll < t
             if not byUser then                                     -- kein Klick dahinter: unser Zustand bleibt
                 tellApp(address, maxed[address] == true)
                 if maxed[address] and not nearArea(ww) then applyArea(ww) end
+                pendingWants[address] = nil
                 return
             end
             if want and not maxed[address] then M.setMax(ww)
@@ -412,6 +508,7 @@ local function appWants(address, want)
             -- Manche Apps ändern danach noch einmal selbst ihre Größe: unseren Zustand kurz darauf erneut durchsetzen
             local function reassert()
                 pcall(function()
+                    if pendingWants[address] ~= token then return end
                     local w3 = winByAddr(address)
                     if w3 == nil or parked(w3) then return end
                     if maxed[address] then
@@ -423,8 +520,9 @@ local function appWants(address, want)
                 end)
             end
             hl.timer(reassert, { timeout = 150, type = "oneshot" })
-            hl.timer(reassert, { timeout = 450, type = "oneshot" })
+            hl.timer(function() reassert(); if pendingWants[address] == token then pendingWants[address] = nil end end, { timeout = 450, type = "oneshot" })
         end)
+        if not ok then logErr("appWants", err) end
     end
     hl.timer(decide, { timeout = 45, type = "oneshot" })
 end
@@ -432,6 +530,7 @@ end
 -- X11-Apps: Hyprland soll ihre Maximieren-Wünsche gar nicht erst selbst ausführen (Fensterregel suppress_event, siehe hyprland.lua);
 -- der X11-Wächter (dx-x11-iconify) liest sie mit und meldet sie hierher. action: "add" | "remove" | "toggle"
 function M.appRequest(address, action)
+    if type(address) ~= "string" then return hl.dsp.no_op() end
     pcall(function()
         local want = (action == "add") or (action == "toggle" and not maxed[address])
         appWants(address, want)
@@ -440,8 +539,11 @@ function M.appRequest(address, action)
 end
 
 -- Wayland-Apps (xdg set/unset_maximized): Hyprland meldet "fullscreen"
+local inFullscreenEvent = false         -- tellApp löst selbst wieder window.fullscreen aus: nie ineinander laufen
 hl.on("window.fullscreen", function(w)
-    pcall(function()
+    if inFullscreenEvent then return end
+    inFullscreenEvent = true
+    local ok, err = pcall(function()
         if w == nil then return end
         local address = w.address
         local fi, fc = w.fullscreen or 0, w.fullscreen_client or 0
@@ -456,31 +558,65 @@ hl.on("window.fullscreen", function(w)
         tellApp(address, maxed[address] == true)
         if want ~= nil then appWants(address, want) end
     end)
+    inFullscreenEvent = false
+    if not ok then logErr("window.fullscreen", err) end
 end)
 
 -- ---------- Minimieren / Zurückholen (die Shell ruft das direkt über den Hyprland-Socket auf) ----------
-local minGeo = {}    -- address -> { x, y, w, h } Geometrie beim Minimieren (nur für nicht maximierte Fenster nötig)
+local minGeo = {}    -- address -> { x, y, w, h, ws } Geometrie/Desktop beim Minimieren (Geometrie nur für nicht maximierte Fenster)
+local minStack = {}  -- Adressen minimierter Fenster, das zuletzt minimierte zuletzt
+local function dropFromStack(address)
+    for i = #minStack, 1, -1 do if minStack[i] == address then table.remove(minStack, i) end end
+end
 function M.minimize(address)
-    pcall(function()
+    if type(address) ~= "string" then return hl.dsp.no_op() end
+    local ok, err = pcall(function()
         quietUntil[address] = now() + 2.0
         local w = winByAddr(address)
         if w == nil or parked(w) then return end
-        if not maxed[address] then minGeo[address] = { x = w.at.x, y = w.at.y, w = w.size.x, h = w.size.y } end
+        local g = { ws = w.workspace and w.workspace.id }
+        if not maxed[address] then g.x, g.y, g.w, g.h = w.at.x, w.at.y, w.size.x, w.size.y end
+        minGeo[address] = g
+        dropFromStack(address); minStack[#minStack + 1] = address
         noAnimFor(address, 1000)
         hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, workspace = "name:minimized", follow = false }))
     end)
+    if not ok then logErr("minimize", err) end
     return hl.dsp.no_op()
 end
 
 function M.unminimize(address, ws)
-    pcall(function()
+    if type(address) ~= "string" then return hl.dsp.no_op() end
+    local ok, err = pcall(function()
         quietUntil[address] = now() + 2.0
+        if winByAddr(address) == nil then minGeo[address] = nil; dropFromStack(address); return end
+        local g = minGeo[address]
+        ws = tonumber(ws) or ws
+        if ws == nil or ws == "" then                                  -- Shell kennt den Desktop nicht: Ursprung, sonst der aktive
+            local aw = hl.get_active_workspace()
+            ws = (g and g.ws) or (aw and aw.id) or 1
+        end
         noAnimFor(address, 1000)
         hl.dispatch(hl.dsp.window.move({ window = "address:" .. address, workspace = ws, follow = false }))
-        local g = minGeo[address]
+        minGeo[address] = nil; dropFromStack(address)                  -- gilt nur für dieses eine Zurückholen
         M.afterRestore(address, g and g.x, g and g.y, g and g.w, g and g.h)
     end)
+    if not ok then logErr("unminimize", err) end
     return hl.dsp.no_op()
+end
+
+-- Zuletzt minimiertes Fenster zurückholen (Tastenkürzel); true, wenn eines da war
+function M.restoreLast()
+    while #minStack > 0 do
+        local address = table.remove(minStack)
+        local w = winByAddr(address)
+        if w ~= nil and w.workspace ~= nil and w.workspace.name == "minimized" then
+            M.unminimize(address)
+            hl.dispatch(hl.dsp.focus({ window = "address:" .. address }))
+            return true
+        end
+    end
+    return false
 end
 
 local function forget(w)
@@ -488,17 +624,72 @@ local function forget(w)
         if w == nil then return end
         local a = w.address
         userMax[a], maxed[a], normal[a], quietUntil[a], drift[a], minGeo[a] = nil, nil, nil, nil, nil, nil
+        maxArea[a], zoneOf[a], toldAt[a], pendingRestore[a], pendingWants[a] = nil, nil, nil, nil, nil
         dragging[a], animGeneration[a] = nil, nil
+        dropFromStack(a)
+        if press ~= nil then
+            if press.pos then press.pos[a] = nil end
+            if press.snaps then press.snaps[a] = nil end
+        end
     end)
 end
 hl.on("window.destroy", forget)
 hl.on("window.close", forget)
 
+-- ---------- Monitor-Änderungen: Fenster nie außerhalb des Bildschirms lassen ----------
+-- Beim Abstecken/Anstecken oder bei geänderter Auflösung/Skalierung/Leiste: maximierte Fenster der neuen Arbeitsfläche anpassen, alle
+-- anderen schwebenden Fenster, die auf keinem Monitor mehr sichtbar sind, zurück auf den Bildschirm holen.
+function M.rescue()
+    local ok, err = pcall(function()
+        if press ~= nil and not press.released then return end
+        for _, w in ipairs(hl.get_windows()) do
+            if w.mapped and w.floating and (w.fullscreen or 0) == 0 and not parked(w) and w.monitor ~= nil and w.at ~= nil and w.size ~= nil
+               and (tiling == nil or not tiling.isTiled(w)) then
+                local a = w.address
+                if maxed[a] then
+                    if not nearArea(w) then applyArea(w) end
+                else
+                    local x, y, ww, wh = M.fitRect(w.at.x, w.at.y, w.size.x, w.size.y, w)
+                    if x ~= w.at.x or y ~= w.at.y or ww ~= w.size.x or wh ~= w.size.y then
+                        local ad = "address:" .. a
+                        if ww ~= w.size.x or wh ~= w.size.y then hl.dispatch(hl.dsp.window.resize({ window = ad, x = ww, y = wh, relative = false })) end
+                        hl.dispatch(hl.dsp.window.move({ window = ad, x = x, y = y, relative = false }))
+                    end
+                end
+            end
+        end
+    end)
+    if not ok then logErr("rescue", err) end
+end
+local rescuePending = false
+local function scheduleRescue()
+    if rescuePending then return end
+    rescuePending = true
+    hl.timer(function() rescuePending = false; M.rescue() end, { timeout = 500, type = "oneshot" })   -- Hyprland ordnet Fenster erst kurz danach um
+end
+hl.on("monitor.added", scheduleRescue)
+hl.on("monitor.removed", scheduleRescue)
+hl.on("monitor.layout_changed", scheduleRescue)
+
 -- ---------- Tastatur: Windows-artige Ketten ----------
+-- Andock-Zone des Fensters – nur, wenn es wirklich (noch) dort sitzt; von Hand verschobene/vergrößerte Fenster haben keine mehr
+local function currentZone(w)
+    local z = zoneOf[w.address]
+    if z == nil then return nil end
+    if z == "max" then
+        if maxed[w.address] then return z end
+    elseif w.mapped and w.floating and w.monitor ~= nil and w.at ~= nil and w.size ~= nil then
+        local x, y, ww, wh = M.rectFor(w.monitor, z, w)
+        if x ~= nil and math.abs(w.at.x - x) + math.abs(w.at.y - y) + math.abs(w.size.x - ww) + math.abs(w.size.y - wh) < 16 then return z end
+    end
+    zoneOf[w.address] = nil
+    return nil
+end
+
 function M.arrow(dir)
     local w = hl.get_active_window()
-    if w == nil then return end
-    local z = zoneOf[w.address]
+    if w == nil or w.address == nil then return end
+    local z = currentZone(w)
     local maximized = w.fullscreen ~= 0
     if dir == "left" then
         M.snapWindow(w, z == "right" and "restore" or "left")
@@ -525,19 +716,22 @@ end
 local function overlap(a1, a2, b1, b2) return a1 < b2 and b1 < a2 end
 
 local function hasNeighbor(m, side)
+    local mw, mh = logical(m)
     for _, o in ipairs(hl.get_monitors()) do
         if o.name ~= m.name then
-            if side == "left" and o.x + o.width == m.x and overlap(o.y, o.y + o.height, m.y, m.y + m.height) then return true end
-            if side == "right" and o.x == m.x + m.width and overlap(o.y, o.y + o.height, m.y, m.y + m.height) then return true end
-            if side == "top" and o.y + o.height == m.y and overlap(o.x, o.x + o.width, m.x, m.x + m.width) then return true end
+            local ow, oh = logical(o)
+            if side == "left" and math.abs(o.x + ow - m.x) < 2 and overlap(o.y, o.y + oh, m.y, m.y + mh) then return true end
+            if side == "right" and math.abs(o.x - (m.x + mw)) < 2 and overlap(o.y, o.y + oh, m.y, m.y + mh) then return true end
+            if side == "top" and math.abs(o.y + oh - m.y) < 2 and overlap(o.x, o.x + ow, m.x, m.x + mw) then return true end
         end
     end
     return false
 end
 
 function M.zoneAt(m, cx, cy)
-    local lx, rx = cx - m.x, m.x + m.width - cx
-    local ty, by = cy - m.y, m.y + m.height - cy
+    local mw, mh = logical(m)
+    local lx, rx = cx - m.x, m.x + mw - cx
+    local ty, by = cy - m.y, m.y + mh - cy
     local atL = lx <= EDGE and not hasNeighbor(m, "left")
     local atR = rx <= EDGE and not hasNeighbor(m, "right")
     local atT = ty <= EDGE and not hasNeighbor(m, "top")
@@ -553,7 +747,8 @@ end
 
 local function monitorAt(cx, cy)
     for _, m in ipairs(hl.get_monitors()) do
-        if cx >= m.x and cx < m.x + m.width and cy >= m.y and cy < m.y + m.height then return m end
+        local mw, mh = logical(m)
+        if cx >= m.x and cx < m.x + mw and cy >= m.y and cy < m.y + mh then return m end
     end
     return nil
 end
@@ -564,7 +759,8 @@ local timer = nil
 local function writePreview(text)
     if text == lastText then return end
     lastText = text
-    hl.exec_cmd("sh -c 'printf %s \"" .. text .. "\" > " .. PREVIEW .. "'")
+    local f = io.open(PREVIEW, "w")         -- direkt schreiben: kein Shell-Prozess je Änderung, keine Zeichen aus Monitor-/Zonennamen in einer Shell
+    if f then f:write(text); f:close() else lastText = "" end
 end
 
 -- Fenster, das seit dem Klick bewegt wurde (egal welches gerade fokussiert ist)
@@ -588,7 +784,7 @@ local function zoneNow()
     return M.zoneAt(m, c.x, c.y), m, c
 end
 
-local function tick()
+local function tickImpl()
     if press == nil then return end
     local w = movedWindow()
     if w == nil then writePreview("none"); press.zoneIdx = nil; return end
@@ -642,6 +838,11 @@ local function tick()
     writePreview(string.format("%s %d %d %d %d", m.name, x, y, ww, wh))
 end
 
+local function tick()
+    local ok, err = pcall(tickImpl)
+    if not ok then logErr("tick", err) end
+end
+
 local function onPress()
     M.notePress()
     local pos = {}
@@ -689,7 +890,6 @@ local function finish(p)
     if tiling ~= nil and tiling.isTiled(w) then
         if c ~= nil then tiling.dropAt(w, c.x, c.y) end
     elseif zone ~= nil then
-        hl.exec_cmd("sh -c 'echo \"$(date +%T) snap " .. zone .. " " .. tostring(w.class) .. "\" >> ~/.local/state/draconyx/snap.log'")
         if zone == "max" then
             M.setMax(w)
             zoneOf[w.address] = "max"
@@ -714,7 +914,10 @@ local function onRelease()
     M.afterClick()
     -- Hyprland beendet das Ziehen erst nach dem Loslassen: kurz warten, dann auswerten
     local released = press
-    hl.timer(function() finish(released) end, { timeout = 40, type = "oneshot" })
+    hl.timer(function()
+        local ok, err = pcall(finish, released)
+        if not ok then press = nil; logErr("finish", err) end
+    end, { timeout = 40, type = "oneshot" })
 end
 
 -- Klick-Hooks (nicht verbrauchend) für das Ziehen: ohne Modifikator (Titelleisten) und mit den Modifikatoren der
