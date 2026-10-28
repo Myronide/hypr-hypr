@@ -5,10 +5,16 @@ import Quickshell.Io
 
 // Draconyx Modern: zentrales Designsystem. Alle Farben, Maße und Bewegungen kommen von hier.
 Singleton {
+    id: root
+    // Erst nach dem ersten Lesen von colors.json gelten Symbolpfade (sonst "Cannot open" für den Standard-Schlüssel beim Start)
+    property bool palReady: false
     // ---------- Farben ----------
     // Kommen aus ~/.config/draconyx/colors.json (gemeinsam mit Aurora; ändern mit `dx-colors` oder in den Einstellungen).
     FileView {
         id: colorFile
+        onLoaded: root.palReady = true
+        onLoadFailed: root.palReady = true
+        printErrors: false
         path: Quickshell.env("HOME") + "/.config/draconyx/colors.json"
         watchChanges: true
         onFileChanged: reload()
@@ -73,18 +79,21 @@ Singleton {
     property real scrollSpeed: 1.0
     FileView {
         path: Quickshell.env("HOME") + "/.config/draconyx/scroll-speed"
+        printErrors: false
         watchChanges: true
         onFileChanged: reload()
         onLoaded: { const v = parseFloat(text().trim()); if (!isNaN(v) && v > 0.05 && v < 20) scrollSpeed = v; }
     }
     FileView {
         path: Quickshell.env("HOME") + "/.config/draconyx/font"
+        printErrors: false
         watchChanges: true
         onFileChanged: reload()
         onLoaded: { const s = text().trim(); if (s !== "") fontFamily = s; }
     }
     FileView {
         path: Quickshell.env("HOME") + "/.config/draconyx/font-code"
+        printErrors: false
         watchChanges: true
         onFileChanged: reload()
         onLoaded: { const s = text().trim(); if (s !== "") fontCodeFamily = s; }
@@ -123,6 +132,7 @@ Singleton {
     readonly property string logo: "file://" + home + "/.local/share/draconyx-hypr/logo-start.png"
 
     function icon(name, accent) {
+        if (!palReady) return "";
         return "file://" + iconDir + name + (accent ? "-a" : "") + ".svg";
     }
 }

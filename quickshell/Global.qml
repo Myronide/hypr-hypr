@@ -147,8 +147,16 @@ Singleton {
         // Schutz vor dem Zurücksetzen der Einstellungen: nie vor dem ersten erfolgreichen Laden schreiben, und bei einem Ladefehler
         // einer vorhandenen Datei (halb geschrieben, kurz weg) NICHT die Standardwerte darüberschreiben – nur anlegen, wenn sie fehlt.
         property bool everLoaded: false
-        onLoaded: everLoaded = true
-        onAdapterUpdated: if (everLoaded) writeAdapter()
+        property bool skipWrite: false
+        onLoaded: {
+            everLoaded = true;
+            let ok = true;
+            try { const j = JSON.parse(text()); ok = j !== null && typeof j === "object" && !Array.isArray(j); } catch (e) { ok = false; }
+            // Kaputte Datei: einmal sichern, bevor die nächste Änderung sie mit Standardwerten überschreibt
+            if (!ok && text().trim() !== "") Quickshell.execDetached(["sh", "-c", "cp -n \"$1\" \"$1.kaputt\"", "sh", path]);
+            root.normalizeSettings();
+        }
+        onAdapterUpdated: { if (everLoaded && !skipWrite) writeAdapter(); }
         onLoadFailed: error => { if (error === FileViewError.FileNotFound) { everLoaded = true; writeAdapter(); } else retryTimer.restart(); }
 
         JsonAdapter {
@@ -206,6 +214,31 @@ Singleton {
             property string codeRoot: ""            // leer = automatisch: <Laufwerk>/Code Space unter /run/media/<user>/
             property var zoneLayouts: ({})       // { "DP-2": Teilungsbaum } eigene Zonen pro Monitor
         }
+    }
+
+    // Falsche Typen in settings.json (von Hand bearbeitet, halb geschrieben): Listen/Objekte, die keine sind, würden .map/.find/.some
+    // der Oberfläche zum Absturz bringen. Hier nur im Speicher korrigieren (kein Zurückschreiben der Datei, solange der Nutzer nichts ändert).
+    Timer { id: normDone; interval: 2000; onTriggered: settingsFile.skipWrite = false }
+    function normalizeSettings() {
+        const isObj = v => v !== null && typeof v === "object" && !Array.isArray(v);
+        const strs = a => Array.isArray(a) && a.every(x => typeof x === "string");
+        const lists = ["pinned", "startPins", "recentApps", "desktopMonitors", "weMouse", "codeAppsOn", "codeRoots"];
+        const objs = ["monitors", "wallpapers", "weWallpapers", "iconPos", "gitSessions", "barItems", "barLayouts", "zoneLayouts"];
+        const fix = {};
+        for (const k of lists) {
+            const v = settings[k];
+            if (!strs(v)) fix[k] = Array.isArray(v) ? v.filter(x => typeof x === "string") : [];
+        }
+        for (const k of objs) if (!isObj(settings[k])) fix[k] = {};
+        if (!Array.isArray(settings.appFolders) || !settings.appFolders.every(f => isObj(f) && Array.isArray(f.apps)))
+            fix.appFolders = Array.isArray(settings.appFolders) ? settings.appFolders.filter(f => isObj(f) && Array.isArray(f.apps)) : [];
+        if (!Array.isArray(settings.codeCustom) || !settings.codeCustom.every(c => isObj(c) && typeof c.id === "string" && typeof c.cmd === "string"))
+            fix.codeCustom = Array.isArray(settings.codeCustom) ? settings.codeCustom.filter(c => isObj(c) && typeof c.id === "string" && typeof c.cmd === "string") : [];
+        if (Object.keys(fix).length === 0) return;
+        console.log("EV settings.json: falsche Typen in " + Object.keys(fix).join(", ") + " – im Speicher korrigiert");
+        settingsFile.skipWrite = true;
+        normDone.restart();
+        for (const k in fix) settings[k] = fix[k];
     }
 
     // Einstellung pro Monitor mit Rückfall auf global
@@ -418,7 +451,13 @@ Singleton {
 
     function layoutFor(mon) {
         const t = (settings.zoneLayouts || {})[mon];
-        return t && t.k ? t : zonePresets["2 Spalten"];
+        return validTree(t, 0) ? t : zonePresets["2 Spalten"];
+    }
+    // Kaputter Teilungsbaum (von Hand bearbeitet): würde computeLayout/Raster-Editor mit TypeError abbrechen lassen
+    function validTree(t, depth) {
+        if (!t || typeof t !== "object" || depth > 8) return false;
+        if (t.k === "leaf") return true;
+        return t.k === "split" && (t.dir === "v" || t.dir === "h") && typeof t.r === "number" && validTree(t.a, depth + 1) && validTree(t.b, depth + 1);
     }
     function cloneTree(t) { return JSON.parse(JSON.stringify(t)); }
     function nodeAt(t, path) {
@@ -556,7 +595,7 @@ Singleton {
         "dolphin": "org.kde.dolphin"
     })
     function normId(id) {
-        const k = (id || "").toLowerCase().replace(/\.desktop$/, "");
+        const k = (typeof id === "string" ? id : "").toLowerCase().replace(/\.desktop$/, "");
         return aliases[k] || k;
     }
     function isPinned(id) {
@@ -763,9 +802,17 @@ Singleton {
     Timer { id: x11Restart; interval: 1500; onTriggered: x11Watch.running = true }
     Process {
         id: x11Watch
+        property double startedAt: Date.now()
+        property int fast: 0                 // Neustarts in Folge, bei denen der Wächter sofort wieder endete (kein XWayland, Skript fehlt)
         running: true
         command: [Theme.home + "/.local/bin/dx-x11-iconify"]
-        onExited: (code, status) => { console.log("EV x11-Wächter beendet (" + code + "), starte neu"); x11Restart.restart(); }   // nie ohne Wächter bleiben
+        onRunningChanged: if (running) startedAt = Date.now()
+        onExited: (code, status) => {
+            fast = Date.now() - startedAt < 5000 ? fast + 1 : 0;
+            x11Restart.interval = Math.min(60000, 1500 * Math.pow(2, Math.min(fast, 6)));   // Rückzug statt Dauerschleife alle 1,5 s
+            if (fast <= 1) console.log("EV x11-Wächter beendet (" + code + "), starte neu");
+            x11Restart.restart();             // nie ohne Wächter bleiben
+        }
         stdout: SplitParser {
             onRead: line => {
                 const m = line.match(/^iconify (0x[0-9a-f]+)/);
@@ -984,6 +1031,7 @@ Singleton {
     FileView {
         id: modeFile
         path: Theme.home + "/.config/draconyx/window-mode"
+        printErrors: false
         watchChanges: true
         onFileChanged: reload()
         onLoaded: { const v = text().trim(); root.windowMode = v === "tiling" ? "tiling" : "floating"; }
@@ -1025,9 +1073,12 @@ Singleton {
     FileView {
         id: updRead
         path: Theme.home + "/.local/state/draconyx/update.json"
+        printErrors: false
         onLoaded: {
-            try { root.updateInfo = JSON.parse(text()); } catch (e) { return; }
-            const u = root.updateInfo;
+            let u = null;
+            try { u = JSON.parse(text()); } catch (e) { return; }
+            if (!u || typeof u !== "object" || Array.isArray(u)) return;     // kaputte Datei (null, Zahl, Liste): ignorieren
+            root.updateInfo = u;
             // Höchstens einmal pro Tag melden; "Nicht mehr erinnern" gilt für diese Version, der Schalter in Aurora für alles
             const now = Date.now() / 1000;
             const due = root.updateManual || (now - root.updateLastNotified > 86400);
@@ -1036,7 +1087,7 @@ Singleton {
                 updNotify.version = u.latest;
                 updNotify.command = ["notify-send", "-a", "Draconyx", "-i", "system-software-update", "-w",
                     "-A", "update=Aktualisieren", "-A", "later=Später", "-A", "mute=Nicht mehr erinnern",
-                    "Draconyx-Update " + u.latest + " verfügbar", "Installiert: " + u.installed + (u.notes && u.notes.length ? "\n• " + u.notes.slice(0, 4).join("\n• ") : "")];
+                    "Draconyx-Update " + u.latest + " verfügbar", "Installiert: " + u.installed + (Array.isArray(u.notes) && u.notes.length ? "\n• " + u.notes.slice(0, 4).join("\n• ") : "")];
                 updNotify.running = false; updNotify.running = true;
             }
             root.updateManual = false;

@@ -382,7 +382,7 @@ PanelWindow {
                         visible: Global.claudeAvailable
                         minWidth: 36; implicitHeight: 38
                         color: hovered ? Theme.accentHover : Theme.tile
-                        Image { source: "file://" + Theme.iconDir + "claude-logo.svg"; sourceSize: Qt.size(40, 40); width: 20; height: 20; smooth: true }
+                        Image { source: Theme.icon("claude-logo", false); sourceSize: Qt.size(40, 40); width: 20; height: 20; smooth: true }
                         onClicked: Global.openProject(row.modelData.path, "claude")
                     }
                     BarButton {
