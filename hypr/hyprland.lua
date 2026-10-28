@@ -241,7 +241,7 @@ B("screenshot_snip", "Screenshot: Bereich wählen (Druck)", "Print", hl.dsp.exec
 B("screenshot_screen", "Screenshot: ganzer Bildschirm (kopiert + speichert)", "SHIFT + Print", hl.dsp.exec_cmd("qs -c draconyx ipc call shell snip screen"))
 
 -- Fenster
-B("window_kill", "Fenster sofort beenden (kill)", "ALT + F4",         hl.dsp.window.kill())    -- sofort beenden (SIGKILL), ohne Nachfrage
+B("window_kill", "Fenster sofort beenden (kill)", "ALT + F4",         hl.dsp.window.kill(), { dont_inhibit = true })    -- sofort beenden (SIGKILL), ohne Nachfrage
 B("window_close", "Fenster schließen", mainMod .. " + Q",  hl.dsp.window.close())   -- normal schließen
 -- Minimieren (Hyprland hat es nicht nativ): Fenster auf den normalen, nie angezeigten Desktop "minimized" legen. Die Zustandsführung
 -- (Geometrie, maximiert, Reihenfolge) liegt in dx_snap (DXSnap.minimize/unminimize/restoreLast), damit Shell und Tastenkürzel
@@ -296,14 +296,19 @@ local function freeMouse()
     for _, m in ipairs(hl.get_monitors()) do
         if cur == nil or m.name ~= cur.name then target = m; break end
     end
-    if target == nil then return end
+    if target == nil then   -- nur ein Bildschirm: Fokus an das zuletzt benutzte andere Fenster geben (lässt den Zeiger-Fang des Spiels los)
+        hl.dispatch(hl.dsp.focus({ last = true }))
+        return
+    end
     hl.dispatch(hl.dsp.focus({ monitor = target.name }))
     local sc = (type(target.scale) == "number" and target.scale > 0) and target.scale or 1   -- width/height sind physisch, Koordinaten logisch
     hl.dispatch(hl.dsp.cursor.move({ x = target.x + math.floor(target.width / sc / 2),
                                      y = target.y + math.floor(target.height / sc / 2) }))
 end
-B("free_mouse", "Maus aus Spielen/Fenstern befreien", mainMod .. " + Escape", freeMouse, { locked = true })
+B("free_mouse", "Maus aus Spielen/Fenstern befreien", mainMod .. " + Escape", freeMouse, { locked = true, dont_inhibit = true })
 
+-- dont_inhibit: Spiele (auch X11-Tastatur-Fang unter XWayland/Proton) dürfen diese Kombinationen nicht schlucken; sonst ginge Alt+Tab
+-- nur, wenn die Fensterregel no_shortcuts_inhibit greift.
 -- Alt+Tab wie Windows: Umschalter der Draconyx Shell mit allen Fenstern (zuletzt benutzt zuerst).
 -- Alt halten + Tab = weiter, Shift+Tab = zurück, Alt loslassen = wechseln.
 -- Ersatz, falls die Shell nicht läuft: direkt zum letzten Fenster.
@@ -311,11 +316,11 @@ local function switcher(action)
     return hl.dsp.exec_cmd("sh -c 'qs -c draconyx ipc call switcher " .. action
         .. " 2>/dev/null || { [ " .. action .. " = next ] && hyprctl dispatch \"hl.dsp.focus({ last = true })\"; }'")
 end
-B("switcher_next", "Alt+Tab: nächstes Fenster", "ALT + Tab",            switcher("next"))
-B("switcher_prev", "Alt+Tab: voriges Fenster", "ALT + SHIFT + Tab",    switcher("prev"))
-B("switcher_commit", "Alt+Tab bestätigen (Alt loslassen)", "ALT + Alt_L",          switcher("commit"), { release = true, transparent = true })
-B("switcher_commit_shift", "Alt+Tab bestätigen (mit Shift)", "ALT + SHIFT + Alt_L",  switcher("commit"), { release = true, transparent = true })
-B("switcher_cancel", "Alt+Tab abbrechen", "ALT + Escape",         switcher("cancel"))
+B("switcher_next", "Alt+Tab: nächstes Fenster", "ALT + Tab",            switcher("next"), { dont_inhibit = true })
+B("switcher_prev", "Alt+Tab: voriges Fenster", "ALT + SHIFT + Tab",    switcher("prev"), { dont_inhibit = true })
+B("switcher_commit", "Alt+Tab bestätigen (Alt loslassen)", "ALT + Alt_L",          switcher("commit"), { release = true, transparent = true, dont_inhibit = true })
+B("switcher_commit_shift", "Alt+Tab bestätigen (mit Shift)", "ALT + SHIFT + Alt_L",  switcher("commit"), { release = true, transparent = true, dont_inhibit = true })
+B("switcher_cancel", "Alt+Tab abbrechen", "ALT + Escape",         switcher("cancel"), { dont_inhibit = true })
 
 -- Wie Windows: Win + Shift + Pfeil = Fenster auf anderen Bildschirm
 B("window_to_left_monitor", "Fenster auf linken Monitor", mainMod .. " + SHIFT + Left",  hl.dsp.window.move({ monitor = "l", follow = true }))

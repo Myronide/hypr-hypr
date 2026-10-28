@@ -730,11 +730,18 @@ Singleton {
         raise(a);
     }
     // Fenster über alle anderen auf dem Bildschirm legen (sonst bleibt ein zurückgeholtes Fenster verdeckt)
+    // WICHTIG: alter_zorder gibt den Fokus an das Vollbild-Fenster des Desktops zurück (gemessen: ein schwebendes Fenster auf dem
+    // Desktop eines Vollbild-Spiels bekam bei "focus, dann alter_zorder" den Fokus sofort wieder entzogen – Alt+Tab aus dem Spiel
+    // scheiterte). Darum immer erst nach oben legen, dann fokussieren – auch beim verzögerten zweiten Anwenden.
     function raise(a) {
         raiseTimer.addr = a; raiseTimer.restart();
         hypr("hl.dsp.window.alter_zorder({ mode = \"top\", window = \"address:" + a + "\" })");
+        hypr("hl.dsp.focus({ window = \"address:" + a + "\" })");
     }
-    Timer { id: raiseTimer; property string addr: ""; interval: 220; onTriggered: root.hypr("hl.dsp.window.alter_zorder({ mode = \"top\", window = \"address:" + addr + "\" })") }
+    Timer { id: raiseTimer; property string addr: ""; interval: 220; onTriggered: {
+        root.hypr("hl.dsp.window.alter_zorder({ mode = \"top\", window = \"address:" + addr + "\" })");
+        root.hypr("hl.dsp.focus({ window = \"address:" + addr + "\" })");
+    } }
     function minimizeH(h) { const a = addressOf(h); if (a !== "") minimizeAddr(a); }
     function minimizeToplevel(wl) { minimizeH(hyprFor(wl)); }
     function restoreH(h) { const a = addressOf(h); if (a !== "") restoreAddr(a); }

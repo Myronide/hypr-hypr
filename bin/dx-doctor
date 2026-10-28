@@ -35,6 +35,18 @@ sec "Hyprland: Konfigurationsfehler / Plugins / Monitore"
 hyprctl configerrors 2>&1 | head -12
 hyprctl plugin list 2>&1 | grep -E '^Plugin' | head
 hyprctl monitors -j 2>/dev/null | jq -r '.[]|"\(.name) \(.width)x\(.height)@\(.refreshRate) pos=\(.x),\(.y) scale=\(.scale) reserved=\(.reserved)"' 2>/dev/null
+sec "Spiele: Regeln, Fokus, Vollbild (Alt+Tab aus dem Spiel)"
+echo "Regeln/Binds in hyprland.lua:"; grep -nE 'games-|no_shortcuts_inhibit|dont_inhibit|workspace_rule|switcher_|free_mouse|window_kill' "$H/hyprland.lua" 2>/dev/null | cut -c1-170 | head -20
+echo "Aktives Fenster (im Spiel: 'sleep 5; dx-doctor' und das Spiel anklicken, oder: hyprctl activewindow -j):"
+hyprctl activewindow -j 2>/dev/null | jq -c '{class,title,address,xwayland,fullscreen,fullscreenClient,floating,workspace:.workspace.name,monitor,pinned,inhibitingIdle,allowedOverFullscreen,focusHistoryID}' 2>/dev/null
+echo "Fenster auf Vollbild-/Spiel-Desktops und alle Vollbild-Fenster:"
+hyprctl clients -j 2>/dev/null | jq -r '.[]|select(.fullscreen!=0 or .workspace.name=="Spiel" or (.class|test("^(steam_app_|gamescope|Rocket)")))|"\(.class) fs=\(.fullscreen)/\(.fullscreenClient) float=\(.floating) ws=\(.workspace.name) mon=\(.monitor) x11=\(.xwayland) focus=\(.focusHistoryID) idle=\(.inhibitingIdle) \(.title[0:40])"' 2>/dev/null
+echo "Desktops mit Monitor und Vollbild-Zustand:"
+hyprctl workspaces -j 2>/dev/null | jq -r '.[]|"\(.id) \(.name) monitor=\(.monitor) fenster=\(.windows) vollbild=\(.hasfullscreen)"' 2>/dev/null
+echo "Aktiver Monitor/Desktop je Monitor:"; hyprctl monitors -j 2>/dev/null | jq -r '.[]|"\(.name) focused=\(.focused) ws=\(.activeWorkspace.name) special=\(.specialWorkspace.name)"' 2>/dev/null
+echo "Binds Alt+Tab/Maus befreien (modmask 8=Alt, 12=Strg+Alt):"; hyprctl binds -j 2>/dev/null | jq -r '.[]|select(.key=="Tab" or .key=="Alt_L" or .key=="Escape" or .key=="F4")|"\(.key) mask=\(.modmask) release=\(.release) transparent=\(.non_consuming)"' 2>/dev/null
+echo "Vollbild-/Fokus-Optionen:"; for o in misc:on_focus_under_fullscreen misc:focus_on_activate misc:new_window_takes_over_fullscreen input:follow_mouse cursor:no_warps; do hyprctl getoption "$o" 2>/dev/null | head -1 | sed "s|^|$o  |"; done
+echo "Shell: Taskleiste bei Vollbild = $(jq -r .fullscreenBar "$HOME/.local/state/draconyx/settings.json" 2>/dev/null)"
 sec "Was lädt deine hyprland.lua?"
 grep -nE 'require|dofile|source|desktop\.lua|aurora|draconyx|exec_cmd\(.*(waybar|qs|desktop-ui|start-)' "$H/hyprland.lua" 2>/dev/null | head -30
 sec "Dateien"
