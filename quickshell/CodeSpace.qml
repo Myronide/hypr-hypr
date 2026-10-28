@@ -251,7 +251,7 @@ PanelWindow {
                 clip: true
                 Keys.onEscapePressed: { cs.creating = false; search.forceActiveFocus(); }
                 Keys.onReturnPressed: createBtn.create()
-                Text { visible: newName.text === ""; text: "Name des neuen Workspaces …"; color: Theme.textDim; font: newName.font }
+                Text { visible: newName.text === ""; text: "Name des neuen Workspaces (frei wählbar) …"; color: Theme.textDim; font: newName.font }
             }
             BarButton {
                 id: createBtn
@@ -401,7 +401,7 @@ PanelWindow {
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
                 text: Global.codeRootEffective === "" ? "Code-Laufwerk nicht eingehängt"
-                    : (cs.inside ? "Keine Ordner in diesem Workspace" : "Noch nichts da – lege in Code Space einen Workspace-Ordner an")
+                    : (cs.inside ? "Keine Ordner in diesem Workspace" : "Noch nichts da – lege mit „+ Workspace“ einen Ordner an")
                 color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsM
             }
         }
@@ -440,6 +440,8 @@ PanelWindow {
                             l.push({ t: "Git-Client öffnen", a: "git", i: "branch" });
                             l.push({ t: "Alles öffnen", a: "all", i: "apps" });
                         }
+                        l.push({ t: isWs ? "Als Projekt behandeln" : "Als Workspace behandeln", a: isWs ? "markProject" : "markWorkspace", i: "folder" });
+                        l.push({ t: "Automatisch erkennen", a: "markAuto", i: "restart" });
                         return l;
                     }
                     MenuRow {
@@ -454,6 +456,9 @@ PanelWindow {
                             case "name": Quickshell.execDetached(["wl-copy", it.name]); break;
                             case "folder": Global.codeOpen = false; Quickshell.execDetached(["dolphin", it.path]); break;
                             case "enter": cs.activate(it); break;
+                            case "markProject": Global.codeMark(it.path, "project"); break;
+                            case "markWorkspace": Global.codeMark(it.path, "workspace"); break;
+                            case "markAuto": Global.codeMark(it.path, "auto"); break;
                             case "git": Global.openGit(it.path); break;
                             default: Global.openProject(it.path, modelData.a);
                             }

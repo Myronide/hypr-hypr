@@ -1129,7 +1129,7 @@ class Settings(Gtk.Application):
   self.section(b,'Uhr')
   self.sw(b,'Datum unter der Uhr','showDate',True);self.sw(b,'Sekunden anzeigen','showSeconds',False)
  def codespace(self):
-  b=self.page('Coding Space','Hier liegen deine Workspaces. Workspace = Ordner mit „Workspace“ im Namen; darin liegen die Projekte. „+ Workspace“ im Coding Space legt neue Ordner genau hier an.')
+  b=self.page('Coding Space','Hier liegen deine Workspaces. Ein Workspace ist ein Ordner, in dem Projekte liegen (der Name ist egal; Rechtsklick im Coding Space: „Als Workspace/Projekt behandeln“); ein Projekt ist ein Ordner mit .git, pom.xml, package.json usw. „+ Workspace“ im Coding Space legt neue Ordner genau hier an.')
   chooser=PathButton('Ordner für den Coding Space')
   current=shell_get('codeRoot','') or ''
   if current and Path(current).is_dir():chooser.set_filename(current)
@@ -1159,7 +1159,7 @@ class Settings(Gtk.Application):
     d.destroy();refill()
    add.connect('clicked',pick);more.pack_start(add,False,False,0);more.show_all()
   refill()
-  self.row(b,'Weitere Ordner',more,'Zusätzliche Ordner, die im Coding Space mitlaufen. Ein Git-Projekt erscheint als Projekt, ein Ordner mit „Workspace“ im Namen als Workspace, jeder andere zeigt seine Unterordner.')
+  self.row(b,'Weitere Ordner',more,'Zusätzliche Ordner, die im Coding Space mitlaufen. Jeder hier hinzugefügte Ordner erscheint als Workspace (der Name ist egal); nur ein Ordner mit .git oder anderem Projektmerkmal bleibt ein Projekt.')
   # ---- Programme in der Projektliste (erkannte IDEs/Editoren + eigene) ----
   apps_box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
   def detected():

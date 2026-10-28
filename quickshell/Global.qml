@@ -304,6 +304,11 @@ Singleton {
             codeList.running = true;
         }
     }
+    // Handarbeit: einen Ordner als Workspace oder Projekt festhalten ("auto" = wieder automatisch)
+    function codeMark(path, kind) {
+        Quickshell.execDetached([Theme.home + "/.local/bin/dx-code-list", "--mark", path, kind]);
+        codeListTimer.interval = 500; codeListTimer.restart();
+    }
     function codeEnter(path) { codeStack = codeStack.concat([path]); projects = []; codeListTimer.restart(); }
     function codeBack() { codeStack = codeStack.slice(0, -1); projects = []; codeListTimer.restart(); }
     function codeReset() { codeStack = []; }
@@ -335,11 +340,10 @@ Singleton {
         cloneStatus = "läuft: " + u.replace(/\.git$/, "").replace(/.*[\/:]/, "");
         cloneProc.running = true;
     }
-    // Neuer Workspace-Ordner auf dem Code-Laufwerk (neben den anderen "… Workspace"-Ordnern); "Workspace" wird ergänzt
+    // Neuer Workspace-Ordner auf dem Code-Laufwerk; der Name bleibt, wie eingegeben (ein Ordner mit Projekten wird ohnehin als Workspace erkannt)
     function codeNewWorkspace(name) {
         let n = name.trim().replace(/[\/\\]/g, "");
         if (n === "" || codeRootEffective === "") return;
-        if (!/workspace/i.test(n)) n += " Workspace";
         // Eigener Code-Space-Ordner (Aurora-Einstellungen): Workspaces entstehen darin; sonst neben dem automatisch gefundenen "Code Space"
         const base = codeRoot !== "" ? codeRoot : codeRootEffective.replace(/\/[^\/]+$/, "");
         Quickshell.execDetached(["mkdir", "-p", base + "/" + n]);
