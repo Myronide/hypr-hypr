@@ -17,7 +17,14 @@ class ControlCenter:
   if self.control_panel:self.close_controls();return
   self.close_popup();self.capture_return_focus()
   w=Gtk.Window(type=Gtk.WindowType.TOPLEVEL);self.prepare(w,'aurora-control-center',Layer.Layer.OVERLAY);self.control_panel=w
-  hs=json.loads(run(['hyprctl','-j','monitors']));target=next((m for m in hs if m['name']==self.prefs['dock_monitor']),hs[0]);self.control_monitor=target;self.control_side=side;(Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-controls-open').touch();Layer.set_monitor(w,self.monitor(target));Layer.set_exclusive_zone(w,-1)
+  try:hs=[m for m in json.loads(run(['hyprctl','-j','monitors']) or '[]') if isinstance(m,dict) and 'name' in m]
+  except ValueError:hs=[]
+  if not hs:   # kein Hyprland / keine Bildschirme: Fenster nicht halb aufbauen
+   self.control_panel=None;w.destroy();print('Kontrollzentrum: keine Bildschirme gefunden',flush=True);return
+  target=next((m for m in hs if m['name']==self.prefs.get('dock_monitor')),hs[0]);self.control_monitor=target;self.control_side=side
+  try:(Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-controls-open').touch()
+  except (KeyError,OSError):pass
+  Layer.set_monitor(w,self.monitor(target));Layer.set_exclusive_zone(w,-1)
   edge=Layer.Edge.LEFT if side=='left' else Layer.Edge.RIGHT
   Layer.set_anchor(w,Layer.Edge.BOTTOM,True);Layer.set_anchor(w,edge,True);Layer.set_margin(w,Layer.Edge.BOTTOM,90);Layer.set_margin(w,edge,24);Layer.set_keyboard_mode(w,Layer.KeyboardMode.ON_DEMAND)
   w.connect('key-press-event',lambda _,e:(self.close_controls(),True)[1] if e.keyval==Gdk.KEY_Escape else False)
@@ -33,7 +40,7 @@ class ControlCenter:
   self.control_updating=False;self.control_sliders={}
   for key,title,icon,maximum in [('volume','Lautstärke','audio-volume-high-symbolic',100),('mic','Mikrofon','audio-input-microphone-symbolic',100),('brightness','Helligkeit','display-brightness-symbolic',100)]:
    box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=3);top=Gtk.Box(spacing=8);top.pack_start(symbol(icon,16),False,False,0);title_label=text(title);title_label.set_xalign(0);top.pack_start(title_label,True,True,0);value=text('—','quick-value');top.pack_end(value,False,False,0);box.pack_start(top,False,False,0);scale=Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL,0,maximum,1);scale.set_draw_value(False);scale.connect('value-changed',self.control_slider,key);box.pack_start(scale,False,False,0);panel.pack_start(box,False,False,0);self.control_sliders[key]=(scale,value)
-  self.control_sliders['brightness'][0].set_sensitive(False);self.ddc_buses=[];self.backlights=list(Path('/sys/class/backlight').iterdir());threading.Thread(target=self.detect_brightness,daemon=True).start()
+  self.control_sliders['brightness'][0].set_sensitive(False);self.ddc_buses=[];self.backlights=list(Path('/sys/class/backlight').iterdir()) if Path('/sys/class/backlight').is_dir() else [];threading.Thread(target=self.detect_brightness,daemon=True).start()
   media=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=9);media.get_style_context().add_class('media-card');self.media_title=text('Keine Medienwiedergabe');self.media_title.set_max_width_chars(38);self.media_title.set_ellipsize(3);self.media_title.set_xalign(0);media_head=Gtk.Box(spacing=10);media_head.pack_start(symbol('audio-x-generic-symbolic',24),False,False,0);media_head.pack_start(self.media_title,True,True,0);media.pack_start(media_head,False,False,0);buttons=Gtk.Box(spacing=14)
   for title,action in [('media-skip-backward-symbolic','previous'),('media-playback-start-symbolic','play-pause'),('media-skip-forward-symbolic','next')]:
    b=Gtk.Button();b.add(symbol(title,18));b.connect('clicked',lambda _,a=action:self.control_command(['playerctl',a]));buttons.pack_start(b,True,True,0)
@@ -46,7 +53,8 @@ class ControlCenter:
   w.show_all();self.refresh_controls();GLib.timeout_add(2000,self.refresh_controls)
  def close_controls(self):
   if self.control_panel:
-   (Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-controls-open').unlink(missing_ok=True)
+   try:(Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-controls-open').unlink(missing_ok=True)
+   except (KeyError,OSError):pass
    w=self.control_panel;self.control_panel=None;w.destroy();self.restore_keyboard_focus()
  def control_command(self,args):
   def worker():run(args,25);GLib.idle_add(self.refresh_controls)
@@ -57,7 +65,7 @@ class ControlCenter:
   for key,device in [('volume','@DEFAULT_AUDIO_SINK@'),('mic','@DEFAULT_AUDIO_SOURCE@')]:
    state=run(['wpctl','get-volume',device]);m=re.search(r'Volume:\s*([0-9.]+)',state)
    if m:
-    value=round(float(m.group(1))*100);self.control_sliders[key][0].set_value(value);self.control_sliders[key][1].set_text(('Stumm' if 'MUTED' in state else str(value)+'%'))
+    value=max(0,min(150,round(float(m.group(1))*100)));self.control_sliders[key][0].set_value(value);self.control_sliders[key][1].set_text(('Stumm' if 'MUTED' in state else str(value)+'%'))
   active={'wifi':run(['nmcli','radio','wifi'])=='enabled','bluetooth':'Powered: yes' in run(['bluetoothctl','show']),'ethernet':any(':ethernet:connected' in line for line in run(['nmcli','-t','-f','DEVICE,TYPE,STATE','device']).splitlines()),'mic':'MUTED' not in run(['wpctl','get-volume','@DEFAULT_AUDIO_SOURCE@']),'layout':self.layout_mode=='tiling'}
   for key,enabled in active.items():
    style=self.control_tiles[key].get_style_context();style.add_class('enabled') if enabled else style.remove_class('enabled')

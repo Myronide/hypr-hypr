@@ -1,9 +1,14 @@
 #!/usr/bin/python3
 import json,subprocess,sys,os
 from pathlib import Path
-base=Path.home()/'.config/hypr/aurora';state=Path(os.environ['XDG_RUNTIME_DIR'])/'aurora-layout-state.json'
+base=Path.home()/'.config/hypr/aurora';state=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-layout-state.json'
 if '--toggle' in sys.argv:
- subprocess.run([str(base/'desktop-ui'),'mode'],check=True)
+ try:rc=subprocess.run([str(base/'desktop-ui'),'mode'],timeout=15).returncode
+ except (OSError,subprocess.SubprocessError) as e:print('mode:',e,file=sys.stderr);sys.exit(1)
+ sys.exit(rc)
 else:
- data=json.loads(state.read_text()) if state.exists() else {};desktop=data.get('mode','desktop')=='desktop'
+ try:data=json.loads(state.read_text())
+ except (OSError,ValueError):data={}
+ if not isinstance(data,dict):data={}
+ desktop=data.get('mode','desktop')=='desktop'
  print(json.dumps({'text':'󰖯  DESKTOP' if desktop else '󰕰  AURORA','class':'floating' if desktop else 'tiling','tooltip':'Aurora Tiling ↔ Desktop · Super + Shift + F\nSuper + J: Layout wechseln · Super + H: minimieren\nNative Maximieren- und Minimieren-Buttons funktionieren in beiden Modi.'}))
