@@ -5,7 +5,12 @@ gi.require_version('Gtk','3.0');gi.require_version('GdkPixbuf','2.0')
 from gi.repository import Gtk,Gdk,GdkPixbuf,GLib,Gio,Pango,GObject
 UI_ALIVE=(Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'aurora-ui.sock').exists()   # altes Aurora-Dock/Alt+Tab-Programm läuft
 import monitors as MON
-from preferences import current_keymap,BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine
+from preferences import current_keymap,BASE,SHELL,modifier_mode,set_modifier_mode,load_preferences,save_preferences,send_ui,apply_background,stop_engine,atomic_write,run_quiet,shell_settings_read,shell_settings_update,normalize_combo,find_conflict,read_binds_conf,write_binds_conf,reset_keys,RESET_GROUPS,export_settings,import_settings,MODIFIERS
+APP=None   # die laufende Settings-Instanz (für Fehlermeldungen aus Hilfsfunktionen)
+def hypr_json(*args,default=None):
+ """hyprctl -j … als Python-Objekt; ohne Hyprland/hyprctl, bei Zeitüberschreitung oder kaputter Ausgabe: default."""
+ try:return json.loads(subprocess.run(['hyprctl','-j',*args],capture_output=True,text=True,timeout=8).stdout)
+ except (OSError,ValueError,subprocess.SubprocessError):return default
 
 class Choice(Gtk.Box):
  """Auswahl als Knopfreihe (für wenige Optionen; bei vielen: Select). GTK-Auswahllisten werden unter XWayland/Hyprland mittig im Fenster und fehlerhaft
@@ -92,12 +97,14 @@ class PathButton(Gtk.Button):
 
 SHELL_SETTINGS=Path.home()/'.local/state/draconyx/settings.json'
 def shell_get(key,default=None):
- try:return json.loads(SHELL_SETTINGS.read_text()).get(key,default)
- except (OSError,ValueError):return default
+ return shell_settings_read(SHELL_SETTINGS)[0].get(key,default)
 def shell_set(key,value):
- try:data=json.loads(SHELL_SETTINGS.read_text())
- except (OSError,ValueError):data={}
- data[key]=value;tmp=SHELL_SETTINGS.with_suffix('.tmp');tmp.write_text(json.dumps(data,indent=4));tmp.replace(SHELL_SETTINGS)
+ """Nur diesen einen Schlüssel setzen (frisch lesen, atomar ersetzen); ein Fehler wird gemeldet statt die Datei der Shell zu zerstören."""
+ try:shell_settings_update({key:value},SHELL_SETTINGS);return True
+ except (OSError,ValueError) as e:
+  print('settings.json:',e,file=sys.stderr)
+  if APP:APP.message('Shell-Einstellung nicht gespeichert: '+str(e))
+  return False
 class Settings(Gtk.Application):
  def __init__(self):super().__init__(application_id='local.aurora.Settings',flags=Gio.ApplicationFlags.FLAGS_NONE);self.window=None
  def do_activate(self):
@@ -114,12 +121,22 @@ class Settings(Gtk.Application):
   icons=Gtk.IconTheme.get_default()
   for t in ('Fluent-dark','Papirus-Dark','Tela-dark','Papirus','Adwaita'):
    if any((Path(b)/t/'index.theme').exists() for b in ('/usr/share/icons',str(Path.home()/'.icons'),str(Path.home()/'.local/share/icons'))):st.set_property('gtk-icon-theme-name',t);break
-  if any('Inter' in l for l in subprocess.run(['fc-list',':family=Inter'],capture_output=True,text=True).stdout.splitlines()[:1]):st.set_property('gtk-font-name','Inter 10')
-  self.p=LivePrefs(load_preferences());self.p.setdefault('shortcuts',{});self.monitor_names=[m['name'] for m in json.loads(subprocess.check_output(['hyprctl','-j','monitors']))]
-  self.window=Gtk.ApplicationWindow(application=self);self.window.set_default_size(1050,780);self.window.set_title('Aurora Einstellungen');self.window.set_icon_name('preferences-system')
+  global APP;APP=self
+  try:
+   if any('Inter' in l for l in subprocess.run(['fc-list',':family=Inter'],capture_output=True,text=True,timeout=10).stdout.splitlines()[:1]):st.set_property('gtk-font-name','Inter 10')
+  except (OSError,subprocess.SubprocessError):pass
+  self.p=LivePrefs(load_preferences());self.p.setdefault('shortcuts',{});self.monitor_names=[m['name'] for m in (hypr_json('monitors',default=[]) or []) if isinstance(m,dict) and 'name' in m]
+  self.window=Gtk.ApplicationWindow(application=self)
+  # Kleine Bildschirme: Fenster nie größer als der Bildschirm
+  try:
+   geo=Gdk.Display.get_default().get_primary_monitor() or Gdk.Display.get_default().get_monitor(0);g=geo.get_geometry();dw,dh=min(1050,g.width-40),min(780,g.height-80)
+  except Exception:dw,dh=1050,780
+  self.window.set_default_size(max(640,dw),max(480,dh));self.window.set_title('Aurora Einstellungen');self.window.set_icon_name('preferences-system')
   head=Gtk.HeaderBar(title='Einstellungen',subtitle='Aurora',show_close_button=True);self.window.set_titlebar(head)
   self.status=Gtk.Label(xalign=0);self.status.get_style_context().add_class('status-bar');root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.window.add(root);body=Gtk.Box();root.pack_start(body,True,True,0)
-  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE,transition_duration=150);self.side=Gtk.ListBox();self.side.set_selection_mode(Gtk.SelectionMode.SINGLE);self.side.get_style_context().add_class('sidebar');sc_side=Gtk.ScrolledWindow();sc_side.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);sc_side.add(self.side);sc_side.set_size_request(250,-1);body.pack_start(sc_side,False,False,0);body.pack_start(self.stack,True,True,0);root.pack_end(self.status,False,False,10)
+  self.stack=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE,transition_duration=150);self.side=Gtk.ListBox();self.side.set_selection_mode(Gtk.SelectionMode.SINGLE);self.side.get_style_context().add_class('sidebar');sc_side=Gtk.ScrolledWindow();sc_side.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);sc_side.add(self.side);sc_side.set_size_request(250,-1);self.search=Gtk.SearchEntry();self.search.set_placeholder_text('Einstellungen durchsuchen …  (Strg+F)');self.search.set_margin_start(10);self.search.set_margin_end(10);self.search.set_margin_top(10);self.search.set_margin_bottom(6)
+  sidebox=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);sidebox.pack_start(self.search,False,False,0);sidebox.pack_start(sc_side,True,True,0);body.pack_start(sidebox,False,False,0);body.pack_start(self.stack,True,True,0)
+  self.page_index={};self.page_boxes={};self._cur_page='';root.pack_end(self.status,False,False,10)
   # Jede Seite einzeln aufbauen: eine kaputte Seite (fehlendes Programm, Lesefehler) darf nicht die ganzen Einstellungen verhindern
   self._safe(self.general,self.windows,self.displays)
   if not SHELL:self._safe(self.dock)   # Dock- und Schreibtisch-Seite gehören zum alten Aurora-Dock; mit der Shell gibt es sie nicht (Taskleiste-Seite stattdessen)
@@ -128,8 +145,10 @@ class Settings(Gtk.Application):
   self._safe(self.wallpaper,self.engine,self.comfort,self.power,self.shortcuts,self.backup,self.system)
   self.build_sidebar()
   self.p.on_change=self.touch   # ab jetzt wird jede Änderung automatisch gespeichert und angewendet
-  css=Gtk.CssProvider();css.load_from_path(str(BASE/'settings.css'))
-  Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+  css=Gtk.CssProvider()
+  try:
+   css.load_from_path(str(BASE/'settings.css'));Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+  except GLib.Error as e:print('settings.css konnte nicht geladen werden:',e,file=sys.stderr)
   self.apply_font()
   self.window.show_all();self.window.present();self.status.set_text('')
   if os.environ.get('AURORA_SETTINGS_PAGE'):self.goto(os.environ['AURORA_SETTINGS_PAGE'])
@@ -138,7 +157,7 @@ class Settings(Gtk.Application):
   scroll=Gtk.ScrolledWindow();scroll.set_policy(Gtk.PolicyType.NEVER,Gtk.PolicyType.AUTOMATIC);box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8,margin=30);box.set_margin_top(26)
   heading=Gtk.Label(label=title,xalign=0);heading.get_style_context().add_class('page-title');box.pack_start(heading,False,False,0)
   l=Gtk.Label(label=description,xalign=0);l.set_line_wrap(True);l.set_max_width_chars(100);l.get_style_context().add_class('page-desc');box.pack_start(l,False,False,0);box.pack_start(Gtk.Box(),False,False,6)
-  scroll.add(box);self.stack.add_titled(scroll,title,title);return box
+  scroll.add(box);self.stack.add_titled(scroll,title,title);self._cur_page=title;self.page_boxes[title]=box;self.page_index[title]=[title.lower()+' '+description.lower()];return box
   # ---- Seitenleiste: Gruppen mit Symbol und Name (statt der schlichten Standardliste) ----
  SIDE=[('ALLGEMEIN',[('Übersicht',['preferences-system-symbolic']),('Fenster',['window-new-symbolic','focus-windows-symbolic']),('Bildschirme',['video-display-symbolic','computer-symbolic']),('Taskleiste',['view-list-symbolic','view-continuous-symbolic'])]),
        ('PROGRAMME',[('Coding Space',['utilities-terminal-symbolic']),('Apps',['view-app-grid-symbolic','application-x-executable-symbolic']),('Autostart',['system-run-symbolic','media-playback-start-symbolic']),('Fensterregeln',['view-restore-symbolic','window-new-symbolic'])]),
@@ -159,6 +178,43 @@ class Settings(Gtk.Application):
     ic=next((n for n in icons if theme.has_icon(n)),'preferences-system-symbolic')
     box=Gtk.Box(spacing=12);box.pack_start(Gtk.Image.new_from_icon_name(ic,Gtk.IconSize.MENU),False,False,0);box.pack_start(Gtk.Label(label=title,xalign=0),True,True,0);r.add(box);self.side.add(r);self.side_rows[title]=r
   self.side.connect('row-selected',lambda lb,r:r is not None and hasattr(r,'page') and self.stack.set_visible_child_name(r.page))
+  self.side.set_filter_func(self._side_filter);self.search.connect('search-changed',lambda e:self.side.invalidate_filter() or self._search_select())
+  self.search.connect('activate',lambda e:self._search_select(True))
+  self.window.connect('key-press-event',lambda w,ev:(self.search.grab_focus(),True)[1] if (ev.state&Gdk.ModifierType.CONTROL_MASK and Gdk.keyval_name(ev.keyval) in ('f','F')) else False)
+  self._add_reset_buttons()
+ def _side_filter(self,row):
+  q=self.search.get_text().strip().lower()
+  if not q:return True
+  page=getattr(row,'page',None)
+  if page is None:return False   # Gruppenüberschriften ausblenden, solange gesucht wird
+  return all(any(w in t for t in self.page_index.get(page,[])) for w in q.split())
+ def _search_select(self,force=False):
+  # ist die aktuelle Seite nicht (mehr) in den Treffern, die erste Trefferseite öffnen (Enter: immer)
+  cur=self.side.get_selected_row()
+  if self.search.get_text().strip() and (force or cur is None or not self._side_filter(cur)):
+   for r in self.side.get_children():
+    if hasattr(r,'page') and self._side_filter(r):self.side.select_row(r);break
+ def _add_reset_buttons(self):
+  builders={'Fenster':self.windows,'Übersicht':self.general,'Bewegung & Licht':getattr(self,'comfort',None)}
+  for title,fn in builders.items():
+   box=self.page_boxes.get(title)
+   if not box or fn is None or title not in RESET_GROUPS:continue
+   btn=Gtk.Button(label='Diese Seite auf Standard zurücksetzen');btn.set_halign(Gtk.Align.START);btn.set_margin_top(14)
+   btn.connect('clicked',lambda w,t=title,f=fn:self.reset_page(t,f));box.pack_end(btn,False,False,0);btn.show()
+ def reset_page(self,title,builder):
+  d=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.QUESTION,buttons=Gtk.ButtonsType.OK_CANCEL,text='Seite „%s“ auf Standard zurücksetzen?'%title)
+  d.format_secondary_text('Die Werte dieser Seite gehen auf die Aurora-Standardwerte zurück. Andere Seiten bleiben unverändert.');r=d.run();d.destroy()
+  if r!=Gtk.ResponseType.OK:return
+  cb=self.p.on_change;self.p.on_change=None
+  try:
+   reset_keys(self.p,RESET_GROUPS[title]);old=self.stack.get_child_by_name(title)
+   if old:self.stack.remove(old);old.destroy()
+   self.page_boxes.pop(title,None);self._safe(builder);self._add_reset_buttons()
+   new=self.stack.get_child_by_name(title)
+   if new:new.show_all()
+   self.stack.set_visible_child_name(title)
+  finally:self.p.on_change=cb
+  self.touch();self.message('Seite „%s“ zurückgesetzt.'%title)
  def goto(self,title):
   r=self.side_rows.get(title)
   if r:self.side.select_row(r)
@@ -167,6 +223,7 @@ class Settings(Gtk.Application):
   l=Gtk.Label(label=title.upper(),xalign=0);l.get_style_context().add_class('section-title');box.pack_start(l,False,False,0);return l
  def row(self,box,title,widget,description=''):
   # Schmale Bedienelemente (Schalter, Knöpfe) rechts neben dem Text; breite (Auswahlreihen, Listen) darunter, damit der Text lesbar bleibt
+  self.page_index.setdefault(self._cur_page,[]).append((title+' '+description).lower())   # für die Suche über alle Einstellungen
   widget.show_all()   # versteckte Widgets melden Größe 0 – erst zeigen, dann messen
   nw=widget.get_preferred_width()[1];nh=widget.get_preferred_height()[1]
   wide=nw>380 or nh>110 or (len(description)>110 and nw>230)
@@ -186,10 +243,14 @@ class Settings(Gtk.Application):
  def combo(self,box,title,key,choices):
   w=Select() if len(choices)>4 else Choice()
   for value,text in choices:w.append(value,text)
-  w.set_active_id(str(self.p.get(key,choices[0][0])));w.connect('changed',lambda w:self.p.__setitem__(key,w.get_active_id()));return self.row(box,title,w)
+  w.set_active_id(str(self.p.get(key,choices[0][0] if choices else '')));w.connect('changed',lambda w:self.p.__setitem__(key,w.get_active_id()));return self.row(box,title,w)
  def button(self,box,title,text,action,description=''):
   b=Gtk.Button(label=text);b.connect('clicked',lambda *_:action());return self.row(box,title,b,description)
  def message(self,text):self.status.set_text(text)
+ def run_tool(self,args,timeout=60):
+  """Hilfsprogramm mit Zeitlimit; fehlendes Programm oder Zeitüberschreitung ergibt ein fehlgeschlagenes Ergebnis statt eines Absturzes."""
+  try:return subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+  except (OSError,subprocess.SubprocessError) as e:return subprocess.CompletedProcess(args,127,'',str(e))
   # ---- Live speichern: jede Änderung wird nach einer kurzen Pause gespeichert und in Hyprland angewendet ----
  def touch(self,*_):
   if getattr(self,'_touch_id',0):GLib.source_remove(self._touch_id)
@@ -224,7 +285,8 @@ class Settings(Gtk.Application):
    except OSError:return True
   msw=Gtk.Switch(active=mem_on());msw.set_valign(Gtk.Align.CENTER)
   def mem_set(w,_):
-   flag.parent.mkdir(parents=True,exist_ok=True);flag.write_text('on\n' if w.get_active() else 'off\n')
+   try:atomic_write(flag,'on\n' if w.get_active() else 'off\n')
+   except OSError as e:self.message('Nicht gespeichert: '+str(e))
   msw.connect('notify::active',mem_set);self.row(b,'Fenstergröße merken',msw,'Beim Schließen merkt sich Draconyx die Größe eines schwebenden Fensters und stellt sie beim nächsten Öffnen derselben App wieder her (Dialoge, Vollbild und Spiele bleiben unberührt).')
   def mem_reset(*_):
    (Path.home()/'.config/draconyx/window-sizes.tsv').unlink(missing_ok=True);self.message('Gemerkte Fenstergrößen gelöscht.')
@@ -240,13 +302,18 @@ class Settings(Gtk.Application):
   self.button(b,'Eigene Titelleisten je App','Anpassen',self.titlebar_dialog,'Zusatzleisten für Anwendungen mit eigenen Fenster-Buttons abschalten.')
  def titlebar_dialog(self):
   d=Gtk.Dialog(title='Titelleisten pro Anwendung',transient_for=self.window,modal=True);d.add_button('Schließen',Gtk.ResponseType.CLOSE);d.set_default_size(650,500);scroll=Gtk.ScrolledWindow();box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6,margin=15);scroll.add(box);d.get_content_area().pack_start(scroll,True,True,0)
-  classes=set((BASE/'csd-apps').read_text().splitlines()) if (BASE/'csd-apps').exists() else set();ws=json.loads(subprocess.check_output(['hyprctl','-j','clients']))
-  for cls in sorted(set(w['class'] for w in ws)):
+  try:classes=set((BASE/'csd-apps').read_text().splitlines())
+  except OSError:classes=set()
+  ws=[w for w in (hypr_json('clients',default=[]) or []) if isinstance(w,dict)]
+  if not ws:box.pack_start(Gtk.Label(label='Keine Fenster gefunden (läuft Hyprland?)',xalign=0),False,False,0)
+  for cls in sorted(set(str(w.get('class','')) for w in ws if w.get('class'))):
    c=Gtk.CheckButton(label=cls+' · eigene Titelleiste');c.set_active(cls in classes)
    def changed(w,cls=cls):
     if w.get_active():classes.add(cls)
     else:classes.discard(cls)
-    (BASE/'csd-apps').write_text('\n'.join(sorted(classes))+'\n');subprocess.run(['hyprctl','reload','config-only'],stdout=subprocess.DEVNULL)
+    try:atomic_write(BASE/'csd-apps','\n'.join(sorted(classes))+'\n')
+    except OSError as e:self.message('Nicht gespeichert: '+str(e));return
+    run_quiet(['hyprctl','reload','config-only'])
    c.connect('toggled',changed);box.pack_start(c,False,False,0)
   d.show_all();d.run();d.destroy()
 
@@ -369,7 +436,10 @@ class Settings(Gtk.Application):
  def mon_apply(self,*_):
   if not any(not m['disabled'] for m in self.mons):self.message('Mindestens ein Bildschirm muss an sein.');return
   MON.normalize(self.mons);prev=copy.deepcopy(self.applied)
+  if getattr(self,'_mon_busy',False):return   # zweiter Klick während der Rückfrage
   if not MON.apply_live(self.mons):self.message('Hyprland hat die Einstellung nicht angenommen – zurückgesetzt.');MON.apply_live(prev);return
+  self._mon_busy=True
+  marker=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/('aurora-mon-confirm-%d'%os.getpid());MON.start_watchdog(prev,marker)
   d=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.QUESTION,text='Bildschirmeinstellungen beibehalten?')
   d.add_button('Zurücksetzen',Gtk.ResponseType.NO);keep=d.add_button('Beibehalten',Gtk.ResponseType.YES);keep.get_style_context().add_class('suggested-action');d.set_default_response(Gtk.ResponseType.NO)
   left=[15]
@@ -377,8 +447,13 @@ class Settings(Gtk.Application):
    left[0]-=1;d.format_secondary_text('Wenn du nichts tust, geht alles in %d s automatisch zurück.'%left[0])
    if left[0]<=0:d.response(Gtk.ResponseType.NO);return False
    return True
-  d.format_secondary_text('Wenn du nichts tust, geht alles in 15 s automatisch zurück.');tid=GLib.timeout_add_seconds(1,tick);d.show_all();r=d.run();d.destroy()
-  if tid:GLib.source_remove(tid) if left[0]>0 else None
+  d.format_secondary_text('Wenn du nichts tust, geht alles in 15 s automatisch zurück.');tid=GLib.timeout_add_seconds(1,tick);d.show_all();d.set_keep_above(True)
+  try:r=d.run()
+  finally:
+   d.destroy();self._mon_busy=False
+   try:marker.touch()   # Sicherheitsnetz entschärfen: ab hier entscheidet die App selbst (Zurücksetzen macht sie unten)
+   except OSError:pass
+   if left[0]>0:GLib.source_remove(tid)   # Timer läuft noch (bei 0 hat er sich selbst beendet)
   if r==Gtk.ResponseType.YES:
    try:MON.write_config(self.mons)
    except OSError as e:self.message('Angewendet, aber nicht gespeichert: %s'%e);return
@@ -398,7 +473,8 @@ class Settings(Gtk.Application):
    if busy['v']:return
    busy['v']=True;self.message(msg)
    def work():
-    r=subprocess.run([dx]+args,capture_output=True,text=True)
+    try:r=subprocess.run([dx]+args,capture_output=True,text=True,timeout=900)
+    except (OSError,subprocess.SubprocessError) as e:r=subprocess.CompletedProcess([dx],1,'',str(e))
     def done():
      busy['v']=False;self.message((r.stdout.strip().splitlines() or ['Fertig'])[-1] if r.returncode==0 else 'Fehlgeschlagen: '+((r.stderr.strip().splitlines() or ['?'])[-1]));refill();return False
     GLib.idle_add(done)
@@ -442,13 +518,14 @@ class Settings(Gtk.Application):
    def changed(w):
     pid=w.get_active_id()
     if not pid:return
-    subprocess.run([dxf,'set',kind,pid]);data[kind]=pid;refresh()
+    run_quiet([dxf,'set',kind,pid],20);data[kind]=pid;refresh()
     if kind=='ui':self.apply_font();self.message('Schrift: '+by[pid]['name']+' – Shell sofort, Aurora jetzt auch')
     else:self.message('Code-Schrift: '+by[pid]['name'])
    def do_inst(*_):
     pid=sel.get_active_id();inst.set_sensitive(False);self.message('Installiere '+by[pid]['name']+' …')
     def work():
-     r=subprocess.run([dxf,'install',pid],capture_output=True,text=True)
+     try:r=subprocess.run([dxf,'install',pid],capture_output=True,text=True,timeout=900)
+     except (OSError,subprocess.SubprocessError) as e:r=subprocess.CompletedProcess([dxf],1,'',str(e))
      def done():
       inst.set_sensitive(True);d2=info()
       for p in d2['presets']:by[p['id']]['installed']=p['installed']
@@ -531,8 +608,8 @@ class Settings(Gtk.Application):
   except OSError:pass
   return out
  def save_rules(self,rules):
-  self.RULES_FILE.parent.mkdir(parents=True,exist_ok=True)
-  self.RULES_FILE.write_text(''.join('\t'.join(['1' if r['on'] else '0',r['cls'],r['title'],r['mon'],r['ws'],r['mode'],r['size'],'1' if r['center'] else '0'])+'\n' for r in rules),encoding='utf-8')
+  clean=lambda v:str(v).replace('\t',' ').replace('\n',' ').replace('\r',' ')   # Tab/Zeilenumbruch würden die Tabelle zerstören
+  atomic_write(self.RULES_FILE,''.join('\t'.join([('1' if r['on'] else '0')]+[clean(r[k]) for k in ('cls','title','mon','ws','mode','size')]+['1' if r['center'] else '0'])+'\n' for r in rules))
  def rules(self):
   b=self.page('Fensterregeln','Lege fest, wie bestimmte Programme geöffnet werden: auf welchem Bildschirm und Desktop, schwebend oder maximiert, in welcher Größe. Regeln gelten für jedes neue Fenster, auf das sie passen (die erste passende Regel gewinnt).')
   box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
@@ -604,8 +681,29 @@ class Settings(Gtk.Application):
   refill()
 
  # ---------------------------------------------------------------- Sicherung
+ def export_dialog(self):
+  d=Gtk.FileChooserDialog(title='Einstellungen exportieren',parent=self.window,action=Gtk.FileChooserAction.SAVE);d.add_buttons('Abbrechen',Gtk.ResponseType.CANCEL,'Speichern',Gtk.ResponseType.OK);d.set_current_name('aurora-einstellungen.json');d.set_do_overwrite_confirmation(True)
+  if d.run()==Gtk.ResponseType.OK:
+   path=d.get_filename();d.destroy()
+   try:export_settings(path);self.message('Exportiert nach '+str(path))
+   except (OSError,ValueError) as e:self.message('Export fehlgeschlagen: '+str(e))
+  else:d.destroy()
+ def import_dialog(self):
+  d=Gtk.FileChooserDialog(title='Einstellungen importieren',parent=self.window,action=Gtk.FileChooserAction.OPEN);d.add_buttons('Abbrechen',Gtk.ResponseType.CANCEL,'Öffnen',Gtk.ResponseType.OK)
+  f=Gtk.FileFilter();f.set_name('Aurora-Einstellungen (*.json)');f.add_pattern('*.json');d.add_filter(f)
+  if d.run()!=Gtk.ResponseType.OK:d.destroy();return
+  path=d.get_filename();d.destroy()
+  if self._touch_id_pending():self.apply()   # offene Änderungen zuerst speichern, damit sie nicht nachträglich den Import überschreiben
+  try:done=import_settings(path)
+  except (OSError,ValueError) as e:self.message('Import fehlgeschlagen: '+str(e));return
+  dict.clear(self.p);dict.update(self.p,load_preferences());self.p.setdefault('shortcuts',{})
+  m=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.INFO,buttons=Gtk.ButtonsType.OK,text='Importiert: '+', '.join(done or ['nichts']))
+  m.format_secondary_text('Die Einstellungen werden jetzt geschlossen. Öffne sie erneut, um die neuen Werte zu sehen.');m.run();m.destroy();self.quit()
+ def _touch_id_pending(self):return bool(getattr(self,'_touch_id',0))
  def backup(self):
   b=self.page('Sicherung','Alle deine Einstellungen (Taskleiste, Farben, Schrift, Tastenkombinationen, Monitore, Fensterregeln, Autostart …) in einer Datei sichern und jederzeit zurückholen – auch auf einem anderen Rechner. Einmal pro Woche sichert Draconyx automatisch.')
+  self.button(b,'Einstellungen exportieren','Als Datei speichern …',self.export_dialog,'Aurora-Einstellungen, Taskleiste und Shell-Optionen, Tastenkombinationen, Haupttaste und Farben in eine JSON-Datei.')
+  self.button(b,'Einstellungen importieren','Datei laden …',self.import_dialog,'Übernimmt nur, was in der Datei steht; Shell-Einstellungen werden schlüsselweise eingemischt, nichts anderes geht verloren.')
   dxb=str(Path.home()/'.local/bin/dx-backup');box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
   def lst():
    try:return json.loads(subprocess.run([dxb,'list','--json'],capture_output=True,text=True,timeout=20).stdout or '[]')
@@ -616,7 +714,7 @@ class Settings(Gtk.Application):
    bar=Gtk.Box(spacing=10)
    mk=Gtk.Button(label='Jetzt sichern');mk.get_style_context().add_class('suggested-action')
    def make(*_):
-    r=subprocess.run([dxb,'create'],capture_output=True,text=True);self.message('Gesichert: '+Path(r.stdout.strip()).name if r.returncode==0 else 'Sicherung fehlgeschlagen');refill()
+    r=self.run_tool([dxb,'create'],120);self.message('Gesichert: '+Path(r.stdout.strip()).name if r.returncode==0 else 'Sicherung fehlgeschlagen');refill()
    mk.connect('clicked',make);bar.pack_start(mk,False,False,0)
    im=Gtk.Button(label='Sicherung importieren …')
    def imp(*_):
@@ -636,7 +734,7 @@ class Settings(Gtk.Application):
      d=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.QUESTION,buttons=Gtk.ButtonsType.YES_NO,text='Diese Sicherung wiederherstellen?')
      d.format_secondary_text('Deine jetzigen Einstellungen werden vorher automatisch gesichert. Danach lädt Hyprland die Konfiguration neu.')
      if d.run()==Gtk.ResponseType.YES:
-      r=subprocess.run([dxb,'restore',x['path']],capture_output=True,text=True);self.message('Wiederhergestellt – bitte die Shell neu starten, falls etwas fehlt' if r.returncode==0 else 'Fehlgeschlagen')
+      r=self.run_tool([dxb,'restore',x['path']],300);self.message('Wiederhergestellt – bitte die Shell neu starten, falls etwas fehlt' if r.returncode==0 else 'Fehlgeschlagen')
      d.destroy()
     rs.connect('clicked',restore)
     ex=Gtk.Button(label='Exportieren …')
@@ -645,7 +743,7 @@ class Settings(Gtk.Application):
      if d.run()==Gtk.ResponseType.OK:_sh.copy2(x['path'],d.get_filename());self.message('Exportiert')
      d.destroy()
     ex.connect('clicked',export)
-    rm=Gtk.Button(label='✕');rm.set_tooltip_text('Löschen');rm.connect('clicked',lambda _,x=x:(subprocess.run([dxb,'delete',x['path']]),refill()))
+    rm=Gtk.Button(label='✕');rm.set_tooltip_text('Löschen');rm.connect('clicked',lambda _,x=x:(self.run_tool([dxb,'delete',x['path']],30),refill()))
     for w in (rs,ex,rm):h.pack_start(w,False,False,0)
     self.row(box,_t.strftime('%d.%m.%Y %H:%M',_t.localtime(x['mtime']))+('  ·  automatisch' if '-auto' in x['name'] else ''),h,'Version %s · %d Dateien · %.1f KB'%(x['version'],x['files'],x['size']/1024))
    box.show_all()
@@ -736,7 +834,10 @@ class Settings(Gtk.Application):
   w.set_active_id(modifier_mode() if modifier_mode() in dict(mods) else 'super')
   def mod_changed(w):
    mode=w.get_active_id()
-   if mode:set_modifier_mode(mode);subprocess.run(['hyprctl','reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);self.message('Haupttaste gewechselt: '+dict(mods)[mode])
+   if mode:
+    try:set_modifier_mode(mode)
+    except (OSError,ValueError) as e:self.message('Haupttaste nicht gespeichert: '+str(e));return
+    run_quiet(['hyprctl','reload']);self.message('Haupttaste gewechselt: '+dict(mods)[mode])
   w.connect('changed',mod_changed)
   self.row(b,'Haupttaste',w,'Defekte oder fehlende Super-Taste? „Super aus“ nutzt überall Strg + Alt statt Super, „Feststelltaste“ macht sie zur Super-Taste. Wirkt sofort.')
   self.bind_editor(b)
@@ -786,40 +887,52 @@ class Settings(Gtk.Application):
   dlg.show_all();r=dlg.run();dlg.destroy()
   if r==Gtk.ResponseType.OK and result['v'] is not None:done(result['v'])
  def bind_editor(self,b):
-  reg=Path.home()/'.config/draconyx/binds-registry.tsv';conf=Path.home()/'.config/draconyx/binds.conf'
-  rows=[]
+  reg=Path.home()/'.config/draconyx/binds-registry.tsv'
+  rows=[];seen=set()
   try:
-   for line in reg.read_text().splitlines():
+   for line in reg.read_text(encoding='utf-8',errors='replace').splitlines():
     p=line.split('\t')
-    if len(p)>=3:rows.append((p[0],p[1],p[2],p[3] if len(p)>3 else p[2]))
+    if len(p)>=3 and p[0] and p[0] not in seen:seen.add(p[0]);rows.append((p[0],p[1],p[2],p[3] if len(p)>3 else p[2]))
   except OSError:pass
-  over={}
-  try:
-   for line in conf.read_text().splitlines():
-    if '=' in line:k,v=line.split('=',1);over[k.strip()]=v.strip()
-  except OSError:pass
+  over=read_binds_conf()
   head=Gtk.Label(label='ALLE TASTENKOMBINATIONEN',xalign=0);head.get_style_context().add_class('section-title');b.pack_start(head,False,False,6)
   if not rows:
    hint=Gtk.Label(label='Die Liste entsteht, sobald Hyprland die Konfiguration geladen hat (hyprctl reload oder neu anmelden).',xalign=0);hint.set_line_wrap(True);hint.get_style_context().add_class('subtitle');b.pack_start(hint,False,False,0);return
   search=Gtk.SearchEntry();search.set_placeholder_text('Aktion suchen …');b.pack_start(search,False,False,4)
   timer={'id':0};entries={}
   def save():
-   conf.parent.mkdir(parents=True,exist_ok=True)
-   conf.write_text(''.join('%s=%s\n'%(k,v) for k,v in over.items()))
+   try:write_binds_conf(over)
+   except OSError as e:self.message('Tastenkombinationen nicht gespeichert: '+str(e));return False
    if timer['id']:GLib.source_remove(timer['id'])
-   timer['id']=GLib.timeout_add(700,lambda:(subprocess.run(['hyprctl','reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL),timer.__setitem__('id',0),False)[2])
-  def duplicate(aid,combo):
-   if not combo:return None
-   for rid,lab,dflt,_ in rows:
-    if rid!=aid and over.get(rid,dflt)==combo:return lab
-   return None
+   timer['id']=GLib.timeout_add(700,lambda:(run_quiet(['hyprctl','reload']),timer.__setitem__('id',0),False)[2])
+   return True
+  def current_map():return {rid:(lab,over.get(rid,dflt)) for rid,lab,dflt,_ in rows}
   def set_combo(aid,combo,default):
-   dup=duplicate(aid,combo)
+   if combo!=default:   # Standards sind von der Config selbst geprüft; nur Eingaben prüfen
+    try:combo=normalize_combo(combo)
+    except ValueError as e:self.message(str(e));return
+   dup=find_conflict(current_map(),aid,combo)
+   if dup:
+    d=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.WARNING,text='Kombination schon belegt')
+    d.format_secondary_text('„%s“ gehört schon zu „%s“. Trotzdem verwenden? Dann reagiert nur eine der beiden Aktionen.'%(combo,dup))
+    d.add_button('Abbrechen',Gtk.ResponseType.CANCEL);d.add_button('Trotzdem',Gtk.ResponseType.OK);r=d.run();d.destroy()
+    if r!=Gtk.ResponseType.OK:self.message('Abgebrochen – Kombination unverändert.');return
+   old=dict(over)
    if combo==default:over.pop(aid,None)
    else:over[aid]=combo
+   if not save():over.clear();over.update(old);return
    entries[aid].set_text(combo)
-   save()
-   self.message(('Doppelt belegt mit „%s“ – bitte prüfen.'%dup) if dup else ('Gespeichert: '+(combo or 'ausgeschaltet')))
+   self.message('Gespeichert: '+(combo or 'ausgeschaltet')+(' (doppelt belegt)' if dup else ''))
+  def reset_all(*_):
+   if not over:self.message('Alle Tastenkombinationen sind schon Standard.');return
+   d=Gtk.MessageDialog(transient_for=self.window,modal=True,message_type=Gtk.MessageType.QUESTION,buttons=Gtk.ButtonsType.OK_CANCEL,text='Alle Tastenkombinationen auf Standard zurücksetzen?')
+   d.format_secondary_text('Deine %d eigenen Belegungen gehen verloren.'%len(over));r=d.run();d.destroy()
+   if r!=Gtk.ResponseType.OK:return
+   over.clear()
+   if save():
+    for rid,lab,dflt,_ in rows:entries[rid].set_text(dflt)
+    self.message('Alle Tastenkombinationen zurückgesetzt.')
+  rb=Gtk.Button(label='Alle auf Standard zurücksetzen');rb.connect('clicked',reset_all);rb.set_halign(Gtk.Align.START);b.pack_start(rb,False,False,4)
   widgets=[]
   for aid,label,default,effective in rows:
    current=over.get(aid,default)
@@ -1127,9 +1240,10 @@ class Settings(Gtk.Application):
   if v['sleep']>0:add+='\n# Standby nach %d Minuten\nlistener {\n    timeout = %d\n    on-timeout = systemctl suspend\n}\n'%(v['sleep'],v['sleep']*60)
   if self.IDLE.exists() and not getattr(self,'_idle_backed',False):
    shutil.copy2(self.IDLE,str(self.IDLE)+'.vor-'+time.strftime('%Y%m%d-%H%M%S'));self._idle_backed=True
-  self.IDLE.parent.mkdir(parents=True,exist_ok=True);self.IDLE.write_text(keep+add)
-  subprocess.run(['pkill','-x','hypridle'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-  subprocess.Popen(['hypridle'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+  atomic_write(self.IDLE,keep+add)
+  run_quiet(['pkill','-x','hypridle'],5)
+  try:subprocess.Popen(['hypridle'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+  except OSError:self.message('hypridle ist nicht installiert – Zeiten gespeichert, aber nicht aktiv.')
  def power(self):
   b=self.page('Energie & Sperre','Wann der Bildschirm gesperrt wird, ausgeht und der Rechner in den Standby geht – gerechnet ab der letzten Eingabe. 0 bedeutet nie. Spiele und Videos halten den Rechner von sich aus wach.')
   v=self.idle_read();state={'id':0}
@@ -1167,13 +1281,17 @@ class Settings(Gtk.Application):
   b=self.page('Farben & Schrift','Gemeinsame Farbwelt und Schrift für Aurora und die Shell. Änderungen gelten sofort für die Shell; Aurora-Fenster übernehmen die Farben beim nächsten Öffnen.')
   import subprocess,json
   tool=str(Path.home()/'.local/bin/dx-colors')
-  try:current=json.loads(subprocess.check_output([tool,'show'],text=True))
-  except Exception:current={'preset':'aurora','accent':'#4d8fe0'}
+  try:current=json.loads(subprocess.run([tool,'show'],capture_output=True,text=True,timeout=10).stdout)
+  except Exception:current=None
+  if not isinstance(current,dict):current={'preset':'aurora','accent':'#4d8fe0'}
   w=Choice();w.append('aurora','Aurora (Grau-Blau)');w.append('draconyx','Draconyx (Violett)');w.set_active_id(current.get('preset') if current.get('preset') in ('aurora','draconyx') else None)
-  w.connect('changed',lambda w:(w.get_active_id() and subprocess.run([tool,'preset',w.get_active_id()]),self.message('Farbwelt gewechselt.')));self.row(b,'Voreinstellung',w)
-  c=Gtk.ColorButton();rgba=Gdk.RGBA();rgba.parse(current.get('accent','#4d8fe0'));c.set_rgba(rgba)
+  w.connect('changed',lambda w:w.get_active_id() and (self.message('Farbwelt gewechselt.') if run_quiet([tool,'preset',w.get_active_id()],20) else self.message('Farbwelt konnte nicht gewechselt werden (dx-colors fehlt?).')));self.row(b,'Voreinstellung',w)
+  c=Gtk.ColorButton();rgba=Gdk.RGBA()
+  if not rgba.parse(str(current.get('accent','#4d8fe0'))):rgba.parse('#4d8fe0')   # kaputter Farbwert in colors.json
+  c.set_rgba(rgba)
   def picked(btn):
-   r=btn.get_rgba();subprocess.run([tool,'accent','#%02x%02x%02x'%(round(r.red*255),round(r.green*255),round(r.blue*255))]);self.message('Akzentfarbe geändert.')
+   r=btn.get_rgba();hexv='#%02x%02x%02x'%tuple(max(0,min(255,round(v*255))) for v in (r.red,r.green,r.blue))
+   self.message('Akzentfarbe geändert.' if run_quiet([tool,'accent',hexv],20) else 'Akzentfarbe konnte nicht gesetzt werden (dx-colors fehlt?).')
   c.connect('color-set',picked);self.row(b,'Akzentfarbe',c,'Hell- und Dunkelvarianten werden daraus abgeleitet.')
   self.fonts_section(b)
  def system(self):
@@ -1195,7 +1313,7 @@ class Settings(Gtk.Application):
    ub.set_visible(bool(i.get('available')) and not i.get('error'))
   def check_bg():
    def work():
-    subprocess.run([str(Path.home()/'.local/bin/dx-update'),'check','--quiet'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    run_quiet([str(Path.home()/'.local/bin/dx-update'),'check','--quiet'],120)
     GLib.idle_add(show,upd_info())
    threading.Thread(target=work,daemon=True).start()
   def run_update(*_):
