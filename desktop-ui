@@ -14,9 +14,15 @@ if SHELL_QML.exists() and os.environ.get('AURORA_LEGACY_UI')!='1':
     def _qs(*a):return _sh(['qs','-c','draconyx','ipc','call',*a])
     _cmd=sys.argv[1] if len(sys.argv)>1 else ''
     if _cmd=='daemon':
-        if _sh(['qs','-c','draconyx','ipc','show'])!=0:
+        # Nur ein Starter gleichzeitig (gleiche Sperre wie dx-shell-ensure): sonst starten beide zugleich eine Shell. Die Sperre schließt sich beim exec von selbst.
+        import fcntl
+        _rt=os.environ.get('XDG_RUNTIME_DIR') or str(Path.home()/'.cache/draconyx');os.makedirs(_rt,exist_ok=True)
+        _lk=open(os.path.join(_rt,'draconyx-shell-ensure.lock'),'w')
+        try:fcntl.flock(_lk,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except OSError:sys.exit(0)
+        if _sh(['qs','-c','draconyx','ipc','show'],5)!=0 and _sh(['pgrep','-x','qs'])!=0:
             try:os.execvp('qs',['qs','-c','draconyx'])
-            except OSError as _e:print('desktop-ui: qs nicht startbar:',_e,file=sys.stderr);sys.exit(1)
+            except OSError as _e:print('desktop-ui: qs nicht startbar (Paket quickshell?):',_e,file=sys.stderr);sys.exit(1)
     elif _cmd=='minimize':_qs('shell','minimizeActive')
     elif _cmd=='mode':_qs('shell','toggleWindowMode')
     elif _cmd=='layout-cycle':_sh(['hyprctl','eval','DXTiling.cycleMode()'])
@@ -30,18 +36,18 @@ if SHELL_QML.exists() and os.environ.get('AURORA_LEGACY_UI')!='1':
         if not _alive:
             subprocess.Popen([sys.executable,sys.argv[0],'__altwatch'],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     elif _cmd=='__altwatch':
-        _run=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'));(_run/'aurora-alt-watch.pid').write_text(str(os.getpid()))
+        _rd=Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'));(_rd/'aurora-alt-watch.pid').write_text(str(os.getpid()))
         _t0=time.monotonic()
         while time.monotonic()-_t0<20:
-            try:_st=(_run/'aurora-alt-state').read_text().strip()
+            try:_st=(_rd/'aurora-alt-state').read_text().strip()
             except OSError:_st='up'
             if _st!='down' and time.monotonic()-_t0>0.12:break
             time.sleep(0.02)
-        _qs('switcher','commit');(_run/'aurora-alt-watch.pid').unlink(missing_ok=True)
+        _qs('switcher','commit');(_rd/'aurora-alt-watch.pid').unlink(missing_ok=True)
     elif _cmd=='show-desktop':_sh(['hyprctl','dispatch','hl.dsp.focus({ workspace = "empty" })'])
     elif _cmd=='controls':_qs('shell','toggleControl')
     elif _cmd=='clipboard-store':
-        try:subprocess.run(['cliphist','store'],stdin=sys.stdin,stderr=subprocess.DEVNULL,timeout=10)
+        try:subprocess.run(['cliphist','store'],stdin=sys.stdin,stderr=subprocess.DEVNULL,timeout=15)
         except (OSError,subprocess.SubprocessError) as _e:print('desktop-ui: cliphist:',_e,file=sys.stderr)
     sys.exit(0)   # alles andere (window-open, reload-settings, ...) braucht das alte Dock nicht
 BASE=Path.home()/'.config/hypr/aurora'

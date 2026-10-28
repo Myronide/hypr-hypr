@@ -64,7 +64,16 @@ LOG = os.path.expanduser("~/.local/state/draconyx/x11-events.log")
 IGNORE = {b"_NET_WM_USER_TIME", b"WM_PROTOCOLS"}
 
 def run(cmd):
-    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout.strip()      # nie ewig auf xdotool/hyprctl warten
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+import re
+ADDR = re.compile(r"^0x[0-9a-fA-F]{1,16}$")
+def safe_addr(a):
+    """Die Adresse wird in Lua-Text eingesetzt (eval): nur echte Hex-Adressen durchlassen."""
+    return a if isinstance(a, str) and ADDR.match(a) else None
 
 def hypr_address(xid):
     pid = run(["xdotool", "getwindowpid", str(xid)])
@@ -72,6 +81,8 @@ def hypr_address(xid):
     try:
         clients = json.loads(run(["hyprctl", "clients", "-j"]))
     except Exception:
+        return None
+    if not pid:
         return None
     cand = [c for c in clients if c.get("xwayland") and str(c.get("pid")) == pid]
     for c in cand:
@@ -90,15 +101,17 @@ def pointer(dpy, root):
 def hypr_call(cmd):
     s = socket.socket(socket.AF_UNIX)
     s.settimeout(1.0)
-    s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
-    s.sendall(cmd.encode())
-    out = b""
-    while True:
-        d = s.recv(4096)
-        if not d:
-            break
-        out += d
-    s.close()
+    try:
+        s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
+        s.sendall(cmd.encode())
+        out = b""
+        while True:
+            d = s.recv(4096)
+            if not d:
+                break
+            out += d
+    finally:
+        s.close()
     return out.decode()
 
 # Beide Titelleisten benutzen denselben Helfer (run_path führt dessen CLI nicht aus).
@@ -109,7 +122,7 @@ def drag_window(dpy, root, xid):
     """Griffpunkt und Release-Zeit vor der Fensterauflösung festhalten."""
     started_ns = time.time_ns()
     cpos = json.loads(hypr_call("j/cursorpos"))
-    addr = fast_address(dpy, xid)
+    addr = safe_addr(fast_address(dpy, xid))
     if addr:
         _drag(addr, lambda: pointer(dpy, root)[2],
               start=(int(cpos["x"]), int(cpos["y"])), started_ns=started_ns)
@@ -133,17 +146,23 @@ def fast_address(dpy, xid):
         try:
             a = json.loads(hypr_call("j/activewindow"))
             if a.get("xwayland") and a.get("pid") == pid:
-                return a["address"]
+                return safe_addr(a["address"])
             cand = [c for c in json.loads(hypr_call("j/clients")) if c.get("xwayland") and c.get("pid") == pid]
             if len(cand) == 1:
-                return cand[0]["address"]
+                return safe_addr(cand[0]["address"])
         except (OSError, ValueError):
             pass
-    return hypr_address(xid)
+    return safe_addr(hypr_address(xid))
 
-dpy = x.XOpenDisplay(None)
+# XWayland startet erst mit dem ersten X11-Fenster bzw. nach Hyprland: nicht sofort aufgeben, sondern mit wachsendem Abstand wieder versuchen
+dpy = None
+for _wait in (0, 1, 2, 3, 5, 5, 10, 10, 15, 15, 20):
+    dpy = x.XOpenDisplay(None)
+    if dpy:
+        break
+    time.sleep(_wait)
 if not dpy:
-    sys.exit("kein X-Display (DISPLAY gesetzt?)")
+    sys.exit("dx-x11-iconify: kein X-Display (DISPLAY=%s) – läuft XWayland?" % os.environ.get("DISPLAY", "nicht gesetzt"))
 root = x.XDefaultRootWindow(dpy)
 x.XSelectInput(dpy, root, 1 << 19)                       # SubstructureNotifyMask
 change_state = x.XInternAtom(dpy, b"WM_CHANGE_STATE", 0)

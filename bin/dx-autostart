@@ -39,6 +39,18 @@ def enabled(d):
     return d.get("Hidden", "false").lower() != "true" and d.get("X-GNOME-Autostart-enabled", "true").lower() != "false"
 
 
+def safe_id(name):
+    """Eintrags-Kennung muss ein einfacher Dateiname in ~/.config/autostart sein (kein ../ oder Unterordner)."""
+    if not name or "/" in name or name in (".", "..") or "\x00" in name:
+        print("Ungültiger Eintrag:", name, file=sys.stderr); sys.exit(1)
+    return name
+
+
+def oneline(v):
+    """Werte kommen in eine .desktop-Zeile: Zeilenumbrüche würden weitere Schlüssel einschleusen (z. B. ein zweites Exec=)."""
+    return " ".join(str(v).split())
+
+
 def entries():
     out = []
     if AUTO.is_dir():
@@ -69,12 +81,15 @@ def set_keys(path, keys):
         out.append(l)
     if sec == "[Desktop Entry]":
         out += ["%s=%s" % (k, v) for k, v in keys.items() if v is not None and k not in done]
-    Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")          # atomar ersetzen
+    tmp.replace(path)
 
 
 def write_entry(name, cmd, icon="", comment="", fname=None):
     AUTO.mkdir(parents=True, exist_ok=True)
     fname = fname or "dx-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") + ".desktop"
+    name, cmd, icon, comment = oneline(name), oneline(cmd), oneline(icon), oneline(comment)
     (AUTO / fname).write_text("[Desktop Entry]\nType=Application\nName=%s\nExec=%s\n%s%sTerminal=false\n" % (
         name, cmd, ("Icon=%s\n" % icon) if icon else "", ("Comment=%s\n" % comment) if comment else ""), encoding="utf-8")
     return fname
@@ -112,8 +127,19 @@ def running(argv):
 
 
 def run_all():
+    import fcntl
     launch = str(HOME / ".local/bin/dx-launch")
     started = []
+    # Nur ein Lauf gleichzeitig (Hyprland-Neuladen oder doppelter Aufruf): sonst starten sich Programme doppelt, weil "läuft schon" erst nach dem Start stimmt
+    rt = os.environ.get("XDG_RUNTIME_DIR") or str(HOME / ".cache/draconyx")
+    os.makedirs(rt, exist_ok=True)
+    lock = open(os.path.join(rt, "draconyx-autostart.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("Autostart läuft schon – nichts doppelt gestartet"); return
+    if not os.access(launch, os.X_OK):
+        print("dx-launch fehlt (%s) – Autostart nicht möglich" % launch, file=sys.stderr); return
     for e in entries():
         if not e["enabled"] or e["id"] in SKIP_RUN:
             continue
@@ -134,7 +160,10 @@ def run_all():
             delay = 0
         if delay > 0:
             time.sleep(min(delay, 20))
-        subprocess.Popen([launch] + argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.Popen([launch] + argv, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as err:
+            print("konnte %s nicht starten: %s" % (e["name"], err), file=sys.stderr); continue
         started.append(e["name"])
         time.sleep(0.4)
     print("gestartet:", ", ".join(started) or "nichts (alles läuft schon oder ist aus)")
@@ -151,7 +180,7 @@ def main():
             for e in L:
                 print("%-4s %-28s %s" % ("an" if e["enabled"] else "aus", e["name"], e["exec"]))
     elif cmd in ("enable", "disable") and len(a) == 2:
-        p = AUTO / a[1]
+        p = AUTO / safe_id(a[1])
         if not p.is_file():
             print("Eintrag nicht gefunden", file=sys.stderr); sys.exit(1)
         if cmd == "disable":
@@ -161,7 +190,7 @@ def main():
     elif cmd == "add" and len(a) >= 3:
         print(write_entry(a[1], " ".join(a[2:])))
     elif cmd == "remove" and len(a) == 2:
-        (AUTO / a[1]).unlink(missing_ok=True)
+        (AUTO / safe_id(a[1])).unlink(missing_ok=True)
     elif cmd == "apps":
         L = installed_apps()
         print(json.dumps(L, ensure_ascii=False) if "--json" in a else "\n".join(x["name"] for x in L))

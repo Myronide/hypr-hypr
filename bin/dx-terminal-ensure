@@ -15,13 +15,17 @@ if [ -n "$first" ]; then
   exit 0
 fi
 # kein Terminal da: höchstens einmal pro Stunde versuchen (kein Dialog-Dauerfeuer)
-STAMP="${XDG_RUNTIME_DIR:-/tmp}/draconyx-terminal-ensure"
+RT="${XDG_RUNTIME_DIR:-}"; [ -n "$RT" ] && [ -d "$RT" ] || RT="$HOME/.cache/draconyx"; mkdir -p "$RT"
+exec 9>"$RT/draconyx-terminal-ensure.lock"; flock -n 9 || exit 0          # nur ein Versuch gleichzeitig (kein doppelter Passwortdialog)
+STAMP="$RT/draconyx-terminal-ensure"
 now=$(date +%s); last=$(cat "$STAMP" 2>/dev/null || echo 0)
+case "$last" in ''|*[!0-9]*) last=0;; esac
 [ $((now - last)) -lt 3600 ] && exit 0
 echo "$now" > "$STAMP"
+command -v pacman >/dev/null 2>&1 || { echo "Kein Terminal installiert und kein pacman vorhanden – bitte von Hand eins installieren." >&2; exit 1; }
 notify-send -a Draconyx -i utilities-terminal "Kein Terminal installiert" "Ghostty wird installiert – gleich fragt ein Fenster nach deinem sudo-Passwort." 2>/dev/null
 export SUDO_ASKPASS="$HOME/.local/bin/dx-askpass"
-if sudo -A pacman -S --needed --noconfirm ghostty; then
+if [ -x "$SUDO_ASKPASS" ] && sudo -A pacman -S --needed --noconfirm ghostty; then
   echo ghostty > "$CFG"
   notify-send -a Draconyx -i utilities-terminal "Ghostty installiert" "Es war kein Terminal mehr vorhanden." 2>/dev/null
 else

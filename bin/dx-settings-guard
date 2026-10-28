@@ -13,7 +13,28 @@ DEF = Path.home() / ".local/share/draconyx-backups/settings-vor-update.json"
 
 
 def load(p):
-    return json.loads(Path(p).read_text())
+    data = json.loads(Path(p).read_text())
+    if not isinstance(data, dict):
+        raise ValueError("kein JSON-Objekt")
+    return data
+
+
+def write_atomic(path, text):
+    """Erst in eine Nachbardatei schreiben, dann ersetzen: ein Abbruch mittendrin lässt nie eine halbe Datei zurück."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp-%d" % os.getpid())
+    try:
+        tmp.write_text(text)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def prune(pattern_dir, prefix, keep=5):
+    """Alte .vor-restore-Sicherungen aufräumen (jede Wiederherstellung legt eine an)."""
+    old = sorted(Path(pattern_dir).glob(prefix + "*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for p in old[keep:]:
+        p.unlink(missing_ok=True)
 
 
 def main():
@@ -25,28 +46,43 @@ def main():
             return
         try:
             load(CUR)
-        except ValueError:
+        except (OSError, ValueError):
             print("settings.json ist beschädigt – keine Sicherung überschrieben", file=sys.stderr); return
         src.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(CUR, src)
+        write_atomic(src, CUR.read_text())
         print("gesichert:", src)
         return
     if cmd in ("restore", "check"):
         try:
-            snap, cur = load(src), load(CUR)
+            snap = load(src)
         except (OSError, ValueError) as e:
-            print("Keine brauchbare Sicherung/Einstellung:", e, file=sys.stderr); sys.exit(1)
+            print("Keine brauchbare Sicherung:", e, file=sys.stderr); sys.exit(1)
+        try:
+            cur = load(CUR)
+        except FileNotFoundError:
+            # Die Einstellungen sind ganz verschwunden (z. B. von einer Aktualisierung gelöscht): aus der Sicherung neu anlegen
+            if cmd == "check":
+                print("settings.json fehlt"); return
+            CUR.parent.mkdir(parents=True, exist_ok=True)
+            write_atomic(CUR, json.dumps(snap, indent=4, ensure_ascii=False))
+            print("settings.json fehlte – aus der Sicherung wiederhergestellt"); return
+        except (OSError, ValueError) as e:
+            # Beschädigt: die kaputte Datei aufheben und die Sicherung einsetzen, statt sie weiter zu benutzen
+            if cmd == "check":
+                print("settings.json ist beschädigt:", e); return
+            shutil.copy2(CUR, str(CUR) + ".defekt-" + time.strftime("%Y%m%d-%H%M%S"))
+            write_atomic(CUR, json.dumps(snap, indent=4, ensure_ascii=False))
+            print("settings.json war beschädigt – aus der Sicherung wiederhergestellt (die defekte Datei liegt daneben)"); return
         diff = [k for k, v in snap.items() if cur.get(k) != v]
         if cmd == "check":
             print("\n".join(diff) or "keine Abweichung"); return
         if not diff:
             print("nichts zurückzusetzen"); return
         shutil.copy2(CUR, str(CUR) + ".vor-restore-" + time.strftime("%Y%m%d-%H%M%S"))
+        prune(CUR.parent, CUR.name + ".vor-restore-")
         for k in diff:
             cur[k] = snap[k]
-        tmp = CUR.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(cur, indent=4, ensure_ascii=False))
-        os.replace(tmp, CUR)                       # atomar ersetzen
+        write_atomic(CUR, json.dumps(cur, indent=4, ensure_ascii=False))
         print("zurückgesetzt auf deine Werte:", ", ".join(diff))
         return
     print(__doc__); sys.exit(2)

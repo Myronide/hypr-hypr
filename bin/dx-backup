@@ -7,7 +7,7 @@
   dx-backup delete DATEI         eine Sicherung löschen
 Enthalten: Shell-Einstellungen (Taskleiste, angeheftete Apps, Desktop-Symbole …), Farben/Schrift/Terminal/Tastaturbelegung/Tastenkombinationen,
 Aurora-Einstellungen, Monitore, Fenster-Regeln, Autostart, Hyprland-Konfiguration. Keine Programme, keine Wallpaper-Dateien."""
-import json, os, subprocess, sys, tarfile, time
+import io, json, os, re, subprocess, sys, tarfile, time
 from pathlib import Path
 
 HOME = Path.home()
@@ -31,8 +31,23 @@ def version():
 def create(name=""):
     DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = DIR / ("draconyx-%s%s.tar.gz" % (stamp, ("-" + name.replace("/", "_").replace(" ", "_")) if name else ""))
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")[:40]       # nur harmlose Zeichen im Dateinamen
+    out = DIR / ("draconyx-%s%s.tar.gz" % (stamp, ("-" + name) if name else ""))
+    n = 1
+    while out.exists():                                                  # zwei Sicherungen in derselben Sekunde überschreiben sich nicht
+        out = DIR / ("draconyx-%s%s-%d.tar.gz" % (stamp, ("-" + name) if name else "", n)); n += 1
+    part = out.with_name(out.name + ".part")                             # erst fertig schreiben, dann umbenennen: nie ein halbes Archiv
     manifest = {"version": version(), "created": int(time.time()), "host": os.uname().nodename, "files": []}
+    try:
+        _write_archive(part, manifest)
+        os.chmod(part, 0o600)                                            # enthält deine Einstellungen: nur für dich lesbar
+        os.replace(part, out)
+    finally:
+        part.unlink(missing_ok=True)
+    return out
+
+
+def _write_archive(out, manifest):
     with tarfile.open(out, "w:gz") as tar:
         for rel in INCLUDE:
             p = HOME / rel
@@ -46,9 +61,7 @@ def create(name=""):
                 tar.add(p, arcname=rel); manifest["files"].append(rel)
         data = json.dumps(manifest, indent=2, ensure_ascii=False).encode()
         info = tarfile.TarInfo("backup.json"); info.size = len(data); info.mtime = int(time.time())
-        import io
         tar.addfile(info, io.BytesIO(data))
-    return out
 
 
 def info(path):
@@ -74,7 +87,7 @@ def safe_members(tar):
         n = m.name
         if m.name == "backup.json":
             continue
-        if n.startswith("/") or ".." in Path(n).parts or not (m.isfile() or m.isdir()):
+        if n.startswith("/") or ".." in Path(n).parts or not (m.isfile() or m.isdir()) or m.issym() or m.islnk():
             continue
         if not any(n == r or n.startswith(r + "/") for r in INCLUDE):
             continue
@@ -85,13 +98,32 @@ def restore(path):
     path = Path(path)
     if not path.is_file():
         print("Datei nicht gefunden:", path, file=sys.stderr); return 1
+    # Erst prüfen, dass das Archiv lesbar ist, BEVOR der jetzige Stand angefasst wird
+    try:
+        with tarfile.open(path) as tar:
+            members = list(safe_members(tar))
+            if not members:
+                print("Das Archiv enthält keine Draconyx-Dateien – nichts wiederhergestellt.", file=sys.stderr); return 1
+            for m in members:                                            # ganzes Archiv einmal durchlesen: ein beschädigtes bricht hier ab
+                if m.isfile():
+                    f = tar.extractfile(m)
+                    while f and f.read(1 << 20):
+                        pass
+    except (tarfile.TarError, EOFError, OSError) as e:
+        print("Die Sicherung ist beschädigt oder kein Archiv (%s) – nichts wiederhergestellt." % e, file=sys.stderr); return 1
     before = create("vor-wiederherstellung")
     print("Jetziger Stand gesichert:", before)
     with tarfile.open(path) as tar:
         members = list(safe_members(tar))
-        tar.extractall(HOME, members=members)
+        try:
+            tar.extractall(HOME, members=members, filter="data")        # "data": keine Sonderdateien/fremden Besitzer/Pfade nach außen
+        except TypeError:                                                # ältere Python-Versionen kennen filter= nicht
+            tar.extractall(HOME, members=members)
     print("%d Dateien wiederhergestellt" % len(members))
-    subprocess.run(["hyprctl", "reload"], capture_output=True)
+    try:
+        subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass                                                             # ohne laufendes Hyprland erst beim nächsten Anmelden
     return 0
 
 

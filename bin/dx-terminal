@@ -4,8 +4,8 @@
 dir=""; cls=""; cmd=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dir) dir="$2"; shift 2;;
-    --class) cls="$2"; shift 2;;
+    --dir) [ $# -ge 2 ] || { echo "dx-terminal: --dir braucht einen Ordner" >&2; exit 2; }; dir="$2"; shift 2;;
+    --class) [ $# -ge 2 ] || { echo "dx-terminal: --class braucht einen Namen" >&2; exit 2; }; cls="$2"; shift 2;;
     --) shift; cmd=("$@"); break;;
     *) cmd=("$@"); break;;
   esac
@@ -18,7 +18,7 @@ fi
 if [ -z "$term" ] || ! command -v "$term" >/dev/null 2>&1; then
   for t in ghostty kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm; do command -v "$t" >/dev/null 2>&1 && term="$t" && break; done
 fi
-[ -n "$dir" ] && cd "$dir" 2>/dev/null
+if [ -n "$dir" ] && ! cd "$dir" 2>/dev/null; then dir=""; fi          # Ordner existiert nicht (mehr): im Heimordner öffnen
 case "$term" in
   ghostty)   exec ghostty ${cls:+--class="$cls"} ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
   kitty)     exec kitty ${cls:+--class "$cls"} ${dir:+--directory "$dir"} "${cmd[@]}";;
@@ -28,7 +28,7 @@ case "$term" in
   konsole)   exec konsole ${dir:+--workdir "$dir"} ${cmd[@]:+-e "${cmd[@]}"};;
   gnome-terminal) exec gnome-terminal ${dir:+--working-directory="$dir"} ${cmd[@]:+-- "${cmd[@]}"};;
   xfce4-terminal) exec xfce4-terminal ${dir:+--working-directory="$dir"} ${cmd[@]:+-x "${cmd[@]}"};;
-  tilix)     exec tilix ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "${cmd[*]}"};;
+  tilix)     exec tilix ${dir:+--working-directory="$dir"} ${cmd[@]:+-e "$(printf '%q ' "${cmd[@]}")"};;
   xterm)     exec xterm ${cmd[@]:+-e "${cmd[@]}"};;
-  *) echo "Kein Terminal gefunden" >&2; exit 127;;
+  *) echo "Kein Terminal gefunden – installiere z. B. Ghostty:  sudo pacman -S ghostty" >&2; exit 127;;
 esac

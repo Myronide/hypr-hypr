@@ -7,6 +7,13 @@ if command -v zenity >/dev/null 2>&1; then
 elif command -v kdialog >/dev/null 2>&1; then
   exec kdialog --title "$title" --password "$text"
 fi
-f="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/dx-askpass.XXXXXX")"; chmod 600 "$f"
+# Passwort nur über eine private Datei (0600, im Laufzeitordner des Nutzers) zurückgeben; immer aufräumen
+umask 077
+base="${XDG_RUNTIME_DIR:-}"; [ -n "$base" ] && [ -d "$base" ] || base="$HOME/.cache"
+mkdir -p "$base"
+f="$(mktemp "$base/dx-askpass.XXXXXX")" || exit 1
+trap 'rm -f "$f"' EXIT
+[ -x "$HOME/.local/bin/dx-terminal" ] || { echo "dx-askpass: weder zenity noch kdialog noch dx-terminal gefunden – kein Passwortfenster möglich" >&2; exit 1; }
 "$HOME/.local/bin/dx-terminal" -- sh -c 'printf "%s\n> " "$1"; stty -echo; read -r pw; stty echo; printf "%s" "$pw" > "$2"' dx-askpass "$text" "$f" >/dev/null 2>&1
-cat "$f"; rm -f "$f"
+[ -s "$f" ] || exit 1          # Abbruch im Fenster: leere Antwort, sudo bricht dann ab statt ein leeres Passwort zu probieren
+cat "$f"

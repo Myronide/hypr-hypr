@@ -24,15 +24,29 @@ if [ "$(id -u)" -eq 0 ]; then
     echo "Bitte nicht als root anmelden, sondern als normaler Benutzer:  sudo ./install.sh" >&2; exit 1
   fi
   UID_REAL="$(id -u "$SUDO_USER")"
+  # absoluter Pfad + bash: "bash install.sh" bzw. ein Aufruf ohne ./ würde sonst unter sudo -u im PATH gesucht und nicht gefunden
   exec sudo -u "$SUDO_USER" -H env DX_VIA_SUDO=1 XDG_RUNTIME_DIR="/run/user/$UID_REAL" \
-       ${DX_NO_START:+DX_NO_START="$DX_NO_START"} "${BASH_SOURCE[0]}" "$@"
+       ${DX_NO_START:+DX_NO_START="$DX_NO_START"} bash "$HERE/$(basename "${BASH_SOURCE[0]}")" "$@"
 fi
 if [ "${DX_VIA_SUDO:-0}" != 1 ]; then
   printf '\033[1;33m!!\033[0m  Zur Sicherheit brauche ich die sudo-Freigabe (der Installer ändert deine Konfiguration).\n'
+  command -v sudo >/dev/null 2>&1 || { echo "Abgebrochen: sudo ist nicht installiert (Paket sudo)." >&2; exit 1; }
   sudo -v || { echo "Abgebrochen: keine sudo-Freigabe." >&2; exit 1; }
 fi
 REPO="$HERE"
 CONF="$HOME/.config"
+# Ohne laufende Sitzung (z. B. per SSH) ist XDG_RUNTIME_DIR oft leer; unter "set -u" würde der Installer sonst mittendrin abbrechen
+[ -n "${XDG_RUNTIME_DIR:-}" ] || XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
+STEP="Vorbereitung"
+on_exit() {   # Teilabbruch: verständlich melden; alles Bisherige ist gesichert und ein zweiter Lauf setzt sauber fort
+  local rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  printf '\033[1;31m!!\033[0m  Installation abgebrochen (Schritt: %s, Code %s).\n' "$STEP" "$rc" >&2
+  [ -d "${BACKUP:-/nonexistent}" ] && echo "    Sicherung deiner Dateien: ${BACKUP/#$HOME/~}" >&2
+  echo "    Nichts ist halb installiert, was nicht beim nächsten Lauf von ./install.sh vollständig nachgeholt wird (Version und Repo-Pfad werden erst am Ende gespeichert)." >&2
+}
+trap on_exit EXIT
 KEYMAP_ARG=""; KEEP_CONFIG=0; DO_WE=1; ASSUME_YES=1; DO_PKGS=1; FORCE=0; CHANGED=0; RESTART=0
 for a in "$@"; do case "$a" in --no-we) DO_WE=0;; --force) FORCE=1;; --yes|-y) ASSUME_YES=1;; --ask) ASSUME_YES=0;; --restart) RESTART=1;; --no-packages) DO_PKGS=0;; --keep-config) KEEP_CONFIG=1;; --keymap=*) KEYMAP_ARG="${a#--keymap=}";; esac; done
 
@@ -43,7 +57,7 @@ ask()  { [ "$ASSUME_YES" = 1 ] && return 0; read -r -p "$1 [j/N] " r; [[ "$r" =~
 BACKUP="$HOME/.local/share/draconyx-backups/install-$(date +%Y%m%d-%H%M%S)"
 backup_file() {   # backup_file DATEI  (Pfad bleibt unter dem Sicherungsordner erhalten)
   local f="$1"; [ -e "$f" ] || return 0
-  local rel="${f#$HOME/}"; mkdir -p "$BACKUP/$(dirname "$rel")" && cp -a "$f" "$BACKUP/$rel" 2>/dev/null || true
+  local rel="${f#"$HOME"/}"; mkdir -p "$BACKUP/$(dirname "$rel")" && cp -a "$f" "$BACKUP/$rel" 2>/dev/null || true
 }
 # put QUELLE ZIEL [MODUS]: kopiert nur, wenn die Datei neu oder anders ist
 put() {
@@ -53,7 +67,22 @@ put() {
   install -D -m"$mode" "$src" "$dst"; CHANGED=$((CHANGED+1)); echo "    aktualisiert: ${dst/#$HOME/~}"
 }
 
+# Nur ein Installer gleichzeitig (Update über die Shell + von Hand gestartet würden sich sonst gegenseitig überschreiben)
+mkdir -p "$CONF/draconyx"
+exec 8>"$CONF/draconyx/.install.lock"
+if ! flock -n 8; then echo "Ein anderer Installer läuft gerade – bitte warten, bis er fertig ist." >&2; exit 1; fi
+
+# Lua-Dateien des Repos prüfen, BEVOR irgendetwas installiert wird: eine kaputte hyprland.lua bringt Hyprland beim Neuladen zum Absturz
+LUAC="$(command -v luac5.4 || command -v luac || true)"
+if [ -n "$LUAC" ]; then
+  for f in "$HERE"/hypr/*.lua; do
+    [ -e "$f" ] || continue
+    "$LUAC" -p "$f" 2>/dev/null || { echo "Abgebrochen: $f hat einen Lua-Syntaxfehler – es wurde nichts installiert." >&2; exit 1; }
+  done
+fi
+
 # ---------------------------------------------------------------- 0b. Berechtigungen
+STEP="Berechtigungen"
 # Dateien, die früher durch ein "sudo" root gehören (oder nicht beschreibbar sind), werden dem Benutzer zurückgegeben,
 # damit der Installer und die Shell überall schreiben können.
 for d in "$CONF/hypr" "$CONF/quickshell" "$CONF/draconyx" "$HOME/.local/bin" "$HOME/.local/share/draconyx-hypr" \
@@ -76,10 +105,22 @@ for f in "$CONF/draconyx/terminal" "$CONF/draconyx/window-mode" "$CONF/draconyx/
   backup_file "$f"
 done
 [ -d "$BACKUP" ] && say "Einstellungen gesichert in ${BACKUP/#$HOME/~}"
+# Ältere Installer-Sicherungen aufräumen: die letzten 15 bleiben (jeder Lauf legt sonst eine neue an)
+BK_ROOT="$HOME/.local/share/draconyx-backups"
+if [ -d "$BK_ROOT" ]; then
+  find "$BK_ROOT" -maxdepth 1 -type d -name 'install-*' -printf '%f\n' 2>/dev/null | sort -r | tail -n +16 | while IFS= read -r old; do
+    rm -rf -- "${BK_ROOT:?}/$old"
+  done
+fi
 # Zusätzlich die Shell-Einstellungen als Ganzes festhalten: nach dem Neustart der Shell wird alles Abweichende zurückgeschrieben
 python3 -I "$HERE/bin/dx-settings-guard" snapshot >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 1. Pakete
+STEP="Pakete"
+if [ "$DO_PKGS" = 1 ] && ! command -v pacman >/dev/null 2>&1; then
+  warn "pacman nicht gefunden (kein Arch-System?) – Pakete werden übersprungen. Benötigt: hyprland quickshell jq python-gobject rsync git …"
+  DO_PKGS=0
+fi
 # Jeder Eintrag: "Name" oder "Name|Alternative|…" (je nach Distribution heißt ein Paket anders, z. B. ttf-inter / inter-font).
 # Es wird das erste Paket genommen, das es in den Paketquellen gibt; ein fehlendes Paket stoppt die anderen nicht mehr.
 PKGS=(hyprland quickshell fuzzel jq python python-gobject python-pillow python-psutil gtk3 gtk-layer-shell grim wl-clipboard zenity xdotool git rsync
@@ -100,11 +141,12 @@ resolve_pkg() {
   for alt in "${alts[@]}"; do pacman -Si "$alt" >/dev/null 2>&1 && { want+=("$alt"); return 0; }; done
   aur+=("${alts[0]}")                                                                    # nicht in den Paketquellen
 }
-for p in "${PKGS[@]}" $([ "$DO_WE" = 1 ] && echo "${WE_PKGS[@]}"); do resolve_pkg "$p"; done
+ALL_PKGS=("${PKGS[@]}"); [ "$DO_WE" = 1 ] && ALL_PKGS+=("${WE_PKGS[@]}")
+if [ "$DO_PKGS" = 1 ]; then for p in "${ALL_PKGS[@]}"; do resolve_pkg "$p"; done; fi
 # Terminal: nur wenn KEIN einziges installiert ist, wird Ghostty erzwungen. Sonst bleibt dein Terminal, und du kannst Ghostty/Kitty
 # jederzeit deinstallieren (der Installer bringt sie nicht zurück). dx-terminal-ensure wacht danach, dass immer eins da ist.
 have_term=0; for t in ghostty kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm; do command -v "$t" >/dev/null 2>&1 && have_term=1; done
-if [ "$have_term" = 0 ]; then say "Kein Terminal gefunden – Ghostty wird installiert"; resolve_pkg ghostty; fi
+if [ "$have_term" = 0 ] && [ "$DO_PKGS" = 1 ]; then say "Kein Terminal gefunden – Ghostty wird installiert"; resolve_pkg ghostty; fi
 FAILED_PKGS=()
 if [ "$DO_PKGS" = 1 ] && { [ "${#want[@]}" -gt 0 ] || [ "${#aur[@]}" -gt 0 ]; }; then
   [ "${#want[@]}" -gt 0 ] && say "Fehlende Pakete: ${want[*]}"
@@ -128,9 +170,13 @@ if [ "$DO_PKGS" = 1 ] && { [ "${#want[@]}" -gt 0 ] || [ "${#aur[@]}" -gt 0 ]; };
 fi
 
 # ---------------------------------------------------------------- 2. Dateien
+STEP="Dateien kopieren"
 say "Shell (Quickshell) nach $CONF/quickshell/draconyx"
 mkdir -p "$CONF/quickshell/draconyx" "$HOME/.local/bin" "$HOME/.local/state/draconyx" "$CONF/draconyx" "$HOME/.local/share/draconyx-hypr"
-n=$(rsync -ai --exclude 'icons-src' --exclude 'logo-*.png' "$HERE/quickshell/" "$CONF/quickshell/draconyx/" | grep -c '^>f' || true)
+# --delay-updates: alle Dateien erscheinen erst am Ende fast gleichzeitig (jede einzelne lädt die Shell sonst mit halbem Stand neu)
+rsync_out="$(rsync -ai --delay-updates --exclude 'icons-src' --exclude 'logo-*.png' "$HERE/quickshell/" "$CONF/quickshell/draconyx/")" \
+  || { echo "Shell-Dateien konnten nicht kopiert werden (Platte voll oder keine Rechte?)." >&2; exit 1; }
+n=$(printf '%s\n' "$rsync_out" | grep -c '^>f' || true)
 [ "$n" -gt 0 ] && { echo "    $n Shell-Dateien aktualisiert"; CHANGED=$((CHANGED+n)); } || echo "    Shell ist aktuell"
 rsync -a --delete "$HERE/quickshell/icons-src/" "$HOME/.local/share/draconyx-hypr/qs-icons-src/"
 cp -n "$HERE"/quickshell/logo-*.png "$HOME/.local/share/draconyx-hypr/" 2>/dev/null || true
@@ -290,6 +336,7 @@ if ! hyprctl plugin list 2>/dev/null | grep -q aurora-native; then
 fi
 
 # ---------------------------------------------------------------- 4. Wallpaper Engine (repariert)
+STEP="Wallpaper Engine"
 if [ "$DO_WE" = 1 ]; then
   # Ein Fehler beim Bauen darf den Rest der Installation nicht abbrechen: eigener Unterprozess
   set +e
@@ -303,10 +350,16 @@ if [ "$DO_WE" = 1 ]; then
     say "Wallpaper Engine ist aktuell – nichts zu bauen"; exit 3
   else
     say "Wallpaper Engine bauen (Web-Wallpaper-Fix + Mausposition)"
+    export GIT_TERMINAL_PROMPT=0
     if [ ! -d "$SRC/.git" ]; then
-      git clone --recurse-submodules https://github.com/Almamu/linux-wallpaperengine.git "$SRC"
-      git -C "$SRC" checkout "$(cat "$HERE/wallpaper-engine/UPSTREAM_COMMIT")" 2>/dev/null || warn "Upstream-Stand nicht gefunden, nehme den neuesten (Patch passt eventuell nicht)."
-      git -C "$SRC" submodule update --init --recursive
+      # In einen Hilfsordner holen und erst am Ende umbenennen: ein abgebrochener Klon (Netz weg) darf keinen halben Quellordner hinterlassen
+      PART="$SRC.partial"; rm -rf "$PART"; mkdir -p "$(dirname "$SRC")"
+      trap 'rm -rf "$PART"' EXIT
+      timeout 900 git clone --recurse-submodules https://github.com/Almamu/linux-wallpaperengine.git "$PART" \
+        || { echo "    Download fehlgeschlagen (kein Netz?) – Wallpaper Engine wird später beim nächsten ./install.sh gebaut." >&2; exit 5; }
+      git -C "$PART" checkout "$(cat "$HERE/wallpaper-engine/UPSTREAM_COMMIT")" 2>/dev/null || warn "Upstream-Stand nicht gefunden, nehme den neuesten (Patch passt eventuell nicht)."
+      timeout 900 git -C "$PART" submodule update --init --recursive || { echo "    Download der Unterprojekte fehlgeschlagen." >&2; exit 5; }
+      mv "$PART" "$SRC"
     fi
     if git -C "$SRC" apply --reverse --check "$HERE/patches/linux-wallpaperengine-fixes.patch" 2>/dev/null; then
       echo "    Patch ist schon angewendet"
@@ -328,6 +381,7 @@ if [ "$DO_WE" = 1 ]; then
   case "$rc" in
     0) CHANGED=$((CHANGED+1));;
     3) ;;
+    5) warn "Wallpaper Engine: Quellen konnten nicht geladen werden (kein Netz?) – der Rest ist installiert. ./install.sh später erneut starten.";;
     *) warn "Wallpaper Engine konnte nicht gebaut werden (Code $rc) – der Rest ist installiert. Fehlende Pakete nachholen und ./install.sh erneut starten.";;
   esac
 fi
@@ -335,6 +389,7 @@ fi
 # ---------------------------------------------------------------- 5. Aurora komplett auf die Shell umstellen
 # Aurora-Skripte (Dock, Launcher, Alt+Tab, Modus, Minimieren) reichen bei vorhandener Shell nur noch an Quickshell weiter;
 # waybar und das alte GTK-Dock starten nicht mehr.
+STEP="Aurora umstellen"
 AU="$CONF/hypr/aurora"
 if [ -e "$AU/desktop-ui" ] || [ -e "$AU/start-desktop" ]; then
   say "Aurora-Skripte auf die Shell umstellen (Sicherungen: *.vor-shell)"
@@ -358,6 +413,7 @@ for p in $(pgrep -x python3 || true); do
   if tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q 'desktop-ui daemon'; then say "altes Aurora-Dock beenden (PID $p)"; kill "$p" || true; fi
 done
 # ---------------------------------------------------------------- 6. Alles anwenden: Hyprland neu laden, Shell neu starten
+STEP="Neu laden"
 # Läuft vollautomatisch; nur wenn sich etwas geändert hat (oder mit --restart). DX_NO_START=1 überspringt das.
 if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ]; }; then
   # laufende Hyprland-Sitzung finden, auch wenn das Skript außerhalb davon gestartet wurde
@@ -420,8 +476,17 @@ fi
 [ -x "$HOME/.local/bin/dx-terminal-ensure" ] && "$HOME/.local/bin/dx-terminal-ensure" --quiet || true
 
 # Installierte Version und Repo-Pfad merken (für die Update-Prüfung der Shell: dx-update)
+STEP="Version speichern"
 mkdir -p "$CONF/draconyx"
-printf '{"version": "%s", "repo": "%s"}\n' "$(cat "$REPO/VERSION" 2>/dev/null || echo 0)" "$REPO" > "$CONF/draconyx/install.json"
+# per Python schreiben: Pfade mit Anführungszeichen/Backslash ergäben sonst ungültiges JSON; atomar ersetzen
+python3 -I - "$(tr -d '[:space:]' < "$REPO/VERSION" 2>/dev/null || echo 0)" "$REPO" "$CONF/draconyx/install.json" <<'PY'
+import json, os, sys
+v, repo, out = sys.argv[1:4]
+tmp = out + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump({"version": v, "repo": repo}, f, ensure_ascii=False); f.write("\n")
+os.replace(tmp, out)
+PY
 [ -x "$HOME/.local/bin/dx-update" ] && "$HOME/.local/bin/dx-update" check --quiet >/dev/null 2>&1 || true
 
 [ "$CHANGED" -eq 0 ] && say "Alles war schon auf dem neuesten Stand." || say "$CHANGED Teile aktualisiert."

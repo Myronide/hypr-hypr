@@ -19,8 +19,17 @@ def read_json(p, default):
 def vkey(v):
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) + (0,) * (3 - len(re.findall(r"\d+", v)[:3]))
 
+def git_env():
+    """Git darf nie auf eine Eingabe warten (Passwort, Host-Schlüssel): im Hintergrund sieht sie niemand und der Aufruf hinge für immer."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10")
+    return env
+
 def git(repo, *args, timeout=40):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout)
+    try:
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout, env=git_env())
+    except FileNotFoundError:
+        raise OSError("git ist nicht installiert (Paket git)")
 
 
 def changelog(text, installed, latest):
@@ -39,9 +48,9 @@ def changelog(text, installed, latest):
 
 def check():
     info = read_json(INSTALL, {})
-    repo = Path(info.get("repo", ""))
+    repo = Path(info["repo"]) if info.get("repo") else None          # Path("") wäre der aktuelle Ordner und würde dessen .git prüfen
     out = {"installed": info.get("version", "?"), "latest": info.get("version", "?"), "available": False, "notes": [], "checked": int(time.time()), "error": ""}
-    if not (repo / ".git").exists():
+    if repo is None or not (repo / ".git").exists():
         out["error"] = "noch nicht mit install.sh eingerichtet – im Repo einmal  sudo ./install.sh  ausführen" if not info else "Repo-Ordner nicht mehr vorhanden – install.sh aus dem neuen Repo starten"
     else:
         try:
@@ -65,8 +74,13 @@ def check():
                 out["changelog"] = changelog(git(repo, "show", up + ":CHANGELOG.md").stdout, out["installed"], latest)
         except (subprocess.TimeoutExpired, OSError) as e:
             out["error"] = str(e)
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    try:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = STATE.with_suffix(".tmp")                                  # atomar: die Shell liest die Datei, während wir schreiben
+        tmp.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+        tmp.replace(STATE)
+    except OSError as e:
+        out["error"] = out["error"] or "Stand konnte nicht gespeichert werden: %s" % e
     return out
 
 
@@ -84,8 +98,11 @@ def progress(percent, text, state="running"):
         pass
 
 def notify(title, body="", urgent=False):
-    subprocess.run(["notify-send", "-a", "Draconyx", "-i", "system-software-update"] + (["-u", "critical"] if urgent else []) + [title, body],
-                   capture_output=True)
+    try:
+        subprocess.run(["notify-send", "-a", "Draconyx", "-i", "system-software-update"] + (["-u", "critical"] if urgent else []) + [title, body],
+                       capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass                                                             # ohne notify-send/Benachrichtigungsdienst läuft das Update trotzdem
 
 def sync_repo(repo, log):
     """Repo auf den Stand des Remotes bringen, ohne etwas zu verlieren: eigene Änderungen werden vorher gesichert."""
@@ -93,7 +110,7 @@ def sync_repo(repo, log):
         r = git(repo, *a, timeout=120)
         log.write("$ git %s\n%s%s\n" % (" ".join(a), r.stdout, r.stderr)); log.flush()
         if check and r.returncode != 0:
-            raise RuntimeError("git %s fehlgeschlagen: %s" % (a[0], (r.stderr.strip().splitlines() or ["?"])[-1]))
+            raise RuntimeError("git %s fehlgeschlagen: %s" % (next(x for x in a if not x.startswith("-") and "=" not in x), (r.stderr.strip().splitlines() or ["?"])[-1]))
         return r
     progress(8, "Hole den neuen Stand …")
     g("fetch", "origin")
@@ -101,7 +118,8 @@ def sync_repo(repo, log):
     up = g("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", check=False).stdout.strip() or "origin/master"
     stamp = time.strftime("%Y%m%d-%H%M%S")
     if g("status", "--porcelain", check=False).stdout.strip():                    # lokale Änderungen im Repo: sichern, nicht löschen
-        g("stash", "push", "--include-untracked", "-m", "dx-update " + stamp, check=False)
+        # Ohne user.name/user.email (frisches System) scheitert "git stash"; dann dürfte unten kein "reset --hard" folgen: lieber abbrechen
+        g("-c", "user.name=Draconyx", "-c", "user.email=draconyx@localhost", "stash", "push", "--include-untracked", "-m", "dx-update " + stamp)
         log.write("(lokale Änderungen im Repo gesichert: git stash list)\n")
     if g("merge", "--ff-only", up, check=False).returncode != 0:               # Verlauf weicht ab (z. B. neu geschrieben): alten Stand merken
         g("branch", "dx-vor-update-" + stamp, "HEAD", check=False)
@@ -121,7 +139,9 @@ def apply(foreground=False, terminal=False):
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return
     import fcntl
-    lockf = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "draconyx-update.lock"), "w")
+    rt = os.environ.get("XDG_RUNTIME_DIR") or str(HOME / ".cache/draconyx")     # nie ein vorhersagbarer Name in /tmp
+    os.makedirs(rt, exist_ok=True)
+    lockf = open(os.path.join(rt, "draconyx-update.lock"), "w")
     try:
         fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -158,8 +178,8 @@ def apply(foreground=False, terminal=False):
         check()
         progress(100, "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old), "done")
     else:
-        progress(100, "Nichts wurde überschrieben – Protokoll: update.log", "error")
-        notify("Draconyx-Update fehlgeschlagen", "Nichts wurde überschrieben. Protokoll: %s" % LOG, True)
+        progress(100, "Update fehlgeschlagen – deine Einstellungen sind unverändert (Protokoll: update.log)", "error")
+        notify("Draconyx-Update fehlgeschlagen", "Deine Einstellungen sind unverändert (Sicherungen: ~/.local/share/draconyx-backups). Protokoll: %s" % LOG, True)
         sys.exit(rc)
 
 def main():

@@ -1,9 +1,16 @@
 #!/bin/sh
+# Aurora-Reste: startet bei vorhandener Draconyx-Shell nur noch das Nötigste (Shell-Start, Zwischenablage, Wallpaper-Wiederherstellung).
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR fehlt – start-desktop gehört in eine Anmeldesitzung}"
 mkdir -p "$HOME/.cache/aurora"
 "$HOME/.config/hypr/aurora/start-dock" &
 "$HOME/.config/hypr/aurora/desktop-ui" daemon >> "$HOME/.cache/aurora/ui.log" 2>&1 &
-flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-text.lock" wl-paste --type text --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store text >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
-flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-image.lock" wl-paste --type image/png --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store image/png >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
+# Zwischenablage-Wächter: je einer (flock); fehlt wl-paste/flock/cliphist, wird das nur protokolliert statt Fehler zu verschlucken
+if command -v wl-paste >/dev/null 2>&1 && command -v flock >/dev/null 2>&1 && command -v cliphist >/dev/null 2>&1; then
+    flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-text.lock" wl-paste --type text --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store text >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
+    flock -n "$XDG_RUNTIME_DIR/aurora-clipboard-image.lock" wl-paste --type image/png --watch "$HOME/.config/hypr/aurora/desktop-ui" clipboard-store image/png >> "$HOME/.cache/aurora/clipboard.log" 2>&1 &
+else
+    echo "$(date +%T) Zwischenablage-Verlauf aus: wl-clipboard, util-linux (flock) und cliphist werden gebraucht" >> "$HOME/.cache/aurora/clipboard.log"
+fi
 "$HOME/.config/hypr/aurora/background-restore" >> "$HOME/.cache/aurora/wallpaper.log" 2>&1 &
 # Sicherheitsnetz: Shell starten, falls der daemon-Aufruf oben sie nicht gestartet hat
 [ -x "$HOME/.local/bin/dx-shell-ensure" ] && "$HOME/.local/bin/dx-shell-ensure" >/dev/null 2>&1 &

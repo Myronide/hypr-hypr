@@ -2,7 +2,8 @@
 # Draconyx Coding Space: listet Unterordner als Projekt oder Workspace.
 #   dx-code-list <ordner> [<ordner-mit-weiteren-*Workspace*-Ordnern>]
 # Ausgabe (TSV): geändert<TAB>art<TAB>git<TAB>name<TAB>pfad     (art = project | workspace)
-dir="$1"; extra="${2:-}"
+dir="${1:-}"; extra="${2:-}"
+[ -n "$dir" ] && [ -d "$dir" ] || { echo "Benutzung: dx-code-list <ordner> [<ordner-mit-Workspaces>]" >&2; exit 2; }   # leer = sonst würde "/" aufgelistet
 
 # Workspace = Ordner mit "Workspace" im Namen. Alles andere ist ein Projekt (keine weiteren Vermutungen).
 classify() {
@@ -11,7 +12,7 @@ classify() {
 }
 emit() {
   local p="$1" k="$2" g=0
-  [ -d "$p/.git" ] && g=1
+  [ -e "$p/.git" ] && g=1             # .git ist bei Worktrees/Submodulen eine Datei
   printf '%s\t%s\t%s\t%s\t%s\n' "$(stat -c %Y "$p" 2>/dev/null || echo 0)" "$k" "$g" "$(basename "$p")" "$p"
 }
 {
@@ -27,7 +28,7 @@ emit() {
   IFS=: read -ra more <<< "${DX_CODE_ROOTS:-}"
   for r in "${more[@]}"; do
     r="${r%/}"; [ -d "$r" ] || continue
-    if [ -d "$r/.git" ]; then emit "$r" project
+    if [ -e "$r/.git" ]; then emit "$r" project
     elif case "$(basename "$r" | tr A-Z a-z)" in *workspace*) true;; *) false;; esac; then emit "$r" workspace
     else
       for p in "$r"/*/; do [ -d "$p" ] && { p="${p%/}"; emit "$p" "$(classify "$p")"; }; done

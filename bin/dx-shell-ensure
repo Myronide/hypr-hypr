@@ -2,18 +2,28 @@
 # Draconyx: sorgt dafür, dass die Shell läuft (Sicherheitsnetz zum Autostart). Mehrere Versuche, Protokoll:
 # ~/.cache/draconyx/shell-start.log. Kann beliebig oft aufgerufen werden – läuft die Shell schon, passiert nichts.
 LOG="$HOME/.cache/draconyx/shell-start.log"; mkdir -p "$(dirname "$LOG")"
-exec 9>"${XDG_RUNTIME_DIR:-/tmp}/draconyx-shell-ensure.lock"; flock -n 9 || exit 0     # nur ein Starter gleichzeitig
+RT="${XDG_RUNTIME_DIR:-}"
+[ -n "$RT" ] && [ -d "$RT" ] || RT="$HOME/.cache/draconyx"        # nie ein vorhersagbarer Name in /tmp
+mkdir -p "$RT"
+# Log klein halten (die Shell schreibt ihre Ausgabe auch hierher)
+if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then tail -c 100000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; fi
+# Ohne Wayland-Sitzung (SSH, Textkonsole) hat ein Start der Shell keinen Sinn und würde nur Fehler ins Protokoll schreiben
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+  echo "$(date +%T) keine Wayland-Sitzung – nichts zu tun" >> "$LOG"; exit 0
+fi
+exec 9>"$RT/draconyx-shell-ensure.lock"; flock -n 9 || exit 0     # nur ein Starter gleichzeitig
 QS="$(command -v qs || echo /usr/bin/qs)"
 [ -f "$HOME/.config/quickshell/draconyx/shell.qml" ] || exit 0
-[ -x "$QS" ] || { echo "$(date +%T) qs nicht gefunden" >> "$LOG"; exit 1; }
+[ -x "$QS" ] || { echo "$(date +%T) qs (Paket quickshell) nicht gefunden" >> "$LOG"; exit 1; }
 for i in 1 2 3 4 5 6; do
-  if "$QS" -c draconyx ipc show >/dev/null 2>&1; then
+  if timeout 5 "$QS" -c draconyx ipc show >/dev/null 2>&1; then
     [ "$i" -gt 1 ] && echo "$(date +%T) Shell läuft (Versuch $i)" >> "$LOG"
     exit 0
   fi
   if pgrep -x qs >/dev/null 2>&1; then sleep 2; continue; fi     # ein anderer Starter ist gerade dabei
   echo "$(date +%T) Shell nicht aktiv – starte (Versuch $i)" >> "$LOG"
-  QS_ICON_THEME=Papirus-Dark setsid "$QS" -c draconyx >>"$LOG" 2>&1 &
+  # 9>&-: die Sperre darf nicht an die Shell vererbt werden, sonst hielte sie sie, solange sie lebt
+  QS_ICON_THEME=Papirus-Dark setsid "$QS" -c draconyx >>"$LOG" 2>&1 9>&- </dev/null &
   sleep 6
 done
-echo "$(date +%T) Shell nach 6 Versuchen nicht gestartet" >> "$LOG"; exit 1
+echo "$(date +%T) Shell nach 6 Versuchen nicht gestartet – prüfe:  dx-doctor" >> "$LOG"; exit 1

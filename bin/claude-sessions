@@ -33,9 +33,17 @@ save() {
         [ -e "$f" ] || continue
         pid=$(jq -r '.pid' "$f" 2>/dev/null) || continue
         # nur lebende Claude-Prozesse, keine Reste
+        case "$pid" in ''|*[!0-9]*) continue;; esac
         [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "claude" ] || continue
         jq -r 'select(.kind=="interactive") | [.sessionId, .cwd, .name] | @tsv' "$f" >> "$SNAP.new"
     done
+    # Keine laufende Session (z. B. nach dem Neustart, bevor alles wieder offen ist): den alten Snapshot NICHT durch eine leere Liste ersetzen,
+    # sonst wären die Sessions, die man wiederherstellen will, verloren
+    if [ ! -s "$SNAP.new" ] && [ -s "$SNAP" ] && [ "${1:-}" != "--force" ]; then
+        rm -f "$SNAP.new"
+        echo "Keine laufende Claude-Session gefunden – der bisherige Snapshot bleibt erhalten (leeren mit: claude-sessions save --force)."
+        return 0
+    fi
     mv "$SNAP.new" "$SNAP"
     echo "$(wc -l < "$SNAP") Sessions gespeichert in $SNAP"
 }
@@ -56,7 +64,7 @@ list() {
 }
 
 case "${1:-}" in
-    save)    save ;;
+    save)    save "${2:-}" ;;
     restore) restore ;;
     list)    list ;;
     *) echo "Benutzung: claude-sessions {save|restore|list}"; exit 1 ;;

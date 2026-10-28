@@ -5,18 +5,23 @@
 # kleben. Läuft nur, solange die Shell es braucht (stirbt mit ihr).
 import json, os, select, signal, socket, sys, time
 
+if not os.environ.get("XDG_RUNTIME_DIR") or not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+    sys.exit("dx-window-watch: keine Hyprland-Sitzung (HYPRLAND_INSTANCE_SIGNATURE fehlt)")
+
 def call(cmd):
     s = socket.socket(socket.AF_UNIX)
     s.settimeout(1.0)
-    s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
-    s.sendall(cmd.encode())
-    out = b""
-    while True:
-        d = s.recv(65536)
-        if not d:
-            break
-        out += d
-    s.close()
+    try:
+        s.connect("%s/hypr/%s/.socket.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
+        s.sendall(cmd.encode())
+        out = b""
+        while True:
+            d = s.recv(65536)
+            if not d:
+                break
+            out += d
+    finally:
+        s.close()                               # auch bei Zeitüberschreitung schließen (sonst läuft der Wächter irgendwann ohne freie Dateien)
     return out.decode()
 
 try:
@@ -30,7 +35,10 @@ KEEP = ("address", "class", "title", "at", "size", "floating", "fullscreen", "wo
 
 # Hyprland-Ereignisse (neues/geschlossenes Fenster, Fokus, Desktop …) wecken den schnellen Takt sofort
 ev = socket.socket(socket.AF_UNIX)
-ev.connect("%s/hypr/%s/.socket2.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
+try:
+    ev.connect("%s/hypr/%s/.socket2.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
+except OSError as e:
+    sys.exit("dx-window-watch: Hyprland-Ereignis-Socket nicht erreichbar (%s) – läuft Hyprland?" % e)
 ev.setblocking(False)
 
 last, n, cache, fast_until = "", 0, [], 0.0
@@ -40,11 +48,13 @@ while True:
     try:
         while True:                                   # Ereignisse leeren
             if not ev.recv(65536):
-                sys.exit(0)
+                sys.exit(0)                           # Hyprland beendet: der Wächter auch (die Shell startet ihn mit der nächsten Sitzung neu)
             event_seen = True
             fast_until = now + 0.6
     except BlockingIOError:
         pass
+    except ConnectionError:
+        sys.exit(0)
     busy = False
     try:
         cl = [{k: c.get(k) for k in KEEP} for c in json.loads(call("j/clients"))]
