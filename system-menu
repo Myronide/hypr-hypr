@@ -1,14 +1,18 @@
 #!/usr/bin/python3
-import subprocess
+import subprocess,sys
 from pathlib import Path
 base=Path.home()/'.config/hypr/aurora'
 def choose(items,prompt):
- r=subprocess.run(['rofi','-no-config','-dmenu','-no-custom','-theme',str(base/'menu.rasi'),'-p',prompt,'-format','i'],input='\n'.join(items),capture_output=True,text=True)
+ try:r=subprocess.run(['rofi','-no-config','-dmenu','-no-custom','-theme',str(base/'menu.rasi'),'-p',prompt,'-format','i'],input='\n'.join(items),capture_output=True,text=True)
+ except OSError as e:print('system-menu: rofi nicht startbar:',e,file=sys.stderr);sys.exit(1)
  return int(r.stdout.strip()) if r.returncode==0 and r.stdout.strip().isdigit() else -1
+def start(cmd):
+ try:subprocess.Popen(cmd,start_new_session=True)
+ except OSError as e:print('system-menu: %s nicht startbar: %s'%(cmd[0],e),file=sys.stderr)
 items=['󰖯  Desktop / Tiling wechseln','󰕾  Audio-Einstellungen','󰤨  Netzwerk','󰂯  Bluetooth','󰒓  Systemeinstellungen','󰤄  Standby','󰐥  Ausschalten / Neustart']
 i=choose(items,'System')
 commands=[ [str(base/'mode'),'--toggle'],['kcmshell6','kcm_pulseaudio'],['kitty','--class','aurora-network','nmtui'],['kcmshell6','kcm_bluetooth'],[str(base/'settings-app')],['systemctl','suspend'] ]
-if 0<=i<len(commands): subprocess.Popen(commands[i],start_new_session=True)
+if 0<=i<len(commands): start(commands[i])
 elif i==6:
  j=choose(['Abbrechen','Neustarten','Ausschalten'],'Sitzung beenden?')
- if j in (1,2): subprocess.Popen(['systemctl','reboot' if j==1 else 'poweroff'])
+ if j in (1,2): start(['systemctl','reboot' if j==1 else 'poweroff'])

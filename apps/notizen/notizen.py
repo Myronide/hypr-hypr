@@ -1,13 +1,26 @@
 #!/usr/bin/python3
 """Draconyx Notizen: Liste links, Editor rechts, speichert selbst. Jede Notiz ist eine Textdatei in ~/Documents/Draconyx-Notizen."""
-import os, re, time
+import os, re, tempfile, time
 from pathlib import Path
 import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GLib
 
 DIR = Path.home() / "Documents" / "Draconyx-Notizen"
-DIR.mkdir(parents=True, exist_ok=True)
+
+
+def write_note(path, text):
+    """Atomar speichern (Temp-Datei + Ersetzen): ein Absturz mitten im Schreiben darf keine Notiz zerstören."""
+    path = Path(path)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".notiz.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try: os.unlink(tmp)
+        except OSError: pass
+        raise
 
 
 def title_of(text, fallback):
@@ -36,8 +49,13 @@ class Notes(Gtk.Application):
                 try: css.load_from_path(str(p))
                 except GLib.Error: pass
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        try:
+            DIR.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print("Notizen: Ordner nicht anlegbar:", e, flush=True)
         self.win = Gtk.ApplicationWindow(application=self, title="Notizen")
         self.win.set_default_size(900, 600)
+        self.win.connect("delete-event", lambda *_: (self.flush(), False)[1])     # offene Eingabe beim Schließen sichern
         head = Gtk.HeaderBar(title="Notizen", show_close_button=True)
         self.win.set_titlebar(head)
         new = Gtk.Button(label="Neue Notiz"); new.get_style_context().add_class("suggested-action"); new.connect("clicked", self.new_note)
@@ -63,8 +81,15 @@ class Notes(Gtk.Application):
     def files(self):
         q = self.search.get_text().strip().lower()
         out = []
-        for f in sorted(DIR.glob("*.txt"), key=lambda p: -p.stat().st_mtime):
-            try: text = f.read_text(encoding="utf-8")
+        try:
+            names = list(DIR.glob("*.txt"))
+        except OSError:
+            names = []
+        def mtime(p):
+            try: return p.stat().st_mtime
+            except OSError: return 0
+        for f in sorted(names, key=lambda p: -mtime(p)):
+            try: text = f.read_text(encoding="utf-8", errors="replace")
             except OSError: continue
             if q and q not in text.lower(): continue
             out.append((f, text))
@@ -77,7 +102,7 @@ class Notes(Gtk.Application):
             row = Gtk.ListBoxRow(); row.path = f
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin=8)
             t = Gtk.Label(label=title_of(text, "(leer)"), xalign=0); t.set_ellipsize(3)
-            d = Gtk.Label(label=time.strftime("%d.%m.%Y %H:%M", time.localtime(f.stat().st_mtime)), xalign=0)
+            d = Gtk.Label(label=time.strftime("%d.%m.%Y %H:%M", time.localtime(mtime(f))), xalign=0)
             d.get_style_context().add_class("subtitle")
             box.pack_start(t, False, False, 0); box.pack_start(d, False, False, 0); row.add(box); self.list.add(row)
             if keep and f == keep:
@@ -89,7 +114,8 @@ class Notes(Gtk.Application):
         self.flush()
         self.current = row.path
         self.loading = True
-        self.buf.set_text(row.path.read_text(encoding="utf-8"))
+        try: self.buf.set_text(row.path.read_text(encoding="utf-8", errors="replace"))
+        except OSError: self.buf.set_text("")
         self.loading = False
 
     def on_change(self, *_):
@@ -103,15 +129,21 @@ class Notes(Gtk.Application):
         if self.current and self.current.exists():
             start, end = self.buf.get_bounds()
             text = self.buf.get_text(start, end, True)
-            if text != self.current.read_text(encoding="utf-8"):
-                self.current.write_text(text, encoding="utf-8")
+            try: old = self.current.read_text(encoding="utf-8", errors="replace")
+            except OSError: old = None
+            if text != old:
+                try: write_note(self.current, text)
+                except OSError as e:
+                    print("Notizen: Speichern fehlgeschlagen:", e, flush=True); return False
                 self.refill(keep=self.current)
         return False
 
     def new_note(self, *_):
         self.flush()
         f = DIR / ("Notiz-%s.txt" % time.strftime("%Y%m%d-%H%M%S"))
-        f.write_text("", encoding="utf-8")
+        try: write_note(f, "")
+        except OSError as e:
+            print("Notizen: Neue Notiz nicht anlegbar:", e, flush=True); return
         self.search.set_text("")
         self.refill(keep=f)
         self.view.grab_focus()
@@ -122,7 +154,9 @@ class Notes(Gtk.Application):
                               buttons=Gtk.ButtonsType.YES_NO, text="Diese Notiz löschen?")
         r = d.run(); d.destroy()
         if r == Gtk.ResponseType.YES:
-            self.current.unlink(missing_ok=True); self.current = None
+            try: self.current.unlink(missing_ok=True)
+            except OSError as e: print("Notizen: Löschen fehlgeschlagen:", e, flush=True)
+            self.current = None
             self.refill()
             rows = self.list.get_children()
             if rows: self.list.select_row(rows[0])

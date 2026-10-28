@@ -4,9 +4,12 @@ Gemeinsam genutzt von der Einstellungs-App (Seite „Bildschirme“) und dem Ins
 Reine Logik ohne GTK, damit sie sich ohne Anzeige testen lässt.
 """
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -18,29 +21,56 @@ def _run(args):
     return subprocess.run(args, capture_output=True, text=True, timeout=10).stdout
 
 
+def _atomic_write(path, text):
+    """Temp-Datei im selben Ordner + Ersetzen: nie eine halb geschriebene monitors_local.lua."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def live():
     """Alle Bildschirme (auch ausgeschaltete) aus dem laufenden Hyprland."""
     try:
         data = json.loads(_run(["hyprctl", "monitors", "all", "-j"]))
     except (OSError, ValueError, subprocess.SubprocessError):
         return []
+    if not isinstance(data, list):
+        return []
     out = []
     for m in data:
+        if not isinstance(m, dict) or not isinstance(m.get("name"), str) or not m["name"]:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_.:\-]+", m["name"]):
+            continue   # Name kommt in Lua-Text und Hyprland-Befehle: nur harmlose Zeichen
         modes = []
         for s in m.get("availableModes", []):
             g = re.match(r"(\d+)x(\d+)@([\d.]+)Hz", s)
             if g:
                 modes.append((int(g[1]), int(g[2]), float(g[3])))
-        out.append({
-            "name": m["name"], "desc": m.get("description", ""), "w": int(m["width"]), "h": int(m["height"]),
-            "hz": float(m.get("refreshRate", 60)), "x": int(m["x"]), "y": int(m["y"]), "scale": round(float(m.get("scale", 1)), 2),
-            "transform": int(m.get("transform", 0)), "disabled": bool(m.get("disabled", False)), "modes": modes,
-        })
+        try:
+            scale = round(float(m.get("scale", 1)), 2)
+            out.append({
+                "name": m["name"], "desc": str(m.get("description", "")).replace("\n", " "), "w": int(m["width"]), "h": int(m["height"]),
+                "hz": float(m.get("refreshRate", 60)), "x": int(m["x"]), "y": int(m["y"]), "scale": scale if scale > 0 else 1.0,
+                "transform": int(m.get("transform", 0)), "disabled": bool(m.get("disabled", False)), "modes": modes,
+            })
+        except (KeyError, TypeError, ValueError):
+            continue   # unvollständiger Eintrag: überspringen statt abstürzen
     return out
 
 
 def logical_size(m):
-    w, h = m["w"] / m["scale"], m["h"] / m["scale"]
+    w, h = m["w"] / (m["scale"] or 1), m["h"] / (m["scale"] or 1)
     return (h, w) if m["transform"] % 2 else (w, h)
 
 
@@ -136,8 +166,7 @@ def write_config(mons, path=CONF):
         parts.append(lua_block(m, old.get(m["name"])))
     parts.append('-- Alles andere (z. B. ein neu angeschlossener Monitor): rechts anhängen\n'
                  'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })\n')
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(parts), encoding="utf-8")
+    _atomic_write(path, "\n".join(parts))
     return backup
 
 
@@ -148,10 +177,27 @@ def apply_live(mons, extras_from=CONF):
     for m in mons:
         block = lua_block(m, old.get(m["name"]))
         code = re.sub(r"^--[^\n]*\n", "", block)
-        r = subprocess.run(["hyprctl", "eval", code], capture_output=True, text=True, timeout=10)
+        try:
+            r = subprocess.run(["hyprctl", "eval", code], capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return False   # kein hyprctl / Hyprland hängt: nicht weitermachen
         if r.returncode != 0 or ("error" in (r.stdout + r.stderr).lower()):
             ok = False
     return ok
+
+
+def start_watchdog(prev, marker, delay=22):
+    """Sicherheitsnetz für die 15-Sekunden-Rückfrage: ein eigener Prozess stellt die alte Anordnung wieder her, wenn bis
+    zum Ablauf keine Marker-Datei existiert – auch wenn die Einstellungs-App währenddessen abstürzt oder beendet wird."""
+    code = ("import sys,os,time,json;sys.path.insert(0,%r);import monitors;"
+            "time.sleep(%d);\nif not os.path.exists(%r): monitors.apply_live(json.loads(sys.argv[1]))" % (str(Path(__file__).resolve().parent), delay, str(marker)))
+    try:
+        Path(marker).unlink(missing_ok=True)
+        subprocess.Popen([sys.executable, "-c", code, json.dumps(prev)], start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except OSError:
+        return False
 
 
 def init_config(path=CONF):
@@ -183,7 +229,7 @@ def sync_missing(path=CONF):
     new = "\n".join(lua_block(m) for m in mons) + "\n"
     i = re.search(r'^\s*hl\.monitor\s*\(\s*\{\s*output\s*=\s*""', text, re.M)
     text = text[:i.start()] + new + text[i.start():] if i else text.rstrip("\n") + "\n\n" + new
-    path.write_text(text, encoding="utf-8")
+    _atomic_write(path, text)
     return len(mons)
 
 

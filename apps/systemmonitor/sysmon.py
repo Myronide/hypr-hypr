@@ -15,15 +15,19 @@ HIST = 90                                    # Messpunkte je Verlauf (bei 1 s = 
 
 # ---------------------------------------------------------------- Farben
 def palette():
+    import json
     c = {"bg": "#262a30", "surface": "#30353d", "text": "#edf1f7", "muted": "#a6b0be", "accent": "#4d8fe0", "accent_bright": "#6ba9ff"}
-    for p in (HOME / ".config/draconyx/colors.json",):
-        try:
-            import json
-            d = json.loads(p.read_text())
-            c.update({"bg": d.get("bg", c["bg"]), "surface": d.get("surface", c["surface"]), "text": d.get("text", c["text"]),
-                      "muted": d.get("muted", c["muted"]), "accent": d.get("accent", c["accent"]), "accent_bright": d.get("accentBright", c["accent_bright"])})
-        except (OSError, ValueError):
-            pass
+    keys = {"bg": "bg", "surface": "surface", "text": "text", "muted": "muted", "accent": "accent", "accentBright": "accent_bright"}
+    try:
+        d = json.loads((HOME / ".config/draconyx/colors.json").read_text())
+    except (OSError, ValueError):
+        return c
+    if not isinstance(d, dict):
+        return c
+    for src, dst in keys.items():
+        v = d.get(src)
+        if isinstance(v, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", v):   # nur gültige #rrggbb-Werte (kommen ins CSS)
+            c[dst] = v
     return c
 
 
@@ -31,8 +35,11 @@ PAL = palette()
 
 
 def rgb(hexstr, a=1.0):
-    h = hexstr.lstrip("#")
-    return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, a)
+    h = str(hexstr).lstrip("#")
+    try:
+        return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, a)
+    except ValueError:
+        return (0.3, 0.56, 0.88, a)
 
 
 CSS = """
