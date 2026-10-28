@@ -38,15 +38,22 @@ def icons(c):
     return key
 def write(c, palette=True):
     for k in PRESETS["aurora"]:
-        if not HEX.match(c.get(k, "")): raise SystemExit("Ungültige Farbe für " + k)
+        if not HEX.match(str(c.get(k, ""))): raise SystemExit("Ungültige Farbe für %s (erwartet wird z. B. #4d8fe0)" % k)
     c["iconKey"] = icons(c)
     CONF.parent.mkdir(parents=True, exist_ok=True)
     tmp = CONF.with_suffix(".tmp"); tmp.write_text(json.dumps(c, indent=2)); tmp.replace(CONF)
     if palette and AURORA.is_dir():
-        (AURORA / "palette.css").write_text(
+        pal = AURORA / "palette.css"; ptmp = pal.with_suffix(".css.tmp")
+        ptmp.write_text(
           "@define-color shell_bg %(bg)s;\n@define-color shell_surface %(surface)s;\n@define-color shell_hover %(hover)s;\n"
           "@define-color shell_border %(border)s;\n@define-color shell_text %(text)s;\n@define-color shell_muted %(muted)s;\n"
           "@define-color shell_blue %(accentBright)s;\n@define-color shell_selected %(selected)s;\n@define-color shell_accent %(accent)s;\n@define-color shell_accent_deep %(accentDeep)s;\n" % c)
+        ptmp.replace(pal)
+def hexarg(v):
+    """Farbe aus der Befehlszeile prüfen ('#abc123' oder 'abc123'), sonst verständlich abbrechen."""
+    h = v if v.startswith("#") else "#" + v
+    if not HEX.match(h): raise SystemExit("Ungültige Farbe '%s' (erwartet wird z. B. #4d8fe0)" % v)
+    return h
 def main(a):
     if not a or a[0] == "show": print(json.dumps(load(), indent=2)); return
     c = load()
@@ -60,11 +67,11 @@ def main(a):
                 print("colors.json nicht lesbar – bleibt unverändert", file=sys.stderr)
         else:
             write(c, palette=False)
-    elif a[0] == "preset" and a[1] in PRESETS: c = dict(PRESETS[a[1]], preset=a[1]); write(c)
-    elif a[0] == "accent":
-        h = a[1] if a[1].startswith("#") else "#" + a[1]
+    elif a[0] == "preset" and len(a) > 1 and a[1] in PRESETS: c = dict(PRESETS[a[1]], preset=a[1]); write(c)
+    elif a[0] == "accent" and len(a) > 1:
+        h = hexarg(a[1])
         c.update(accent=h, accentBright=shade(h, .12), accentDeep=shade(h, -.1), selected=shade(h, -.28, -.15), preset="custom"); write(c)
-    elif a[0] == "set" and a[1] in PRESETS["aurora"]:
-        c[a[1]] = a[2] if a[2].startswith("#") else "#" + a[2]; c["preset"] = "custom"; write(c)
+    elif a[0] == "set" and len(a) > 2 and a[1] in PRESETS["aurora"]:
+        c[a[1]] = hexarg(a[2]); c["preset"] = "custom"; write(c)
     else: raise SystemExit(__doc__)
 main(sys.argv[1:])

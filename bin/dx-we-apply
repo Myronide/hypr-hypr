@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Draconyx: (neu) starten der Wallpaper Engine. Aufruf: dx-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
-PIDF="${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.pid"
+RT="${XDG_RUNTIME_DIR:-}"; [ -n "$RT" ] && [ -d "$RT" ] || RT="$HOME/.cache/draconyx"; mkdir -p "$RT"
+PIDF="$RT/draconyx-we.pid"
 PREFS="$HOME/.config/hypr/aurora/preferences.json"
+# Schnelle Klicks starten dieses Skript mehrfach gleichzeitig: nur einer arbeitet, die anderen warten (sonst laufen am Ende zwei Engines)
+exec 9>"$RT/draconyx-we-apply.lock"
+flock -w 20 9 || { echo "dx-we-apply: ein anderer Wechsel läuft noch" >&2; exit 1; }
 
 # Aurora-Einstellungen spiegeln (die Wallpaper-Engine-Seite zeigt dann den aktuellen Stand)
 mirror() {
@@ -22,20 +26,28 @@ else:
     if folder: p["engine_path"] = folder
     p["engine_active"] = True
     p["engine_monitor"] = pairs[0].split("=", 1)[0] if len(pairs) == 1 else ""
-json.dump(p, open(prefs, "w"), ensure_ascii=False, indent=2)
+tmp = prefs + ".tmp"          # atomar: ein Abbruch darf preferences.json nie halb geschrieben zurücklassen
+with open(tmp, "w") as f:
+    json.dump(p, f, ensure_ascii=False, indent=2)
+os.replace(tmp, prefs)
 PY
 }
 
 if [ -f "$PIDF" ]; then
-  old=$(cat "$PIDF"); kill "$old" 2>/dev/null
-  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$old" 2>/dev/null || break; sleep 0.2; done
-  kill -9 "$old" 2>/dev/null; rm -f "$PIDF"
+  old=$(cat "$PIDF" 2>/dev/null); rm -f "$PIDF"
+  # Die PID kann inzwischen einem fremden Programm gehören (alte Datei nach Neustart): nur beenden, wenn es noch die Engine ist
+  case "$old" in ''|*[!0-9]*) old="";; esac
+  if [ -n "$old" ] && [ "$(cat "/proc/$old/comm" 2>/dev/null)" = "linux-wallpaper" ]; then
+    kill "$old" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$old" 2>/dev/null || break; sleep 0.2; done
+    kill -9 "$old" 2>/dev/null
+  fi
 fi
 # übrig gebliebene Instanzen (z. B. aus schnellen Klicks) sicher beenden
 for p in $(pgrep -x linux-wallpaper); do kill "$p" 2>/dev/null; done
 # Reste des alten Aurora-Renderers (liegt sonst unter dem neuen Wallpaper und kommt beim Abwählen wieder zum Vorschein)
 for p in $(pgrep -f '/aurora/native/wallpaper/aurora-wallpaper' | grep -vx "$$"); do kill "$p" 2>/dev/null; done
-rm -f "${XDG_RUNTIME_DIR:-/tmp}/aurora-wallpaper-pids.json"
+rm -f "$RT/aurora-wallpaper-pids.json"
 sleep 0.4
 for p in $(pgrep -x linux-wallpaper); do kill -9 "$p" 2>/dev/null; done
 mirror "$@"
@@ -66,5 +78,5 @@ if [ -z "$assets" ] || [ ! -d "$assets" ]; then
   done
 fi
 [ -n "$assets" ] && args+=(--assets-dir "$assets")
-setsid "$HOME/.local/bin/dx-we-run" "${args[@]}" --layer "${DX_WE_LAYER:-bottom}" --fps 30 --silent --no-fullscreen-pause >"${XDG_RUNTIME_DIR:-/tmp}/draconyx-we.log" 2>&1 &
+setsid "$HOME/.local/bin/dx-we-run" "${args[@]}" --layer "${DX_WE_LAYER:-bottom}" --fps 30 --silent --no-fullscreen-pause >"$RT/draconyx-we.log" 2>&1 9>&- </dev/null &
 echo $! > "$PIDF"

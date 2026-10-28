@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Nimmt die Meldungen des nativen Aurora-Plugins entgegen ($XDG_RUNTIME_DIR/aurora-ui.sock) und gibt sie an die Shell weiter.
   ["minimize","0xADRESSE"]  -> Minimieren-Knopf einer App (z. B. Brave/Discord) -> Shell minimiert/holt zurück."""
-import json, os, socket, subprocess, sys
+import json, os, re, socket, subprocess, sys, time
 
 # Nur eine Instanz: ein neuer Wächter übernimmt und beendet den alten (sonst melden mehrere Wächter jedes Ereignis mehrfach,
 # und Minimieren/Wiederherstellen schaukelt sich auf). Stirbt die Shell, stirbt auch der Wächter (PDEATHSIG).
@@ -33,11 +33,19 @@ path = Path(rt) / "aurora-ui.sock"
 path.unlink(missing_ok=True)
 s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
 s.bind(str(path))
+os.chmod(path, 0o600)                       # nur der eigene Benutzer darf dem Wächter Meldungen schicken
 qs = ["qs", "-c", "draconyx", "ipc", "call", "shell"]
+ADDR = re.compile(r"^0x[0-9a-fA-F]{1,16}$")
 while True:
     try:
         msg = json.loads(s.recv(4096).decode())
-    except (ValueError, OSError):
+    except ValueError:
         continue
-    if isinstance(msg, list) and len(msg) >= 2 and msg[0] == "minimize" and isinstance(msg[1], str) and msg[1].startswith("0x"):
-        subprocess.Popen(qs + ["toggleMinAddr", msg[1]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        time.sleep(0.5)                     # Dauerfehler nicht mit voller Geschwindigkeit wiederholen
+        continue
+    if isinstance(msg, list) and len(msg) >= 2 and msg[0] == "minimize" and isinstance(msg[1], str) and ADDR.match(msg[1]):
+        try:
+            subprocess.Popen(qs + ["toggleMinAddr", msg[1]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            time.sleep(0.5)                 # qs fehlt/nicht startbar

@@ -19,7 +19,10 @@ for id in "${IDS[@]}"; do
   mkdir -p "$USER_APPS"
   # nach dem Programm in jeder Exec-Zeile die Option einfügen (Flatpak-Starter ausgenommen)
   grep -q '^Exec=.*flatpak' "$src" && continue
-  { echo "$MARK"; sed -E "s|^Exec=([^ ]+)|Exec=$HOME/.local/bin/dx-launch \\1 --ozone-platform=x11|" "$src"; } > "$dst.tmp"
+  # Pfad mit Leerzeichen im Exec-Wert in Anführungszeichen setzen; "&" und "|" im Pfad für sed maskieren
+  launch="$HOME/.local/bin/dx-launch"; case "$launch" in *" "*) launch="\"$launch\"";; esac
+  launch_esc="$(printf '%s' "$launch" | sed -e 's/[&|\\]/\\&/g')"
+  { echo "$MARK"; sed -E "s|^Exec=([^ ]+)|Exec=$launch_esc \\1 --ozone-platform=x11|" "$src"; } > "$dst.tmp"
   if [ -f "$dst" ] && cmp -s "$dst.tmp" "$dst"; then rm -f "$dst.tmp"; else mv "$dst.tmp" "$dst"; echo "angelegt: $dst"; n=$((n+1)); fi
 done
 # Chromium-Browser: dieselbe Option über die jeweilige Flags-Datei (nur anlegen, wenn es sie nicht gibt)
@@ -27,7 +30,9 @@ for pair in "code:code-flags.conf" "codium:codium-flags.conf" "code-oss:code-oss
   bin="${pair%%:*}"; fl="$HOME/.config/${pair#*:}"
   command -v "$bin" >/dev/null 2>&1 || continue
   [ -e "$fl" ] && continue
-  printf '%s\n%s\n' "$MARK" '--ozone-platform=x11' > "$fl"; echo "angelegt: $fl"; n=$((n+1))
+  mkdir -p "$(dirname "$fl")"
+  printf '%s\n%s\n' "$MARK" '--ozone-platform=x11' > "$fl" || { echo "konnte $fl nicht schreiben" >&2; continue; }
+  echo "angelegt: $fl"; n=$((n+1))
 done
 command -v update-desktop-database >/dev/null && update-desktop-database "$USER_APPS" 2>/dev/null
 [ "$n" -gt 0 ] && echo "Hinweis: laufende Apps einmal beenden und neu starten, damit sie über XWayland laufen."
