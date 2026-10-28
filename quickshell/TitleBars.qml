@@ -176,7 +176,7 @@ Scope {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onPressed: mouse => {
                         if (mouse.button !== Qt.LeftButton) return;
-                        Global.hypr("hl.dsp.focus({ " + win.sel + " })");
+                        Global.raise(win.addr);               // erst nach oben legen, dann fokussieren (sonst bleibt das Fenster hinter Steam & Co.)
                         dragEnd.stop();
                         win.dragPos = null;
                         dragProc.startX = win.d.x + mouse.x;
