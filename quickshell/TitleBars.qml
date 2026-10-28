@@ -14,6 +14,7 @@ Scope {
     readonly property bool enabled: Global.titleBars
     property int rounding: 12          // Eckenradius der Fenster (Aurora → Fenster)
     FileView {
+        printErrors: false
         path: Theme.home + "/.config/hypr/aurora/preferences.json"; watchChanges: true; onFileChanged: reload()
         onLoaded: { try { const r = parseInt(JSON.parse(text()).rounding); if (r >= 0 && r <= 40) tb.rounding = r; } catch (e) {} }
     }
@@ -26,9 +27,9 @@ Scope {
         for (const l of text.split("\n")) { const k = l.trim().toLowerCase(); if (k !== "" && !k.startsWith("#")) m[k] = true; }
         csd = m;
     }
-    FileView { path: Theme.home + "/.config/draconyx/titlebar-force"; watchChanges: true; onFileChanged: reload(); onLoaded: { const m = {}; for (const l of text().split("\n")) { const k = l.trim().toLowerCase(); if (k !== "" && !k.startsWith("#")) m[k] = true; } tb.force = m; } }
-    FileView { path: Theme.home + "/.config/hypr/csd-apps"; watchChanges: true; onFileChanged: reload(); onLoaded: tb.addList(text()) }
-    FileView { path: Theme.home + "/.config/hypr/aurora/csd-apps"; watchChanges: true; onFileChanged: reload(); onLoaded: tb.addList(text()) }
+    FileView { printErrors: false; path: Theme.home + "/.config/draconyx/titlebar-force"; watchChanges: true; onFileChanged: reload(); onLoaded: { const m = {}; for (const l of text().split("\n")) { const k = l.trim().toLowerCase(); if (k !== "" && !k.startsWith("#")) m[k] = true; } tb.force = m; } }
+    FileView { printErrors: false; path: Theme.home + "/.config/hypr/csd-apps"; watchChanges: true; onFileChanged: reload(); onLoaded: tb.addList(text()) }
+    FileView { printErrors: false; path: Theme.home + "/.config/hypr/aurora/csd-apps"; watchChanges: true; onFileChanged: reload(); onLoaded: tb.addList(text()) }
 
     // ---------- GTK-Apps zeichnen ihre Titelleiste selbst ----------
     // Wer libgtk geladen hat, bekommt keine zweite Leiste. Geprüft wird einmal je Prozess (cat /proc/PID/maps), das Ergebnis bleibt gemerkt.

@@ -26,6 +26,7 @@ PanelWindow {
 
     FileView {
         path: Theme.home + "/.cache/draconyx/update-progress.json"
+        printErrors: false
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {

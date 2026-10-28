@@ -71,7 +71,7 @@ PanelWindow {
         if (rest.length > 0) out.push({ name: "Weitere", items: rest });
         return out;
     }
-    FileView { id: reg; path: Theme.home + "/.config/draconyx/binds-registry.tsv"; onLoaded: sc.rows = sc.build(text()) }
+    FileView { id: reg; printErrors: false; path: Theme.home + "/.config/draconyx/binds-registry.tsv"; onLoaded: sc.rows = sc.build(text()) }
 
     readonly property var shown: {
         const q = query.trim().toLowerCase();

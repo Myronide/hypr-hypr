@@ -581,7 +581,7 @@ PanelWindow {
                             color: gcl.claudeBusy ? Theme.accentSoft : (hovered ? Theme.accentHover : Theme.tile)
                             Row {
                                 spacing: 6
-                                Image { source: "file://" + Theme.iconDir + "claude-logo.svg"; sourceSize: Qt.size(32, 32); width: 16; height: 16; anchors.verticalCenter: parent.verticalCenter }
+                                Image { source: Theme.icon("claude-logo", false); sourceSize: Qt.size(32, 32); width: 16; height: 16; anchors.verticalCenter: parent.verticalCenter }
                                 Text { text: gcl.claudeBusy && gcl.claudeMode === "msg" ? "schreibt …" : "Nachricht"; color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsXs; anchors.verticalCenter: parent.verticalCenter }
                             }
                             onClicked: gcl.claudeCommitMessage()
@@ -805,7 +805,7 @@ PanelWindow {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                 anchors.margins: Global.claudeAvailable ? 6 : 0; height: Global.claudeAvailable ? 32 : 0; radius: 16
                 color: Theme.tile; border.color: claudeIn.activeFocus ? Theme.accent : Theme.borderSoft
-                Image { id: cIcon2; source: "file://" + Theme.iconDir + "claude-logo.svg"; sourceSize: Qt.size(32, 32); width: 16; height: 16
+                Image { id: cIcon2; source: Theme.icon("claude-logo", false); sourceSize: Qt.size(32, 32); width: 16; height: 16
                         anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; opacity: gcl.claudeBusy ? 0.5 : 1 }
                 TextInput {
                     id: claudeIn
