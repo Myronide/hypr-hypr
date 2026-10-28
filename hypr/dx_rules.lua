@@ -7,6 +7,14 @@ local FILE = (os.getenv("HOME") or "") .. "/.config/draconyx/window-rules.tsv"
 local snap = nil
 function M.setup(snapModule) snap = snapModule end
 
+local lastErr = nil
+local function logErr(err)
+    if tostring(err) == lastErr then return end
+    lastErr = tostring(err)
+    io.stderr:write("[dx_rules] ", lastErr, "\n")
+end
+local pending = {}      -- address -> Token des laufenden Regel-Timers (Schließen/Adress-Wiederverwendung macht ihn ungültig)
+
 local function read()
     local f = io.open(FILE, "r")
     if not f then return {} end
@@ -40,12 +48,18 @@ local function apply(w)
                 hl.dispatch(hl.dsp.window.move({ window = a, workspace = id, follow = false }))
             end
             if r.mon ~= "" then hl.dispatch(hl.dsp.window.move({ window = a, monitor = r.mon, follow = false })) end
+            local token = {}
+            pending[w.address] = token
             hl.timer(function()
-                pcall(function()
+                local ok, err = pcall(function()
+                    if pending[w.address] ~= token then return end
+                    pending[w.address] = nil
                     for _, x in ipairs(hl.get_windows()) do
                         if x.address == w.address then
                             local m = x.monitor or hl.get_active_monitor()
-                            local mw, mh = m.width / (m.scale or 1), m.height / (m.scale or 1)
+                            if m == nil then return end
+                            local sc = (type(m.scale) == "number" and m.scale > 0) and m.scale or 1
+                            local mw, mh = m.width / sc, m.height / sc
                             local nw, nh = x.size.x, x.size.y
                             local sw, sh = r.size:match("^(%d+)x(%d+)$")
                             if sw then nw, nh = math.min(tonumber(sw), mw - 20), math.min(tonumber(sh), mh - 20)
@@ -59,20 +73,45 @@ local function apply(w)
                         end
                     end
                 end)
+                if not ok then logErr(err) end
             end, { timeout = 160, type = "oneshot" })
             return          -- die erste passende Regel gilt
         end
     end
 end
 
-function M.applyAll() for _, w in ipairs(hl.get_windows()) do pcall(apply, w) end end
+function M.applyAll()
+    for _, w in ipairs(hl.get_windows()) do
+        if w.mapped ~= false then
+            local ok, err = pcall(apply, w)
+            if not ok then logErr(err) end
+        end
+    end
+end
 
+local openPending = {}  -- address -> Token des 380-ms-Timers
 hl.on("window.open", function(w)
-    pcall(function()
-        if w == nil then return end
-        hl.timer(function() pcall(function() for _, x in ipairs(hl.get_windows()) do if x.address == w.address then apply(x) return end end end) end,
-                 { timeout = 380, type = "oneshot" })      -- nach der Fenstergrößen-Erinnerung (220 ms), damit Regeln gewinnen
+    local ok, err = pcall(function()
+        if w == nil or w.address == nil then return end
+        local address, token = w.address, {}
+        openPending[address] = token
+        hl.timer(function()
+            local ok2, err2 = pcall(function()
+                if openPending[address] ~= token then return end        -- Fenster schon weg (oder Adresse neu vergeben)
+                openPending[address] = nil
+                for _, x in ipairs(hl.get_windows()) do if x.address == address then apply(x) return end end
+            end)
+            if not ok2 then logErr(err2) end
+        end, { timeout = 380, type = "oneshot" })      -- nach der Fenstergrößen-Erinnerung (220 ms), damit Regeln gewinnen
     end)
+    if not ok then logErr(err) end
 end)
+
+local function gone(w)
+    if w == nil or w.address == nil then return end
+    pending[w.address], openPending[w.address] = nil, nil
+end
+hl.on("window.close", gone)
+hl.on("window.destroy", gone)
 
 return M

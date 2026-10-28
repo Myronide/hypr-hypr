@@ -12,6 +12,7 @@ local REGISTRY = DIR .. "/binds-registry.tsv"
 local over = {}
 local reg = {}
 local effective = {}
+local used = {}        -- Kombination (kleingeschrieben) -> Kennung: doppelte Belegung melden
 
 do
     local f = io.open(OVERRIDES, "r")
@@ -32,15 +33,23 @@ function M.bind(id, label, default, action, opts)
     effective[id] = combo
     if combo == nil or combo == "" then return nil end
     local ok, handle = pcall(hl.bind, combo, action, opts)
-    if not ok then
+    -- hl.bind meldet eine ungültige Kombination als Konfigurationsfehler und gibt nil zurück (wirft nicht)
+    if not ok or handle == nil then
         -- ungültige Kombination: Standard versuchen, damit nichts unbedienbar wird
+        io.stderr:write("[dx_binds] Kombination für '", id, "' ungültig: ", tostring(combo), "\n")
         effective[id] = default
-        if combo ~= default then
+        if combo ~= default and default ~= nil and default ~= "" then
             local ok2, h2 = pcall(hl.bind, default, action, opts)
-            if ok2 then return h2 end
+            if ok2 and h2 ~= nil then return h2 end
         end
+        effective[id] = ""
         return nil
     end
+    local key = effective[id]:lower():gsub("%s+", "") .. ((opts and opts.release) and "|release" or "")
+    if used[key] ~= nil and used[key] ~= id then
+        io.stderr:write("[dx_binds] Kombination ", effective[id], " doppelt belegt: '", used[key], "' und '", id, "'\n")
+    end
+    used[key] = used[key] or id
     return handle
 end
 

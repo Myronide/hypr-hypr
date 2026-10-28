@@ -30,12 +30,22 @@ local function load()
     end
 end
 
+local madeDir = false
 local function save()
-    os.execute('mkdir -p "' .. DIR .. '"')
-    local f = io.open(FILE, "w")
+    if not madeDir then os.execute('mkdir -p "' .. DIR .. '"'); madeDir = true end   -- nur einmal: os.execute hält Hyprland an
+    local tmp = FILE .. ".tmp"
+    local f = io.open(tmp, "w")
     if not f then return end
     for c, s in pairs(sizes) do f:write(c, "\t", s.w, "\t", s.h, "\n") end
     f:close()
+    if not os.rename(tmp, FILE) then os.remove(tmp) end        -- atomar: ein Absturz mittendrin lässt keine halbe Liste zurück
+end
+
+local lastErr = nil
+local function logErr(err)
+    if tostring(err) == lastErr then return end
+    lastErr = tostring(err)
+    io.stderr:write("[dx_sizes] ", lastErr, "\n")
 end
 
 local DEFAULT_EXCLUDE = { "^$", "^steam_app_", "^gamescope", "^xdg%-desktop%-portal", "^org%.freedesktop%.impl%.portal", "^Rocket", "^dx%-", "^draconyx%-" }
@@ -63,8 +73,10 @@ end
 function M.setup(snapModule) snap = snapModule end
 
 -- Beim Schließen: Größe merken (das letzte Fenster einer App = das Hauptfenster)
+local pending = {}      -- address -> Token des Öffnen-Timers (Schließen/Adress-Wiederverwendung macht ihn ungültig)
 hl.on("window.close", function(w)
-    pcall(function()
+    if w ~= nil then pending[w.address] = nil end
+    local ok, err = pcall(function()
         if w == nil or not enabled() or excluded(w.class) or others(w) > 0 then return end
         local width, height
         if snap ~= nil and snap.maxedOrig then width, height = snap.maxedOrig(w) end   -- maximiert: Größe davor merken
@@ -73,24 +85,34 @@ hl.on("window.close", function(w)
             width, height = w.size.x, w.size.y
         end
         if width < 260 or height < 160 then return end                                  -- Menüs, Popups, Mini-Fenster
+        if w.class:find("[\t\r\n]") then return end                                       -- würde die Tabelle zerstören
+        load()                                                                          -- Datei neu lesen: "Gemerkte Größen löschen" in den Einstellungen gilt
         sizes[w.class] = { w = math.floor(width), h = math.floor(height) }
         save()
     end)
+    if not ok then logErr(err) end
 end)
 
 -- Beim Öffnen: gemerkte Größe anwenden (kurz warten, bis das Fenster seine Klasse/Größe gemeldet hat)
 hl.on("window.open", function(w)
     pcall(function()
         if w == nil or not enabled() then return end
-        local addr = w.address
+        local addr, token = w.address, {}
+        if addr == nil then return end
+        pending[addr] = token
         hl.timer(function()
-            pcall(function()
+            local ok, err = pcall(function()
+                if pending[addr] ~= token then return end
+                pending[addr] = nil
                 for _, x in ipairs(hl.get_windows()) do
                     if x.address == addr then
                         local s = sizes[x.class]
                         if s == nil or excluded(x.class) or not x.floating or x.fullscreen ~= 0 or others(x) > 0 then return end
+                        if snap ~= nil and snap.isMaxed and snap.isMaxed(x) then return end    -- maximiert: Größe gehört dem Maximieren
                         local m = x.monitor or hl.get_active_monitor()
-                        local mw, mh = m.width / (m.scale or 1), m.height / (m.scale or 1)
+                        if m == nil then return end
+                        local sc = (type(m.scale) == "number" and m.scale > 0) and m.scale or 1
+                        local mw, mh = m.width / sc, m.height / sc
                         local nw, nh = math.min(s.w, mw - 40), math.min(s.h, mh - 80)
                         local a = "address:" .. addr
                         hl.dispatch(hl.dsp.window.resize({ window = a, x = nw, y = nh, relative = false }))
@@ -99,6 +121,7 @@ hl.on("window.open", function(w)
                     end
                 end
             end)
+            if not ok then logErr(err) end
         end, { timeout = 220, type = "oneshot" })
     end)
 end)
