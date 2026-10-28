@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.5.4
+- Spiele: Alt+Tab aus Vollbild-Spielen (Fokus/Stapelreihenfolge, fremde Fenster nicht auf dem Spiele-Desktop, Maus wird beim Verlassen freigegeben); Titelleiste hebt Fenster nach oben; Härtung: Lua-Module (Skalierung, Zustandslecks, Timer), Shell (Start-Warnungen, kaputte settings.json), Skripte/Installer (Sperren, atomares Schreiben, Timeouts), Aurora-Einstellungen (Suche, Export/Import, Prüfung der Eingaben); dx-doctor erweitert
+
 ## 1.5.3
 - Titelleisten: Verschieben ohne Animationsreste und Release-Rennen (ein gemeinsamer Helfer), Ereignisse wecken den Fensterwächter sofort, Tests
 
