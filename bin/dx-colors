@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Gemeinsame Farbwelt für Aurora und die Shell.
-  dx-colors preset aurora|draconyx   Voreinstellung wählen
+  dx-colors preset aurora|draconyx|kontrast   Voreinstellung wählen
   dx-colors accent '#4d8fe0'         Akzentfarbe ändern (Hell/Dunkel werden abgeleitet)
   dx-colors set bg '#262a30'         einzelne Farbe (bg surface hover border text muted accent accentBright accentDeep selected)
   dx-colors show | ensure
@@ -17,6 +17,8 @@ PRESETS = {
                     accent="#4d8fe0", accentBright="#6ba9ff", accentDeep="#397acb", selected="#355a86"),
   "draconyx":  dict(bg="#0d0b17", surface="#14112a", hover="#1c1838", border="#3a2f66", text="#ece9f7", muted="#9a95b8",
                     accent="#8b5cf6", accentBright="#a78bfa", accentDeep="#5b3fd0", selected="#3b2d7a"),
+  "kontrast":  dict(bg="#000000", surface="#0a0a0a", hover="#1f1f1f", border="#ffffff", text="#ffffff", muted="#e6e6e6",
+                    accent="#ffd400", accentBright="#ffe55c", accentDeep="#c9a700", selected="#5c4b00"),   # Hoher Kontrast (Eingabehilfen)
 }
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 def load():
