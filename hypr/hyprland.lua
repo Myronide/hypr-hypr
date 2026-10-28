@@ -266,6 +266,7 @@ DXSizes = require("dx_sizes")   -- Fenstergröße beim Schließen merken, beim �
 DXSizes.setup(DXSnap)
 DXRules = require("dx_rules")   -- Fensterregeln (Aurora → Fensterregeln)
 DXRules.setup(DXSnap)
+DXGames = require("dx_games")   -- Spiele-Desktop: fremde Fenster nicht ueber dem Spiel, Zeiger beim Verlassen des Spiels freigeben
 
 B("snap_up", "Fenster nach oben (Snap/Maximieren)", mainMod .. " + Up",    function() DXSnap.arrow("up") end)
 B("snap_down", "Fenster nach unten (Snap/Wiederherstellen)", mainMod .. " + Down",  function() DXSnap.arrow("down") end)

@@ -34,3 +34,12 @@ class GameFocusTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GameDesktopTests(unittest.TestCase):
+    def test_games_module_wired(self):
+        self.assertIn('require("dx_games")', (ROOT / 'hypr/hyprland.lua').read_text())
+        self.assertIn('dx_games.lua', (ROOT / 'install.sh').read_text())
+        src = (ROOT / 'hypr/dx_games.lua').read_text()
+        for needle in ('window.open', 'window.active', 'follow = false', 'cursor.move', 'moved[addr]'):
+            self.assertIn(needle, src)
