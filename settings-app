@@ -143,6 +143,7 @@ class Settings(Gtk.Application):
   self._safe(self.taskbar,self.codespace,self.apps,self.autostart,self.windowmode,self.rules,self.colors)
   if not SHELL:self._safe(self.desktop)
   self._safe(self.wallpaper,self.engine,self.comfort,self.power,self.shortcuts,self.backup,self.system)
+  self.load_extension_pages()
   self.build_sidebar()
   self.p.on_change=self.touch   # ab jetzt wird jede Änderung automatisch gespeichert und angewendet
   css=Gtk.CssProvider()
@@ -163,6 +164,29 @@ class Settings(Gtk.Application):
        ('PROGRAMME',[('Coding Space',['utilities-terminal-symbolic']),('Apps',['view-app-grid-symbolic','application-x-executable-symbolic']),('Autostart',['system-run-symbolic','media-playback-start-symbolic']),('Fensterregeln',['view-restore-symbolic','window-new-symbolic'])]),
        ('DARSTELLUNG',[('Fenstermodus',['view-dual-symbolic','view-grid-symbolic']),('Farben & Schrift',['applications-graphics-symbolic','color-select-symbolic']),('Bewegung & Licht',['weather-clear-night-symbolic','display-brightness-symbolic']),('Hintergrund',['preferences-desktop-wallpaper-symbolic','image-x-generic-symbolic']),('Wallpaper Engine',['video-x-generic-symbolic','camera-video-symbolic']),('Dock',['user-desktop-symbolic']),('Schreibtisch',['user-desktop-symbolic'])]),
        ('SYSTEM',[('Energie & Sperre',['system-shutdown-symbolic','battery-symbolic']),('Tastenkombinationen',['input-keyboard-symbolic']),('Sicherung',['document-save-symbolic','drive-harddisk-symbolic']),('System',['emblem-system-symbolic','system-run-symbolic'])])]
+ def load_extension_pages(self):
+  """Weitere Seiten aus settings_pages/page_*.py (ein Modul je Seite). Ein Modul liefert TITLE, GROUP (Seitenleisten-Gruppe, Standard 'SYSTEM'),
+  ICONS (Liste von Symbolnamen), ORDER (Reihenfolge, Standard 100) und build(app); build ruft app.page(TITLE, Beschreibung) auf.
+  Ein kaputtes Modul darf die Einstellungen nicht verhindern: Fehler gehen nach stderr."""
+  import importlib.util
+  base=Path(os.path.realpath(__file__)).parent/'settings_pages'
+  if not base.is_dir():return
+  mods=[]
+  for f in sorted(base.glob('page_*.py')):
+   try:
+    spec=importlib.util.spec_from_file_location('settings_pages_'+f.stem,f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+    if not isinstance(getattr(m,'TITLE',None),str) or not callable(getattr(m,'build',None)):raise ValueError('TITLE und build(app) fehlen')
+    mods.append(m)
+   except Exception as e:print('Einstellungsseite',f.name,'konnte nicht geladen werden:',repr(e),file=sys.stderr)
+  mods.sort(key=lambda m:(getattr(m,'ORDER',100),m.TITLE))
+  self.SIDE=[(h,list(i)) for h,i in self.SIDE]
+  for m in mods:
+   try:m.build(self)
+   except Exception as e:print('Einstellungsseite',m.TITLE,'konnte nicht aufgebaut werden:',repr(e),file=sys.stderr);continue
+   group=getattr(m,'GROUP','SYSTEM');entry=(m.TITLE,list(getattr(m,'ICONS',['preferences-system-symbolic'])))
+   for h,items in self.SIDE:
+    if h==group:items.append(entry);break
+   else:self.SIDE.append((group,[entry]))
  def _safe(self,*fns):
   for fn in fns:
    try:fn()
