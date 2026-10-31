@@ -19,7 +19,8 @@ The installer detects the monitors itself (`~/.config/hypr/monitors_local.lua`, 
 | `bin/` | `hyhy-*` helper scripts: `hyhy-colors` (shared colour scheme), `hyhy-terminal` (terminal choice), Wallpaper Engine, code list |
 | `patches/`, `wallpaper-engine/` | Fixes for linux-wallpaperengine (web wallpapers, mouse position) – `install.sh` builds it |
 | `docs/` | Handover with all decisions and pitfalls |
-| Repo root | `settings-app`, `preferences.py`, `settings.css`: Aurora settings, restyled, with pages for taskbar, Coding Space, window mode, colours, terminal |
+| Repo root | `settings-app`, `settings.css`: Aurora settings, restyled, with pages for taskbar, Coding Space, window mode, colours, terminal |
+| `aurora_runtime/` | Aurora Python modules (`preferences.py`, `monitors.py`, `dock_visibility.py`, `control_center.py`); the installer copies them flat to `~/.config/hypr/aurora/` |
 
 ## Merged (cherry-pick)
 - **From Aurora:** colour scheme (grey-blue), taskbar look, settings app (restyled and extended), terminal choice.

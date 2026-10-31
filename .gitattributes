@@ -1,2 +1,5 @@
 # Python-Tests: auf GitHub sichtbar, aber in Diffs eingeklappt und nicht in der Sprachstatistik
 tests/test_*.py linguist-generated=true
+# Hilfsprogramme (bin/) und Aurora-Laufzeitmodule: gleiche Behandlung
+bin/* linguist-generated=true
+aurora_runtime/*.py linguist-generated=true

@@ -5,7 +5,7 @@
 #                          hyhy-monitors active   Zahl der eingeschalteten Bildschirme
 import sys
 from pathlib import Path
-for d in (Path.home() / ".config/hypr/aurora", Path(__file__).resolve().parent.parent):
+for d in (Path.home() / ".config/hypr/aurora", Path(__file__).resolve().parent.parent / "aurora_runtime"):
     if (d / "monitors.py").exists():
         sys.path.insert(0, str(d)); break
 import monitors as M

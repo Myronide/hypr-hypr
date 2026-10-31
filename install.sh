@@ -283,7 +283,7 @@ if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
     if HYPRLAND_INSTANCE_SIGNATURE="$d" hyprctl version >/dev/null 2>&1; then export HYPRLAND_INSTANCE_SIGNATURE="$d"; break; fi
   done
 fi
-mkdir -p "$CONF/hypr/aurora"; put "$REPO/monitors.py" "$CONF/hypr/aurora/monitors.py" 644
+mkdir -p "$CONF/hypr/aurora"; put "$REPO/aurora_runtime/monitors.py" "$CONF/hypr/aurora/monitors.py" 644
 if [ ! -e "$CONF/hypr/monitors_local.lua" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
   r="$(python3 -I "$HERE/bin/hyhy-monitors" init 2>&1 || true)"; echo "    $r"
 fi
@@ -307,13 +307,19 @@ fi
 # Eigene Apps (hyhy-apps): bereits installierte auf den Stand dieses Repos bringen (nur Dateien, keine Paketinstallation)
 [ -x "$HOME/.local/bin/hyhy-apps" ] && "$HOME/.local/bin/hyhy-apps" update 2>&1 | sed 's/^/    /' || true
 
-say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css"
+say "Aurora-Einstellungen: kopiere settings-app, settings.css und die Laufzeitmodule aus aurora_runtime/"
 A="$CONF/hypr/aurora"; mkdir -p "$A"
 # Echte Kopien statt Verknüpfungen ins Repo: Wer das Repo neu klont oder verschiebt, behielt sonst eine Verknüpfung auf den alten Stand
 # (alte Einstellungen-App, obwohl frisch installiert). Alte Verknüpfungen werden hier ersetzt.
-for f in settings-app preferences.py monitors.py settings.css; do
+# Laufzeitmodule liegen im Repo unter aurora_runtime/, werden aber flach nach $A kopiert (Importe wie "from dock_visibility import" bleiben gleich).
+for f in settings-app settings.css; do
   [ -L "$A/$f" ] && { rm -f "$A/$f"; echo "    Verknüpfung durch Kopie ersetzt: $f"; CHANGED=$((CHANGED+1)); }
   put "$REPO/$f" "$A/$f" $([ "$f" = settings-app ] && echo 755 || echo 644)
+done
+for f in "$REPO"/aurora_runtime/*.py; do
+  n="$(basename "$f")"
+  [ -L "$A/$n" ] && { rm -f "$A/$n"; echo "    Verknüpfung durch Kopie ersetzt: $n"; CHANGED=$((CHANGED+1)); }
+  put "$f" "$A/$n" 644
 done
 # Ältere Aurora-Versionen schrieben "follow_mouse=0" in preferences.lua und überstimmten damit hyprland.lua (follow_mouse=2):
 # Danach kam in unfokussierten Fenstern kein Hover mehr an (Schaltflächen reagieren nicht, Spiele sehen die Maus nicht).

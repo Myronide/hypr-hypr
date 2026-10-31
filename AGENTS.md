@@ -8,7 +8,7 @@ Repo: Hyprland desktop by **SyntaxJason (Hypr Hypr)** and **Myronide (Aurora)**,
 | Shell (taskbar, start menu, popups, desktop, Git client, wallpaper picker …) | `quickshell/*.qml` (Quickshell 0.3, QML) | `~/.config/quickshell/draconyx/`, start: `qs -c draconyx` |
 | Hyprland config (Lua, Hyprland **0.56.2**) | `hypr/hyprland.lua`, `dx_*.lua` | `~/.config/hypr/` |
 | Helper scripts | `bin/hyhy-*` | `~/.local/bin/` |
-| Aurora settings (GTK3, Python) | `settings-app`, `preferences.py`, `settings.css`, `palette.css` | `~/.config/hypr/aurora/` |
+| Aurora settings (GTK3, Python) | `settings-app`, `settings.css`, `palette.css`; Python modules in `aurora_runtime/` (`preferences.py`, `monitors.py`, `dock_visibility.py`, `control_center.py`) | `~/.config/hypr/aurora/` (modules copied flat) |
 | Aurora leftovers (only pass through when the shell is installed) | `desktop-ui`, `start-desktop`, `start-dock`, `background-restore` | `~/.config/hypr/aurora/` |
 | Native plugins (hyprbars, aurora-native) | `native/`, `hyprbars.version` | see **Plugins** below |
 | Wallpaper Engine (own build with fixes) | `patches/`, `wallpaper-engine/` | `~/.local/opt/linux-wallpaperengine` |
