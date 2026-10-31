@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.6.2
+- Name Hypr Hypr statt Draconyx in allen Anzeigen, Benachrichtigungen und der Doku; Pfade und Ordner bleiben, nichts muss migriert werden
+
 ## 1.6.1
 - Coding Space: Workspaces brauchen kein „Workspace“ im Namen – Erkennung nach Inhalt (Ordner mit Projekten), hinzugefügte Ordner und neu angelegte Workspaces behalten ihren Namen, Rechtsklick: als Workspace/Projekt behandeln
 
