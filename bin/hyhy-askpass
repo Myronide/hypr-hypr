@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Hypr Hypr: Passwortabfrage für sudo als kleines Fenster (SUDO_ASKPASS). Gibt das Passwort auf stdout aus.
-# Reihenfolge: zenity, kdialog, sonst ein Terminal-Fenster (dx-terminal) mit Eingabe ohne Anzeige.
+# Reihenfolge: zenity, kdialog, sonst ein Terminal-Fenster (hyhy-terminal) mit Eingabe ohne Anzeige.
 title="Hypr Hypr-Update"; text="${1:-Passwort für sudo (Hypr Hypr aktualisieren):}"
 if command -v zenity >/dev/null 2>&1; then
   exec zenity --password --title="$title"
@@ -11,9 +11,9 @@ fi
 umask 077
 base="${XDG_RUNTIME_DIR:-}"; [ -n "$base" ] && [ -d "$base" ] || base="$HOME/.cache"
 mkdir -p "$base"
-f="$(mktemp "$base/dx-askpass.XXXXXX")" || exit 1
+f="$(mktemp "$base/hyhy-askpass.XXXXXX")" || exit 1
 trap 'rm -f "$f"' EXIT
-[ -x "$HOME/.local/bin/dx-terminal" ] || { echo "dx-askpass: weder zenity noch kdialog noch dx-terminal gefunden – kein Passwortfenster möglich" >&2; exit 1; }
-"$HOME/.local/bin/dx-terminal" -- sh -c 'printf "%s\n> " "$1"; stty -echo; read -r pw; stty echo; printf "%s" "$pw" > "$2"' dx-askpass "$text" "$f" >/dev/null 2>&1
+[ -x "$HOME/.local/bin/hyhy-terminal" ] || { echo "hyhy-askpass: weder zenity noch kdialog noch hyhy-terminal gefunden – kein Passwortfenster möglich" >&2; exit 1; }
+"$HOME/.local/bin/hyhy-terminal" -- sh -c 'printf "%s\n> " "$1"; stty -echo; read -r pw; stty echo; printf "%s" "$pw" > "$2"' hyhy-askpass "$text" "$f" >/dev/null 2>&1
 [ -s "$f" ] || exit 1          # Abbruch im Fenster: leere Antwort, sudo bricht dann ab statt ein leeres Passwort zu probieren
 cat "$f"

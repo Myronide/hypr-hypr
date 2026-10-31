@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# Hypr Hypr: Bildschirme.   dx-monitors show     erkannte Bildschirme anzeigen
-#                          dx-monitors init     monitors_local.lua aus dem laufenden Zustand anlegen, falls es sie noch nicht gibt
-#                          dx-monitors sync     nicht eingetragene Bildschirme mit ihrem jetzigen Zustand ergänzen (vor jedem Neuladen)
-#                          dx-monitors active   Zahl der eingeschalteten Bildschirme
+# Hypr Hypr: Bildschirme.   hyhy-monitors show     erkannte Bildschirme anzeigen
+#                          hyhy-monitors init     monitors_local.lua aus dem laufenden Zustand anlegen, falls es sie noch nicht gibt
+#                          hyhy-monitors sync     nicht eingetragene Bildschirme mit ihrem jetzigen Zustand ergänzen (vor jedem Neuladen)
+#                          hyhy-monitors active   Zahl der eingeschalteten Bildschirme
 import sys
 from pathlib import Path
 for d in (Path.home() / ".config/hypr/aurora", Path(__file__).resolve().parent.parent):

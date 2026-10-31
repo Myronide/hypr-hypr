@@ -14,7 +14,7 @@ if SHELL_QML.exists() and os.environ.get('AURORA_LEGACY_UI')!='1':
     def _qs(*a):return _sh(['qs','-c','draconyx','ipc','call',*a])
     _cmd=sys.argv[1] if len(sys.argv)>1 else ''
     if _cmd=='daemon':
-        # Nur ein Starter gleichzeitig (gleiche Sperre wie dx-shell-ensure): sonst starten beide zugleich eine Shell. Die Sperre schließt sich beim exec von selbst.
+        # Nur ein Starter gleichzeitig (gleiche Sperre wie hyhy-shell-ensure): sonst starten beide zugleich eine Shell. Die Sperre schließt sich beim exec von selbst.
         import fcntl
         _rt=os.environ.get('XDG_RUNTIME_DIR') or str(Path.home()/'.cache/draconyx');os.makedirs(_rt,exist_ok=True)
         _lk=open(os.path.join(_rt,'draconyx-shell-ensure.lock'),'w')

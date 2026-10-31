@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Hypr Hypr: (neu) starten der Wallpaper Engine. Aufruf: dx-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
+# Hypr Hypr: (neu) starten der Wallpaper Engine. Aufruf: hyhy-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
 RT="${XDG_RUNTIME_DIR:-}"; [ -n "$RT" ] && [ -d "$RT" ] || RT="$HOME/.cache/draconyx"; mkdir -p "$RT"
 PIDF="$RT/draconyx-we.pid"
 PREFS="$HOME/.config/hypr/aurora/preferences.json"
 # Schnelle Klicks starten dieses Skript mehrfach gleichzeitig: nur einer arbeitet, die anderen warten (sonst laufen am Ende zwei Engines)
 exec 9>"$RT/draconyx-we-apply.lock"
-flock -w 20 9 || { echo "dx-we-apply: ein anderer Wechsel läuft noch" >&2; exit 1; }
+flock -w 20 9 || { echo "hyhy-we-apply: ein anderer Wechsel läuft noch" >&2; exit 1; }
 
 # Aurora-Einstellungen spiegeln (die Wallpaper-Engine-Seite zeigt dann den aktuellen Stand)
 mirror() {
@@ -20,7 +20,7 @@ if not pairs:
 else:
     first = pairs[0].split("=", 1)[1]
     folder = ""
-    for line in subprocess.run([os.path.expanduser("~/.local/bin/dx-we-list")], capture_output=True, text=True).stdout.splitlines():
+    for line in subprocess.run([os.path.expanduser("~/.local/bin/hyhy-we-list")], capture_output=True, text=True).stdout.splitlines():
         f = line.split("\t")
         if f and f[0] == first and len(f) > 3 and f[3]: folder = os.path.dirname(f[3])
     if folder: p["engine_path"] = folder
@@ -55,7 +55,7 @@ mirror "$@"
 
 # Ordner jeder Wallpaper-ID aus der Liste holen: die Engine findet eine bloße ID nur in der Standard-Steam-Bibliothek
 # (liegt der Workshop-Ordner woanders, bleibt der Bildschirm schwarz) – mit vollem Pfad klappt es überall.
-LIST="$("$HOME/.local/bin/dx-we-list" 2>/dev/null)"
+LIST="$("$HOME/.local/bin/hyhy-we-list" 2>/dev/null)"
 args=()
 for kv in "$@"; do
   m="${kv%%=*}"; id="${kv#*=}"
@@ -66,7 +66,7 @@ for kv in "$@"; do
 done
 # Assets der Wallpaper Engine (die Steam-Bibliothek kann überall liegen): Datei, Aurora-Einstellung oder Steam-Bibliotheken
 assets=""
-[ -f "$HOME/.config/draconyx/we-assets" ] && assets="$(head -1 "$HOME/.config/draconyx/we-assets")"
+[ -f "$HOME/.config/hypr-hypr/we-assets" ] && assets="$(head -1 "$HOME/.config/hypr-hypr/we-assets")"
 [ -z "$assets" ] && [ -f "$PREFS" ] && assets="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1])).get("engine_assets",""))' "$PREFS" 2>/dev/null)"
 if [ -z "$assets" ] || [ ! -d "$assets" ]; then
   assets=""
@@ -78,5 +78,5 @@ if [ -z "$assets" ] || [ ! -d "$assets" ]; then
   done
 fi
 [ -n "$assets" ] && args+=(--assets-dir "$assets")
-setsid "$HOME/.local/bin/dx-we-run" "${args[@]}" --layer "${DX_WE_LAYER:-bottom}" --fps 30 --silent --no-fullscreen-pause >"$RT/draconyx-we.log" 2>&1 9>&- </dev/null &
+setsid "$HOME/.local/bin/hyhy-we-run" "${args[@]}" --layer "${DX_WE_LAYER:-bottom}" --fps 30 --silent --no-fullscreen-pause >"$RT/draconyx-we.log" 2>&1 9>&- </dev/null &
 echo $! > "$PIDF"

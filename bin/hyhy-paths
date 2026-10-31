@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Hypr Hypr: Ordnernamen. Die neuen Ordner heißen hypr-hypr; die alten draconyx-Ordner bleiben als Symlinks
+# auf die neuen erhalten, damit alle bestehenden Pfade (qs -c draconyx, ~/.config/draconyx/…) weiter funktionieren.
+#   hyhy-paths migrate     verschiebt alte Ordner in die neuen (ohne etwas zu verlieren) und legt die Symlinks an. Idempotent.
+#   hyhy-paths gate NEU   Exitcode 1 + Meldung, wenn NEU eine 2.x-Version ist und die installierte Version unter 1.6.3 liegt.
+# ENTFÄLLT MIT 2.0.0: dann gibt es keine alten Namen mehr, Symlinks und Migration werden entfernt.
+set -euo pipefail
+HOME_DIR="${HOME:?HOME fehlt}"
+MIN_FOR_2="1.6.3"
+BK_ROOT="$HOME_DIR/.local/share/hypr-hypr-backups"
+
+# alt|neu  – Reihenfolge egal, jede Zeile wird einzeln behandelt
+PAIRS=(
+  "$HOME_DIR/.config/draconyx|$HOME_DIR/.config/hypr-hypr"
+  "$HOME_DIR/.config/quickshell/draconyx|$HOME_DIR/.config/quickshell/hypr-hypr"
+  "$HOME_DIR/.local/state/draconyx|$HOME_DIR/.local/state/hypr-hypr"
+  "$HOME_DIR/.local/share/draconyx-hypr|$HOME_DIR/.local/share/hypr-hypr"
+  "$HOME_DIR/.local/share/draconyx-backups|$BK_ROOT"
+  "$HOME_DIR/.cache/draconyx|$HOME_DIR/.cache/hypr-hypr"
+)
+
+say() { printf '%s\n' "$*"; }
+
+migrate_pair() {   # migrate_pair ALT NEU
+  local old="$1" new="$2" ts="$3"
+  mkdir -p "$(dirname "$new")"
+  if [ -L "$old" ]; then
+    # schon ein Symlink: nur reparieren, wenn er auf etwas anderes zeigt
+    if [ "$(readlink -f "$old")" != "$(readlink -m "$new")" ]; then
+      say "  Symlink $old zeigt nicht auf $new – unverändert gelassen"
+    fi
+    mkdir -p "$new"
+    return 0
+  fi
+  if [ -d "$old" ]; then
+    if [ ! -e "$new" ]; then
+      mv "$old" "$new"                                             # einfacher Fall: alter Ordner wird neu
+      say "  verschoben: ${old/#$HOME_DIR/~} -> ${new/#$HOME_DIR/~}"
+    else
+      # beide existieren: alles aus dem alten Ordner übernehmen, was der neue noch nicht hat (nichts wird überschrieben),
+      # den Rest des alten Ordners in die Sicherung legen
+      cp -an "$old/." "$new/"
+      local keep="$BK_ROOT/migrate-$ts/$(basename "$old")"
+      mkdir -p "$(dirname "$keep")"
+      mv "$old" "$keep"
+      say "  zusammengeführt: ${old/#$HOME_DIR/~} (Original gesichert unter ${keep/#$HOME_DIR/~})"
+    fi
+  fi
+  mkdir -p "$new"
+  if [ ! -e "$old" ]; then
+    ln -s "$new" "$old"
+    say "  Symlink: ${old/#$HOME_DIR/~} -> ${new/#$HOME_DIR/~}"
+  fi
+}
+
+migrate() {
+  local ts; ts="$(date +%Y%m%d-%H%M%S)"
+  local pair old new
+  for pair in "${PAIRS[@]}"; do
+    old="${pair%%|*}"; new="${pair#*|}"
+    migrate_pair "$old" "$new" "$ts"
+  done
+}
+
+vkey() {   # "1.6.3" -> "1 6 3" (zum Vergleichen)
+  printf '%s' "$1" | grep -oE '[0-9]+' | head -3 | tr '\n' ' '
+}
+
+gate() {   # gate NEU_VERSION: 2.x nur ab 1.6.3 installiert
+  local new="$1" inst="" f
+  for f in "$HOME_DIR/.config/hypr-hypr/install.json" "$HOME_DIR/.config/draconyx/install.json"; do
+    [ -f "$f" ] && { inst="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1])).get("version",""))' "$f" 2>/dev/null || true)"; [ -n "$inst" ] && break; }
+  done
+  local major; major="$(vkey "$new" | cut -d' ' -f1)"
+  if [ "${major:-0}" -ge 2 ]; then
+    local have want; have="$(vkey "${inst:-0.0.0}")"; want="$(vkey "$MIN_FOR_2")"
+    # Vergleich Zahl für Zahl
+    local a b i cmp=0
+    read -r -a A <<< "$have"; read -r -a B <<< "$want"
+    for i in 0 1 2; do a=${A[$i]:-0}; b=${B[$i]:-0}; if [ "$a" -lt "$b" ]; then cmp=-1; break; elif [ "$a" -gt "$b" ]; then cmp=1; break; fi; done
+    if [ "$cmp" -lt 0 ]; then
+      say "Update auf $new abgebrochen: installiert ist ${inst:-unbekannt}, mindestens $MIN_FOR_2 ist nötig. Erst auf $MIN_FOR_2 aktualisieren."
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# Befehle: bis 1.x heißen sie zusätzlich dx-<name> (Symlink auf hyhy-<name> in ~/.local/bin). Ab 2.0.0 entfällt das.
+links() {
+  local bin="$HOME_DIR/.local/bin" f name legacy
+  for f in "$bin"/hyhy-*; do
+    [ -e "$f" ] || continue
+    name="${f##*/hyhy-}"; legacy="$bin/dx-$name"
+    if [ -f "$legacy" ] && [ ! -L "$legacy" ]; then rm -f "$legacy"; fi   # alte Kopie durch Verweis ersetzen
+    [ -e "$legacy" ] || ln -s "hyhy-$name" "$legacy"
+  done
+}
+
+case "${1:-}" in
+  migrate) migrate ;;
+  links)   links ;;
+  gate)    gate "${2:?Aufruf: hyhy-paths gate VERSION}" ;;
+  *) echo "Aufruf: hyhy-paths migrate | links | gate VERSION" >&2; exit 2 ;;
+esac

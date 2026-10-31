@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Hypr Hypr: Electron-Apps (Discord & Co.) über XWayland starten. Hyprland ignoriert das Minimieren-Symbol nativer Wayland-Apps;
-# bei XWayland-Fenstern fängt die Shell es ab (dx-x11-iconify). Es werden eigene Starter in ~/.local/share/applications angelegt,
+# bei XWayland-Fenstern fängt die Shell es ab (hyhy-x11-iconify). Es werden eigene Starter in ~/.local/share/applications angelegt,
 # die den Start mit --ozone-platform=x11 erzwingen. Bestehende eigene Starter bleiben unangetastet.
-#   dx-electron-x11          anlegen / erneuern
-#   dx-electron-x11 --undo   unsere Starter wieder entfernen
+#   hyhy-electron-x11          anlegen / erneuern
+#   hyhy-electron-x11 --undo   unsere Starter wieder entfernen
 USER_APPS="$HOME/.local/share/applications"; MARK="# Draconyx: Electron über XWayland"
 IDS=(discord discord-ptb discord-canary vesktop webcord legcord armcord slack signal-desktop element-desktop teams-for-linux)
 if [ "$1" = "--undo" ]; then
@@ -20,7 +20,7 @@ for id in "${IDS[@]}"; do
   # nach dem Programm in jeder Exec-Zeile die Option einfügen (Flatpak-Starter ausgenommen)
   grep -q '^Exec=.*flatpak' "$src" && continue
   # Pfad mit Leerzeichen im Exec-Wert in Anführungszeichen setzen; "&" und "|" im Pfad für sed maskieren
-  launch="$HOME/.local/bin/dx-launch"; case "$launch" in *" "*) launch="\"$launch\"";; esac
+  launch="$HOME/.local/bin/hyhy-launch"; case "$launch" in *" "*) launch="\"$launch\"";; esac
   launch_esc="$(printf '%s' "$launch" | sed -e 's/[&|\\]/\\&/g')"
   { echo "$MARK"; sed -E "s|^Exec=([^ ]+)|Exec=$launch_esc \\1 --ozone-platform=x11|" "$src"; } > "$dst.tmp"
   if [ -f "$dst" ] && cmp -s "$dst.tmp" "$dst"; then rm -f "$dst.tmp"; else mv "$dst.tmp" "$dst"; echo "angelegt: $dst"; n=$((n+1)); fi

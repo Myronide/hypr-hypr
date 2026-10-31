@@ -393,7 +393,7 @@ PanelWindow {
                 width: ctxCol.width
                 iconName: "add"
                 label: "Im Terminal öffnen"
-                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/dx-terminal", "--dir", desk.menu.path]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-terminal", "--dir", desk.menu.path]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "item"
@@ -430,7 +430,7 @@ PanelWindow {
                 width: ctxCol.width
                 iconName: "add"
                 label: "Terminal hier"
-                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/dx-terminal", "--dir", Global.desktopDirEffective]); desk.menu = null; }
+                onTriggered: { Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-terminal", "--dir", Global.desktopDirEffective]); desk.menu = null; }
             }
             MenuRow {
                 visible: desk.menu && desk.menu.kind === "empty"

@@ -9,7 +9,7 @@ Singleton {
     // Erst nach dem ersten Lesen von colors.json gelten Symbolpfade (sonst "Cannot open" für den Standard-Schlüssel beim Start)
     property bool palReady: false
     // ---------- Farben ----------
-    // Kommen aus ~/.config/draconyx/colors.json (gemeinsam mit Aurora; ändern mit `dx-colors` oder in den Einstellungen).
+    // Kommen aus ~/.config/draconyx/colors.json (gemeinsam mit Aurora; ändern mit `hyhy-colors` oder in den Einstellungen).
     FileView {
         id: colorFile
         onLoaded: root.palReady = true
@@ -69,7 +69,7 @@ Singleton {
     readonly property color textOn:  "#ffffff"
 
     // ---------- Typografie ----------
-    // Schriften: Voreinstellungen aus Aurora (dx-fonts). ~/.config/draconyx/font = Oberfläche, font-code = Git-Client und Diffs.
+    // Schriften: Voreinstellungen aus Aurora (hyhy-fonts). ~/.config/draconyx/font = Oberfläche, font-code = Git-Client und Diffs.
     property string fontFamily: "Inter"
     property string fontCodeFamily: "Monaspace Krypton"
     // Nicht installierte Schrift: auf Inter bzw. die Systemschrift für Festbreite ausweichen (sonst wäre alles Standardschrift)

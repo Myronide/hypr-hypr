@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Hypr Hypr: Steam Workshop der Wallpaper Engine (App 431960) durchsuchen.
-  dx-we-workshop browse [--sort trend|new|top] [--search TEXT] [--page N]
+  hyhy-we-workshop browse [--sort trend|new|top] [--search TEXT] [--page N]
       Ausgabe (TSV): id <TAB> Titel <TAB> Vorschaubild (lokale Datei) <TAB> installiert (0/1)
-  dx-we-workshop open ID        Seite des Wallpapers in Steam öffnen (dort „Abonnieren“: Steam lädt es herunter, danach erscheint es unter „Meine“)
-  dx-we-workshop web ID         Seite im Browser öffnen
+  hyhy-we-workshop open ID        Seite des Wallpapers in Steam öffnen (dort „Abonnieren“: Steam lädt es herunter, danach erscheint es unter „Meine“)
+  hyhy-we-workshop web ID         Seite im Browser öffnen
 Die Liste kommt von der öffentlichen Workshop-Seite (kein Konto, kein API-Schlüssel nötig). Herunterladen selbst macht Steam:
 Ein Abo lädt nur der Steam-Client herunter, der das Eigentum an Wallpaper Engine prüft."""
 import html, os, re, subprocess, sys, urllib.parse, urllib.request
@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HOME = Path.home()
-CACHE = HOME / ".cache/draconyx/workshop"
+CACHE = HOME / ".cache/hypr-hypr/workshop"
 UA = "Mozilla/5.0 (X11; Linux x86_64) Hypr Hypr"
 SORTS = {"trend": ("trend", "7"), "new": ("mostrecent", "-1"), "top": ("toprated", "-1")}
 
@@ -26,7 +26,7 @@ def fetch(url, timeout=25):
 
 def installed_ids():
     try:
-        out = subprocess.run([str(HOME / ".local/bin/dx-we-list")], capture_output=True, text=True, timeout=30).stdout
+        out = subprocess.run([str(HOME / ".local/bin/hyhy-we-list")], capture_output=True, text=True, timeout=30).stdout
         return {l.split("\t")[0] for l in out.splitlines() if l}
     except (OSError, subprocess.SubprocessError):
         return set()

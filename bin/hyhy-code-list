@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Hypr Hypr Coding Space: listet Unterordner als Projekt oder Workspace.
-#   dx-code-list <ordner> [<ordner-mit-weiteren-*Workspace*-Ordnern>]
+#   hyhy-code-list <ordner> [<ordner-mit-weiteren-*Workspace*-Ordnern>]
 # Ausgabe (TSV): geändert<TAB>art<TAB>git<TAB>name<TAB>pfad     (art = project | workspace)
-# dx-code-list --mark <pfad> workspace|project|auto : Handarbeit festhalten (auto = wieder automatisch erkennen)
+# hyhy-code-list --mark <pfad> workspace|project|auto : Handarbeit festhalten (auto = wieder automatisch erkennen)
 if [ "${1:-}" = "--mark" ]; then
   path="${2:-}"; kind="${3:-}"; path="${path%/}"
-  [ -n "$path" ] && [ -d "$path" ] && case "$kind" in workspace|project|auto) true;; *) false;; esac || { echo "Benutzung: dx-code-list --mark <ordner> workspace|project|auto" >&2; exit 2; }
+  [ -n "$path" ] && [ -d "$path" ] && case "$kind" in workspace|project|auto) true;; *) false;; esac || { echo "Benutzung: hyhy-code-list --mark <ordner> workspace|project|auto" >&2; exit 2; }
   conf="${XDG_CONFIG_HOME:-$HOME/.config}/draconyx"; mkdir -p "$conf"
   for f in code-workspaces code-projects; do
     [ -f "$conf/$f" ] || continue
@@ -15,10 +15,10 @@ if [ "${1:-}" = "--mark" ]; then
   exit 0
 fi
 dir="${1:-}"; extra="${2:-}"
-[ -n "$dir" ] && [ -d "$dir" ] || { echo "Benutzung: dx-code-list <ordner> [<ordner-mit-Workspaces>]" >&2; exit 2; }   # leer = sonst würde "/" aufgelistet
+[ -n "$dir" ] && [ -d "$dir" ] || { echo "Benutzung: hyhy-code-list <ordner> [<ordner-mit-Workspaces>]" >&2; exit 2; }   # leer = sonst würde "/" aufgelistet
 
 # Workspace oder Projekt? Reihenfolge:
-#   1. Handarbeit: Pfad steht in ~/.config/draconyx/code-workspaces bzw. code-projects (eine Zeile je Pfad)
+#   1. Handarbeit: Pfad steht in ~/.config/hypr-hypr/code-workspaces bzw. code-projects (eine Zeile je Pfad)
 #   2. "Workspace" im Namen -> Workspace (Namen sind nicht nötig, aber weiter erlaubt)
 #   3. Ordner mit Projektmerkmal (.git, pom.xml, package.json, Cargo.toml, ...) -> Projekt
 #   4. Ordner ohne Merkmal, in dem mindestens ein Projekt liegt -> Workspace

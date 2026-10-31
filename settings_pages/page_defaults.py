@@ -24,7 +24,7 @@ CATEGORIES = [
     ('pdf', 'PDF-Dokumente', '', 'application/pdf', ['application/pdf']),
     ('archive', 'Archive', 'ZIP, TAR, 7z, RAR …', 'application/zip', ['application/zip', 'application/x-tar', 'application/gzip', 'application/x-7z-compressed', 'application/vnd.rar']),
 ]
-KNOWN_TERMINALS = ['ghostty', 'kitty', 'foot', 'alacritty', 'wezterm', 'konsole', 'gnome-terminal', 'xfce4-terminal', 'tilix', 'xterm']  # wie bin/dx-terminal
+KNOWN_TERMINALS = ['ghostty', 'kitty', 'foot', 'alacritty', 'wezterm', 'konsole', 'gnome-terminal', 'xfce4-terminal', 'tilix', 'xterm']  # wie bin/hyhy-terminal
 
 # ---------- reine Logik ----------
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Hypr Hypr: Autostart verwalten und beim Anmelden ausführen.
-  dx-autostart list [--json]           Programme in ~/.config/autostart (an/aus) + eigene Einträge
-  dx-autostart enable|disable ID       einschalten / ausschalten (Datei bleibt erhalten)
-  dx-autostart add NAME BEFEHL         eigenen Eintrag anlegen
-  dx-autostart remove ID               Eintrag löschen
-  dx-autostart apps [--json]           installierte Programme (zum Hinzufügen)
-  dx-autostart addapp DESKTOP-ID       ein installiertes Programm in den Autostart aufnehmen
-  dx-autostart run                     (von Hyprland beim Start) alle eingeschalteten Einträge starten, schon laufende überspringen
+  hyhy-autostart list [--json]           Programme in ~/.config/autostart (an/aus) + eigene Einträge
+  hyhy-autostart enable|disable ID       einschalten / ausschalten (Datei bleibt erhalten)
+  hyhy-autostart add NAME BEFEHL         eigenen Eintrag anlegen
+  hyhy-autostart remove ID               Eintrag löschen
+  hyhy-autostart apps [--json]           installierte Programme (zum Hinzufügen)
+  hyhy-autostart addapp DESKTOP-ID       ein installiertes Programm in den Autostart aufnehmen
+  hyhy-autostart run                     (von Hyprland beim Start) alle eingeschalteten Einträge starten, schon laufende überspringen
 Eigene Einträge liegen als normale .desktop-Dateien in ~/.config/autostart (andere Programme verstehen sie auch)."""
 import json, os, re, shlex, shutil, subprocess, sys, time
 from pathlib import Path
@@ -128,10 +128,10 @@ def running(argv):
 
 def run_all():
     import fcntl
-    launch = str(HOME / ".local/bin/dx-launch")
+    launch = str(HOME / ".local/bin/hyhy-launch")
     started = []
     # Nur ein Lauf gleichzeitig (Hyprland-Neuladen oder doppelter Aufruf): sonst starten sich Programme doppelt, weil "läuft schon" erst nach dem Start stimmt
-    rt = os.environ.get("XDG_RUNTIME_DIR") or str(HOME / ".cache/draconyx")
+    rt = os.environ.get("XDG_RUNTIME_DIR") or str(HOME / ".cache/hypr-hypr")
     os.makedirs(rt, exist_ok=True)
     lock = open(os.path.join(rt, "draconyx-autostart.lock"), "w")
     try:
@@ -139,7 +139,7 @@ def run_all():
     except OSError:
         print("Autostart läuft schon – nichts doppelt gestartet"); return
     if not os.access(launch, os.X_OK):
-        print("dx-launch fehlt (%s) – Autostart nicht möglich" % launch, file=sys.stderr); return
+        print("hyhy-launch fehlt (%s) – Autostart nicht möglich" % launch, file=sys.stderr); return
     for e in entries():
         if not e["enabled"] or e["id"] in SKIP_RUN:
             continue

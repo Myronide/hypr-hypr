@@ -109,7 +109,7 @@ def save_preferences(p):
  home=Path.home();shared=home/'.config/draconyx'
  term=p.get('terminal')
  if isinstance(term,str) and term.strip() and re.fullmatch(r'[A-Za-z0-9_.+\-/ ]+',term.strip()):
-  atomic_write(shared/'terminal',term.strip()+'\n')   # gemeinsam mit dem Hypr Hypr-Teil (dx-terminal)
+  atomic_write(shared/'terminal',term.strip()+'\n')   # gemeinsam mit dem Hypr Hypr-Teil (hyhy-terminal)
  n=lambda key,lo,hi:number(p,key,lo,hi)
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p.get('blur',True) else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))

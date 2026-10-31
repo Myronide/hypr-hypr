@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # Hypr Hypr: listet alle Steam-Workshop-Wallpaper der Wallpaper Engine als TSV: id, titel, typ, vorschau-pfad, geändert
-#   dx-we-list            Liste
-#   dx-we-list --roots    Diagnose: durchsuchte Ordner mit Anzahl gefundener Wallpaper
-# Suchorte (alle zusammen): ~/.config/draconyx/workshop, Aurora-Einstellung "workshop" (auch der Ordner darüber/darunter),
+#   hyhy-we-list            Liste
+#   hyhy-we-list --roots    Diagnose: durchsuchte Ordner mit Anzahl gefundener Wallpaper
+# Suchorte (alle zusammen): ~/.config/hypr-hypr/workshop, Aurora-Einstellung "workshop" (auch der Ordner darüber/darunter),
 # alle Steam-Bibliotheken (libraryfolders.vdf) und gängige Einhängepunkte.
 import glob, json, os, re, sys
 try:
@@ -29,7 +29,7 @@ def read(path):
             return f.read()
     except OSError:
         return ""
-add(read(home + "/.config/draconyx/workshop"))
+add(read(home + "/.config/hypr-hypr/workshop"))
 try:
     add(json.loads(read(home + "/.config/hypr/aurora/preferences.json") or "{}").get("workshop", ""))
 except ValueError:

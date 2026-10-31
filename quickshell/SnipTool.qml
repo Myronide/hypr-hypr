@@ -43,7 +43,7 @@ Variants {
                 Global.snipEdit(file, Math.round(selX * k), Math.round(selY * k), Math.round(selW * k), Math.round(selH * k), modelData.name);
                 return;
             }
-            Quickshell.execDetached([Theme.home + "/.local/bin/dx-snip-crop", file,
+            Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-snip-crop", file,
                 String(Math.round(selX * k)), String(Math.round(selY * k)), String(Math.round(selW * k)), String(Math.round(selH * k)), mode]);
             Global.snipClose(1500);
         }

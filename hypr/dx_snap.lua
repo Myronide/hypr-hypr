@@ -528,7 +528,7 @@ local function appWants(address, want)
 end
 
 -- X11-Apps: Hyprland soll ihre Maximieren-Wünsche gar nicht erst selbst ausführen (Fensterregel suppress_event, siehe hyprland.lua);
--- der X11-Wächter (dx-x11-iconify) liest sie mit und meldet sie hierher. action: "add" | "remove" | "toggle"
+-- der X11-Wächter (hyhy-x11-iconify) liest sie mit und meldet sie hierher. action: "add" | "remove" | "toggle"
 function M.appRequest(address, action)
     if type(address) ~= "string" then return hl.dsp.no_op() end
     pcall(function()
@@ -899,8 +899,8 @@ local function finish(p)
     end
 end
 
--- Loslassen der linken Maustaste sofort festhalten (Datei mit neuem Zeitstempel): die Verschiebe-Helfer der Shell (dx-window-drag,
--- dx-x11-iconify) hören darauf auf, damit sie das Andocken beim Loslassen nicht überschreiben – unabhängig davon, wann die Shell es merkt.
+-- Loslassen der linken Maustaste sofort festhalten (Datei mit neuem Zeitstempel): die Verschiebe-Helfer der Shell (hyhy-window-drag,
+-- hyhy-x11-iconify) hören darauf auf, damit sie das Andocken beim Loslassen nicht überschreiben – unabhängig davon, wann die Shell es merkt.
 local MOUSEUP = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/draconyx-mouse-up"
 local function markRelease()
     local f = io.open(MOUSEUP, "w")

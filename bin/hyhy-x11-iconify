@@ -29,7 +29,7 @@ def _single_instance(name):
         _ct.CDLL("libc.so.6").prctl(1, int(_signal.SIGTERM))      # PR_SET_PDEATHSIG
     except OSError:
         pass
-_single_instance("dx-x11-iconify")
+_single_instance("hyhy-x11-iconify")
 
 x = ctypes.cdll.LoadLibrary(ctypes.util.find_library("X11") or "libX11.so.6")
 
@@ -60,7 +60,7 @@ x.XQueryPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctyp
                             ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                             ctypes.POINTER(ctypes.c_uint)]
 import os, time
-LOG = os.path.expanduser("~/.local/state/draconyx/x11-events.log")
+LOG = os.path.expanduser("~/.local/state/hypr-hypr/x11-events.log")
 IGNORE = {b"_NET_WM_USER_TIME", b"WM_PROTOCOLS"}
 
 def run(cmd):
@@ -116,7 +116,7 @@ def hypr_call(cmd):
 
 # Beide Titelleisten benutzen denselben Helfer (run_path führt dessen CLI nicht aus).
 import runpy
-_drag = runpy.run_path(os.path.join(os.path.dirname(os.path.realpath(__file__)), "dx-window-drag"))["drag"]
+_drag = runpy.run_path(os.path.join(os.path.dirname(os.path.realpath(__file__)), "hyhy-window-drag"))["drag"]
 
 def drag_window(dpy, root, xid):
     """Griffpunkt und Release-Zeit vor der Fensterauflösung festhalten."""
@@ -162,7 +162,7 @@ for _wait in (0, 1, 2, 3, 5, 5, 10, 10, 15, 15, 20):
         break
     time.sleep(_wait)
 if not dpy:
-    sys.exit("dx-x11-iconify: kein X-Display (DISPLAY=%s) – läuft XWayland?" % os.environ.get("DISPLAY", "nicht gesetzt"))
+    sys.exit("hyhy-x11-iconify: kein X-Display (DISPLAY=%s) – läuft XWayland?" % os.environ.get("DISPLAY", "nicht gesetzt"))
 root = x.XDefaultRootWindow(dpy)
 x.XSelectInput(dpy, root, 1 << 19)                       # SubstructureNotifyMask
 change_state = x.XInternAtom(dpy, b"WM_CHANGE_STATE", 0)

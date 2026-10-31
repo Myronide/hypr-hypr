@@ -17,7 +17,7 @@ if not okMon then
 ---------------------
 ---- PROGRAMME ------
 ---------------------
-local terminal    = os.getenv("HOME") .. "/.local/bin/dx-terminal"
+local terminal    = os.getenv("HOME") .. "/.local/bin/hyhy-terminal"
 local fileManager = "dolphin"
 local browser     = "gtk-launch \"$(xdg-settings get default-web-browser)\""
 local runMenu     = "fuzzel"
@@ -73,7 +73,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")
     hl.exec_cmd("gsettings set org.gnome.desktop.interface icon-theme Papirus-Dark")
     -- Eigener Autostart (Aurora → Autostart): alle eingeschalteten Programme aus ~/.config/autostart, schon laufende werden übersprungen
-    hl.exec_cmd("sh -c '[ -x \"" .. HOME_ .. "/.local/bin/dx-autostart\" ] && sleep 4 && exec \"" .. HOME_ .. "/.local/bin/dx-autostart\" run'")
+    hl.exec_cmd("sh -c '[ -x \"" .. HOME_ .. "/.local/bin/hyhy-autostart\" ] && sleep 4 && exec \"" .. HOME_ .. "/.local/bin/hyhy-autostart\" run'")
 end)
 
 

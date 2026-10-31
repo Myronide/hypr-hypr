@@ -35,7 +35,7 @@ PanelWindow {
     function wsLoad(page) {
         wsPage = page;
         wsLoading = true; wsError = "";
-        wsProc.command = [Theme.home + "/.local/bin/dx-we-workshop", "browse", "--sort", wsSort, "--search", wsQuery, "--page", String(page)];
+        wsProc.command = [Theme.home + "/.local/bin/hyhy-we-workshop", "browse", "--sort", wsSort, "--search", wsQuery, "--page", String(page)];
         wsProc.running = false; wsProc.running = true;
     }
     Process {
@@ -67,12 +67,12 @@ PanelWindow {
     property string rootsText: ""
     Process {
         id: rootsProc
-        command: [Theme.home + "/.local/bin/dx-we-list", "--roots"]
+        command: [Theme.home + "/.local/bin/hyhy-we-list", "--roots"]
         stdout: StdioCollector { onStreamFinished: wp.rootsText = text.trim().split("\n").filter(l => l.indexOf("\t") > 0).slice(0, 10).map(l => l.split("\t").join("  →  ")).join("\n"); }
     }
     Process {
         id: load
-        command: [Theme.home + "/.local/bin/dx-we-list"]
+        command: [Theme.home + "/.local/bin/hyhy-we-list"]
         stdout: StdioCollector {
             onStreamFinished: {
                 wp.items = text.split("\n").filter(l => l !== "").map(l => {
@@ -263,7 +263,7 @@ PanelWindow {
                         id: ma; anchors.fill: parent; hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: mouse => {
-                            if (cell.modelData.workshop) Quickshell.execDetached([Theme.home + "/.local/bin/dx-we-workshop", mouse.button === Qt.RightButton ? "web" : "open", cell.modelData.id]);
+                            if (cell.modelData.workshop) Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-we-workshop", mouse.button === Qt.RightButton ? "web" : "open", cell.modelData.id]);
                             else Global.weSet(wp.mon, cell.modelData.id);
                         }
                     }

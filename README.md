@@ -9,14 +9,14 @@ sudo ./install.sh --keymap=us   # Tastaturbelegung vorgeben: de = QWERTZ, us = Q
 sudo ./install.sh --no-we # ohne Wallpaper Engine
 ```
 Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).
-Die Monitore erkennt der Installer selbst (`~/.config/hypr/monitors_local.lua`, nur wenn es sie noch nicht gibt). Anordnen wie unter Windows: Aurora-Einstellungen → Bildschirme (mit 15-Sekunden-Rückfrage, damit nie ein schwarzer Bildschirm übrig bleibt). Anzeigen: `dx-monitors show`.
+Die Monitore erkennt der Installer selbst (`~/.config/hypr/monitors_local.lua`, nur wenn es sie noch nicht gibt). Anordnen wie unter Windows: Aurora-Einstellungen → Bildschirme (mit 15-Sekunden-Rückfrage, damit nie ein schwarzer Bildschirm übrig bleibt). Anzeigen: `hyhy-monitors show`.
 
 ## Inhalt
 | Ordner | Was |
 |---|---|
 | `quickshell/` | Shell in QML: Taskleiste (Teile einzeln an/aus), Startmenü (Symbol wählbar), Alt+Tab, Task View, Desktop (Symbole frei ziehbar, mehrere Monitore), Coding Space + Git-Client, Wallpaper-Auswahl, Zonen-Editor |
 | `hypr/` | `hyprland.lua` + `dx_snap` (Snap/Maximieren), `dx_tiling` (Kacheln, Standardmodus floating/tiling), `dx_zones`; Monitore in `monitors_local.lua` |
-| `bin/` | `dx-*` Hilfsskripte: `dx-colors` (gemeinsame Farbwelt), `dx-terminal` (Terminal-Auswahl), Wallpaper Engine, Code-Liste |
+| `bin/` | `hyhy-*` Hilfsskripte: `hyhy-colors` (gemeinsame Farbwelt), `hyhy-terminal` (Terminal-Auswahl), Wallpaper Engine, Code-Liste |
 | `patches/`, `wallpaper-engine/` | Fixes für linux-wallpaperengine (Web-Wallpaper, Mausposition) – `install.sh` baut es |
 | `docs/` | Übergabe mit allen Entscheidungen und Fallstricken |
 | Repo-Wurzel | `settings-app`, `preferences.py`, `settings.css`: Aurora-Einstellungen, neu gestylt, mit Seiten für Taskleiste, Coding Space, Fenstermodus, Farben, Terminal |
@@ -27,7 +27,7 @@ Die Monitore erkennt der Installer selbst (`~/.config/hypr/monitors_local.lua`, 
 - **Gemeinsam steuerbar:** Farben (`~/.config/draconyx/colors.json`), Terminal (`~/.config/draconyx/terminal`), Fenstermodus (`~/.config/draconyx/window-mode`), Taskleiste (`~/.local/state/draconyx/settings.json`).
 
 ## Aurora läuft auf der Shell
-Ist die Shell installiert, reichen `desktop-ui`, `start-desktop`, `start-dock` und `background-restore` nur noch an Quickshell weiter: kein waybar, kein GTK-Dock. Launcher, Alt+Tab, Fenstermodus und Minimieren-Knöpfe (über `dx-ui-bridge`) landen in der Shell. Altes Verhalten: `AURORA_LEGACY_UI=1`.
+Ist die Shell installiert, reichen `desktop-ui`, `start-desktop`, `start-dock` und `background-restore` nur noch an Quickshell weiter: kein waybar, kein GTK-Dock. Launcher, Alt+Tab, Fenstermodus und Minimieren-Knöpfe (über `hyhy-ui-bridge`) landen in der Shell. Altes Verhalten: `AURORA_LEGACY_UI=1`.
 
 
 ## Haupttaste (Super-Taste defekt oder fehlt)
@@ -39,7 +39,7 @@ Strg+Leertaste öffnet die Suche nur auf dem leeren Desktop, in Apps bleibt die 
 ## Neu: Schnellsuche, frei bindbare Tasten, Diagnose
 - **Strg+Leertaste** öffnet auf dem leeren Desktop ein eigenes Suchfeld mittig mit Ergebnissen darunter (Apps, Rechner, Einstellungen, Dateien, Web); Rechtsklick auf ein Ergebnis: an Taskleiste/Start anheften, Datei öffnen, Ordner zeigen, Pfad kopieren. In Apps bleibt die Taste unberührt.
 - **Alle Tastenkombinationen** sind in den Aurora-Einstellungen → Tastenkombinationen umbindbar (inkl. Maus wie Alt+Linksklick), gespeichert in `~/.config/draconyx/binds.conf`. Die Liste entsteht aus der geladenen Hyprland-Config (`dx_binds.lua`).
-- **`dx-doctor`** schreibt einen Zustandsbericht nach `~/dx-doctor.txt` (laufende Prozesse, Config-Fehler, Dateien, Shell-Log); `dx-doctor --fix` beendet Doppelstarts (waybar, altes Aurora-Dock).
+- **`hyhy-doctor`** schreibt einen Zustandsbericht nach `~/hyhy-doctor.txt` (laufende Prozesse, Config-Fehler, Dateien, Shell-Log); `hyhy-doctor --fix` beendet Doppelstarts (waybar, altes Aurora-Dock).
 
 
 ## Taskleiste: Anordnung

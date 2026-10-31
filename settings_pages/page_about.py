@@ -156,7 +156,7 @@ def update_command():
 
 
 def terminal_update_cmd():
-    t = U.find_bin('dx-terminal')
+    t = U.find_bin('hyhy-terminal')
     return [t, '--'] + update_command() if t else None
 
 
@@ -269,7 +269,7 @@ def build(app):
     def run_update():
         cmd = terminal_update_cmd()
         if not cmd:
-            app.message('dx-terminal wurde nicht gefunden.')
+            app.message('hyhy-terminal wurde nicht gefunden.')
             return
         try:
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)

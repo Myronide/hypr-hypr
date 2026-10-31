@@ -53,7 +53,7 @@ class InstallerTests(Sandbox):
 
     def snapshot(self):
         return {str(p.relative_to(self.home)): p.read_bytes() for p in sorted(self.home.rglob("*"))
-                if p.is_file() and "draconyx-backups" not in p.parts and p.name not in (".install.lock", "update.json")}
+                if p.is_file() and "hypr-hypr-backups" not in p.parts and p.name not in (".install.lock", "update.json")}
 
     def test_zweiter_lauf_aendert_nichts(self):
         r1 = self.install()
@@ -63,7 +63,7 @@ class InstallerTests(Sandbox):
         self.assertEqual(r2.returncode, 0, r2.stderr)
         self.assertIn("schon auf dem neuesten Stand", r2.stdout)
         self.assertEqual(a, self.snapshot())
-        info = json.loads((self.home / ".config/draconyx/install.json").read_text())
+        info = json.loads((self.home / ".config/hypr-hypr/install.json").read_text())
         self.assertEqual(info["repo"], str(ROOT))
         self.assertNotIn("sudo -", self.calls().replace("sudo -v", ""))   # kein echtes sudo ausser der Freigabe
 
@@ -73,13 +73,13 @@ class InstallerTests(Sandbox):
         self.home.mkdir()
         r = self.install()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue((self.home / ".local/bin/dx-update").exists())
+        self.assertTrue((self.home / ".local/bin/hyhy-update").exists())
 
     def test_nutzereinstellungen_bleiben(self):
-        st = self.home / ".local/state/draconyx"
+        st = self.home / ".local/state/hypr-hypr"
         st.mkdir(parents=True)
         (st / "settings.json").write_text('{"barStyle": "mine"}')
-        cd = self.home / ".config/draconyx"
+        cd = self.home / ".config/hypr-hypr"
         cd.mkdir(parents=True)
         (cd / "colors.json").write_text(json.dumps(dict(bg="#000000", surface="#111111", hover="#222222", border="#333333", text="#ffffff",
                                                         muted="#999999", accent="#ff0000", accentBright="#ff5555", accentDeep="#aa0000", selected="#550000")))
@@ -96,8 +96,8 @@ class InstallerTests(Sandbox):
         if shutil.which("luac5.4") or shutil.which("luac"):
             self.assertNotEqual(r.returncode, 0)
             self.assertIn("Lua-Syntaxfehler", r.stderr)
-            self.assertFalse((self.home / ".local/bin/dx-update").exists())
-            self.assertFalse((self.home / ".config/draconyx/install.json").exists())
+            self.assertFalse((self.home / ".local/bin/hyhy-update").exists())
+            self.assertFalse((self.home / ".config/hypr-hypr/install.json").exists())
 
     def test_abbruch_meldet_schritt_und_laesst_install_json_unberuehrt(self):
         repo = self.tmp / "repo"
@@ -106,12 +106,12 @@ class InstallerTests(Sandbox):
         r = self.install(repo)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("Installation abgebrochen", r.stderr)
-        self.assertFalse((self.home / ".config/draconyx/install.json").exists())
+        self.assertFalse((self.home / ".config/hypr-hypr/install.json").exists())
 
     def test_zweiter_installer_gleichzeitig_wird_abgewiesen(self):
         import fcntl
-        (self.home / ".config/draconyx").mkdir(parents=True)
-        with open(self.home / ".config/draconyx/.install.lock", "w") as lk:
+        (self.home / ".config/hypr-hypr").mkdir(parents=True)
+        with open(self.home / ".config/hypr-hypr/.install.lock", "w") as lk:
             fcntl.flock(lk, fcntl.LOCK_EX)
             r = self.install()
         self.assertNotEqual(r.returncode, 0)
@@ -131,8 +131,8 @@ class UpdateTests(Sandbox):
         git("add", "-A", cwd=work); git("commit", "-qm", "v1", cwd=work); git("push", "-q", "origin", "HEAD:master", cwd=work)
         self.repo = self.tmp / "installed repo"                  # Leerzeichen im Pfad
         git("clone", "-q", str(remote), str(self.repo))
-        (self.home / ".config/draconyx").mkdir(parents=True)
-        (self.home / ".config/draconyx/install.json").write_text(json.dumps({"version": "1.0.0", "repo": str(self.repo)}))
+        (self.home / ".config/hypr-hypr").mkdir(parents=True)
+        (self.home / ".config/hypr-hypr/install.json").write_text(json.dumps({"version": "1.0.0", "repo": str(self.repo)}))
         (work / "VERSION").write_text("1.1.0\n")
         (work / "CHANGELOG.md").write_text("# x\n\n## 1.1.0\n- neu\n\n## 1.0.0\n- a\n")
         git("commit", "-qam", "v2", cwd=work); git("push", "-q", "origin", "HEAD:master", cwd=work)
@@ -140,19 +140,19 @@ class UpdateTests(Sandbox):
     def test_check_findet_update_ohne_notify_send_und_schreibt_atomar(self):
         self.make_remote()
         (self.mock / "notify-send").unlink()
-        r = self.run_cmd([sys.executable, str(ROOT / "bin/dx-update"), "check"])
+        r = self.run_cmd([sys.executable, str(ROOT / "bin/hyhy-update"), "check"])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("UPDATE VERFÜGBAR", r.stdout)
-        st = json.loads((self.home / ".local/state/draconyx/update.json").read_text())
+        st = json.loads((self.home / ".local/state/hypr-hypr/update.json").read_text())
         self.assertTrue(st["available"]); self.assertEqual(st["latest"], "1.1.0")
         self.assertEqual(st["changelog"][0]["version"], "1.1.0")
-        self.assertFalse(list((self.home / ".local/state/draconyx").glob("*.tmp")))
+        self.assertFalse(list((self.home / ".local/state/hypr-hypr").glob("*.tmp")))
 
     def test_check_ohne_repo_nutzt_nicht_den_aktuellen_ordner(self):
-        (self.home / ".config/draconyx").mkdir(parents=True)
-        (self.home / ".config/draconyx/install.json").write_text('{"version": "1.0.0"}')
-        r = self.run_cmd([sys.executable, str(ROOT / "bin/dx-update"), "check"], cwd=str(ROOT))   # cwd ist ein Git-Repo
-        st = json.loads((self.home / ".local/state/draconyx/update.json").read_text())
+        (self.home / ".config/hypr-hypr").mkdir(parents=True)
+        (self.home / ".config/hypr-hypr/install.json").write_text('{"version": "1.0.0"}')
+        r = self.run_cmd([sys.executable, str(ROOT / "bin/hyhy-update"), "check"], cwd=str(ROOT))   # cwd ist ein Git-Repo
+        st = json.loads((self.home / ".local/state/hypr-hypr/update.json").read_text())
         self.assertIn("Repo", st["error"] + "Repo")
         self.assertFalse(st["available"])
         self.assertIn("install.sh", st["error"])
@@ -160,12 +160,12 @@ class UpdateTests(Sandbox):
     def test_check_ohne_netz_bricht_nicht_ab(self):
         self.make_remote()
         subprocess.run(["git", "-C", str(self.repo), "remote", "set-url", "origin", "/nonexistent/remote.git"], check=True)
-        r = self.run_cmd([sys.executable, str(ROOT / "bin/dx-update"), "check", "--quiet"])
+        r = self.run_cmd([sys.executable, str(ROOT / "bin/hyhy-update"), "check", "--quiet"])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(json.loads((self.home / ".local/state/draconyx/update.json").read_text())["error"])
+        self.assertTrue(json.loads((self.home / ".local/state/hypr-hypr/update.json").read_text())["error"])
 
     def test_git_ohne_eingabeaufforderung(self):
-        code = "import runpy;m=runpy.run_path(%r);e=m['git_env']();print(e['GIT_TERMINAL_PROMPT'],e['GIT_SSH_COMMAND'])" % str(ROOT / "bin/dx-update")
+        code = "import runpy;m=runpy.run_path(%r);e=m['git_env']();print(e['GIT_TERMINAL_PROMPT'],e['GIT_SSH_COMMAND'])" % str(ROOT / "bin/hyhy-update")
         r = self.run_cmd([sys.executable, "-c", code])
         self.assertTrue(r.stdout.startswith("0 ssh -o BatchMode=yes"), r.stdout + r.stderr)
 
@@ -174,22 +174,22 @@ class UpdateTests(Sandbox):
         (self.mock / "notify-send").unlink()
         (self.repo / "lokal.txt").write_text("meine Aenderung")       # untracked: muss gesichert werden
         (self.mock / "sudo").write_text("#!/bin/sh\necho sudo $* >> \"$MOCKLOG\"\nexit 1\n")
-        r = self.run_cmd([sys.executable, str(ROOT / "bin/dx-update"), "apply", "--fg"], env={"DX_UPDATE_CHILD": "1"})
+        r = self.run_cmd([sys.executable, str(ROOT / "bin/hyhy-update"), "apply", "--fg"], env={"DX_UPDATE_CHILD": "1"})
         self.assertNotEqual(r.returncode, 0)
         stash = subprocess.run(["git", "-C", str(self.repo), "stash", "list"], capture_output=True, text=True).stdout
-        self.assertIn("dx-update", stash)
+        self.assertIn("hyhy-update", stash)
         self.assertIn("sudo -A", self.calls())                      # nur die Attrappe wurde gerufen
-        prog = json.loads((self.home / ".cache/draconyx/update-progress.json").read_text())
+        prog = json.loads((self.home / ".cache/hypr-hypr/update-progress.json").read_text())
         self.assertEqual(prog["state"], "error")
-        self.assertEqual(json.loads((self.home / ".config/draconyx/install.json").read_text())["version"], "1.0.0")
+        self.assertEqual(json.loads((self.home / ".config/hypr-hypr/install.json").read_text())["version"], "1.0.0")
 
 
 class GuardAndBackupTests(Sandbox):
     def guard(self, *a):
-        return self.run_cmd([sys.executable, "-I", str(ROOT / "bin/dx-settings-guard"), *a])
+        return self.run_cmd([sys.executable, "-I", str(ROOT / "bin/hyhy-settings-guard"), *a])
 
     def settings(self):
-        p = self.home / ".local/state/draconyx/settings.json"
+        p = self.home / ".local/state/hypr-hypr/settings.json"
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
@@ -220,11 +220,11 @@ class GuardAndBackupTests(Sandbox):
         p = self.settings(); p.write_text('{"a": 1}'); self.guard("snapshot")
         p.write_text("[1,2]")                                   # gültiges JSON, aber kein Objekt
         self.guard("snapshot")
-        snap = self.home / ".local/share/draconyx-backups/settings-vor-update.json"
+        snap = self.home / ".local/share/hypr-hypr-backups/settings-vor-update.json"
         self.assertEqual(json.loads(snap.read_text()), {"a": 1})
 
     def backup(self, *a):
-        return self.run_cmd([sys.executable, "-I", str(ROOT / "bin/dx-backup"), *a])
+        return self.run_cmd([sys.executable, "-I", str(ROOT / "bin/hyhy-backup"), *a])
 
     def test_backup_create_rechte_und_restore(self):
         p = self.settings(); p.write_text('{"a": 1}')
@@ -263,7 +263,7 @@ class GuardAndBackupTests(Sandbox):
 
 class HelperTests(Sandbox):
     def test_dx_terminal_ohne_wert_haengt_nicht(self):
-        r = self.run_cmd(["bash", str(ROOT / "bin/dx-terminal"), "--dir"])
+        r = self.run_cmd(["bash", str(ROOT / "bin/hyhy-terminal"), "--dir"])
         self.assertEqual(r.returncode, 2)
         self.assertIn("braucht einen Ordner", r.stderr)
 
@@ -271,12 +271,12 @@ class HelperTests(Sandbox):
         victim = self.home / ".config/secret.desktop"; victim.parent.mkdir(parents=True); victim.write_text("[Desktop Entry]\nExec=x\n")
         (self.home / ".config/autostart").mkdir()
         for cmd in ("disable", "remove"):
-            r = self.run_cmd([sys.executable, "-I", str(ROOT / "bin/dx-autostart"), cmd, "../secret.desktop"])
+            r = self.run_cmd([sys.executable, "-I", str(ROOT / "bin/hyhy-autostart"), cmd, "../secret.desktop"])
             self.assertNotEqual(r.returncode, 0)
         self.assertTrue(victim.exists()); self.assertNotIn("Hidden", victim.read_text())
 
     def test_autostart_zeilenumbruch_schleust_keine_schluessel_ein(self):
-        r = self.run_cmd([sys.executable, "-I", str(ROOT / "bin/dx-autostart"), "add", "Test\nExec=boese", "echo hi\nExec=boese"])
+        r = self.run_cmd([sys.executable, "-I", str(ROOT / "bin/hyhy-autostart"), "add", "Test\nExec=boese", "echo hi\nExec=boese"])
         self.assertEqual(r.returncode, 0, r.stderr)
         text = next((self.home / ".config/autostart").glob("*.desktop")).read_text()
         self.assertEqual(text.count("Exec="), 2 if False else text.count("Exec="))
@@ -284,13 +284,13 @@ class HelperTests(Sandbox):
 
     def test_colors_ungueltige_eingabe_ohne_traceback(self):
         for args in (["accent", "zzz"], ["set", "bg"], ["accent"], ["preset"]):
-            r = self.run_cmd([sys.executable, "-I", str(ROOT / "bin/dx-colors"), *args])
+            r = self.run_cmd([sys.executable, "-I", str(ROOT / "bin/hyhy-colors"), *args])
             self.assertNotIn("Traceback", r.stderr, args)
             self.assertNotEqual(r.returncode, 0)
 
     def test_window_drag_lehnt_lua_einschleusung_ab(self):
         import runpy
-        m = runpy.run_path(str(ROOT / "bin/dx-window-drag"))
+        m = runpy.run_path(str(ROOT / "bin/hyhy-window-drag"))
         sent = []
         m["drag"].__globals__["call"] = lambda c: sent.append(c) or "[]"
         m["drag"]("0x1');os.execute('x')--", lambda: True, None, (0, 0), 1)
@@ -298,7 +298,7 @@ class HelperTests(Sandbox):
 
     def test_ui_bridge_und_iconify_adresspruefung(self):
         import re
-        for f in ("dx-ui-bridge", "dx-x11-iconify"):
+        for f in ("hyhy-ui-bridge", "hyhy-x11-iconify"):
             src = (ROOT / "bin" / f).read_text()
             self.assertIn("0x[0-9a-fA-F]", src, f)
 
@@ -310,12 +310,12 @@ class HelperTests(Sandbox):
         self.assertEqual((snapdir / "snapshot.tsv").read_text(), "id1\t/tmp\tname\n")
 
     def test_code_list_ohne_argument(self):
-        r = self.run_cmd(["bash", str(ROOT / "bin/dx-code-list")])
+        r = self.run_cmd(["bash", str(ROOT / "bin/hyhy-code-list")])
         self.assertEqual(r.returncode, 2)
 
     def test_code_list_pfad_mit_leerzeichen(self):
         d = self.tmp / "My Workspace" / "proj one" / ".git"; d.mkdir(parents=True)
-        r = self.run_cmd(["bash", str(ROOT / "bin/dx-code-list"), str(self.tmp / "My Workspace")])
+        r = self.run_cmd(["bash", str(ROOT / "bin/hyhy-code-list"), str(self.tmp / "My Workspace")])
         self.assertIn("proj one", r.stdout)
 
     def test_release_lehnt_kaputte_version_ab(self):
@@ -335,7 +335,7 @@ class HelperTests(Sandbox):
 
     def test_doctor_laeuft_ohne_sitzung_und_fasst_zusammen(self):
         out = self.tmp / "doc.txt"
-        r = self.run_cmd(["bash", str(ROOT / "bin/dx-doctor")], env={"DX_DOCTOR_OUT": str(out)})
+        r = self.run_cmd(["bash", str(ROOT / "bin/hyhy-doctor")], env={"DX_DOCTOR_OUT": str(out)})
         self.assertEqual(r.returncode, 0, r.stderr)
         head = out.read_text().splitlines()[0:6]
         self.assertTrue(any("Zusammenfassung" in l for l in head))

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Hypr Hypr Snip: schneidet einen Bereich aus einem Bildschirmfoto aus und kopiert/speichert ihn.
-  dx-snip-crop BILD X Y B H copy|save|both     (Pixel des Bildes)
-  dx-snip-crop BILD X Y B H edit               (Ausschnitt als Datei für den Editor: gibt den Pfad aus)
-  dx-snip-crop BILD X Y B H ocr                (Text im Ausschnitt erkennen und kopieren; tesseract + Sprachpakete deu/eng)
-  dx-snip-crop --screen MONITOR copy|save|both  (ganzer Monitor direkt)
-  dx-snip-crop --deliver DATEI copy|save|both   (fertiges Bild aus dem Editor kopieren/speichern)"""
+  hyhy-snip-crop BILD X Y B H copy|save|both     (Pixel des Bildes)
+  hyhy-snip-crop BILD X Y B H edit               (Ausschnitt als Datei für den Editor: gibt den Pfad aus)
+  hyhy-snip-crop BILD X Y B H ocr                (Text im Ausschnitt erkennen und kopieren; tesseract + Sprachpakete deu/eng)
+  hyhy-snip-crop --screen MONITOR copy|save|both  (ganzer Monitor direkt)
+  hyhy-snip-crop --deliver DATEI copy|save|both   (fertiges Bild aus dem Editor kopieren/speichern)"""
 import datetime, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 try:
     from PIL import Image
 except ImportError:
-    sys.exit("dx-snip-crop: python-pillow fehlt (sudo pacman -S python-pillow)")
+    sys.exit("hyhy-snip-crop: python-pillow fehlt (sudo pacman -S python-pillow)")
 
 
 def rundir():
@@ -96,7 +96,7 @@ def main(a):
         if mode not in ("copy", "save", "both", "edit", "ocr"): raise ValueError(mode)
         img = Image.open(src)
     except (IndexError, ValueError, OSError) as e:
-        sys.exit("dx-snip-crop: ungültiger Aufruf oder Bild nicht lesbar (%s)\n%s" % (e, __doc__))
+        sys.exit("hyhy-snip-crop: ungültiger Aufruf oder Bild nicht lesbar (%s)\n%s" % (e, __doc__))
     x = max(0, min(x, img.width - 1)); y = max(0, min(y, img.height - 1))
     w = max(1, min(w, img.width - x)); h = max(1, min(h, img.height - y))
     cropped = img.crop((x, y, x + w, y + h))

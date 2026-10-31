@@ -61,7 +61,7 @@ Scope {
     property var addrs: []         // nur die Adressen: ändert sich nur, wenn Fenster dazukommen/wegfallen (Leisten bleiben bestehen)
     property var byAddr: ({})
     function rectsOverlap(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }
-    property var snap: ({ c: [], m: [] })          // letzter Stand von dx-window-watch
+    property var snap: ({ c: [], m: [] })          // letzter Stand von hyhy-window-watch
     function recompute() {
         if (!enabled) { if (wins.length > 0) wins = []; return; }
         const mons = {};
@@ -103,10 +103,10 @@ Scope {
             if (keys.length !== addrs.length || keys.some((k, i) => k !== addrs[i])) addrs = keys;
         }
     }
-    // Fenster und Bildschirme in Echtzeit von Hyprland (dx-window-watch): so kleben die Leisten auch bei schnellen Bewegungen am Fenster
+    // Fenster und Bildschirme in Echtzeit von Hyprland (hyhy-window-watch): so kleben die Leisten auch bei schnellen Bewegungen am Fenster
     Process {
         running: tb.enabled
-        command: [Theme.home + "/.local/bin/dx-window-watch"]
+        command: [Theme.home + "/.local/bin/hyhy-window-watch"]
         stdout: SplitParser {
             onRead: line => { try { tb.snap = JSON.parse(line); } catch (e) { return; } tb.recompute(); }
         }
@@ -196,7 +196,7 @@ Scope {
                     property real startX: 0
                     property real startY: 0
                     property string startedAt: "0"
-                    command: [Theme.home + "/.local/bin/dx-window-drag", win.addr, String(startX), String(startY), startedAt]
+                    command: [Theme.home + "/.local/bin/hyhy-window-drag", win.addr, String(startX), String(startY), startedAt]
                     stdout: SplitParser {
                         onRead: line => {
                             const p = line.trim().split(" ").map(Number);

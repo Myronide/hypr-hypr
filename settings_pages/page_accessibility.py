@@ -58,7 +58,7 @@ def build(app):
 
     # hoher Kontrast
     colors = Path.home() / '.config/draconyx/colors.json'
-    tool = Path.home() / '.local/bin/dx-colors'
+    tool = Path.home() / '.local/bin/hyhy-colors'
     hc = Gtk.Switch(active=high_contrast_active(colors))
     st = {'busy': False}
 
@@ -67,7 +67,7 @@ def build(app):
             return
         target = 'kontrast' if w.get_active() else current_preset_before[0]
         if not tool.exists():
-            app.message('dx-colors fehlt – Farbwelt kann nicht gewechselt werden.')
+            app.message('hyhy-colors fehlt – Farbwelt kann nicht gewechselt werden.')
             return
         ui.run_async([str(tool), 'preset', target], lambda rc, o: app.message('Farbwelt: %s.' % ('Hoher Kontrast' if target == 'kontrast' else target) if rc == 0 else 'Farbwelt konnte nicht gewechselt werden.'), timeout=20)
     current_preset_before = [current_preset(colors)]

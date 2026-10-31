@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Gemeinsame Farbwelt für Aurora und die Shell.
-  dx-colors preset aurora|draconyx|kontrast   Voreinstellung wählen
-  dx-colors accent '#4d8fe0'         Akzentfarbe ändern (Hell/Dunkel werden abgeleitet)
-  dx-colors set bg '#262a30'         einzelne Farbe (bg surface hover border text muted accent accentBright accentDeep selected)
-  dx-colors show | ensure
-Schreibt ~/.config/draconyx/colors.json (die Shell lädt sie live), Symbol-Sätze und Auroras palette.css."""
+  hyhy-colors preset aurora|draconyx|kontrast   Voreinstellung wählen
+  hyhy-colors accent '#4d8fe0'         Akzentfarbe ändern (Hell/Dunkel werden abgeleitet)
+  hyhy-colors set bg '#262a30'         einzelne Farbe (bg surface hover border text muted accent accentBright accentDeep selected)
+  hyhy-colors show | ensure
+Schreibt ~/.config/hypr-hypr/colors.json (die Shell lädt sie live), Symbol-Sätze und Auroras palette.css."""
 import json, os, re, sys, colorsys
 from pathlib import Path
 HOME = Path.home()
-CONF = HOME / ".config/draconyx/colors.json"
-SRC = HOME / ".local/share/draconyx-hypr/qs-icons-src"
-OUT = HOME / ".local/share/draconyx-hypr/icons"
+CONF = HOME / ".config/hypr-hypr/colors.json"
+SRC = HOME / ".local/share/hypr-hypr/qs-icons-src"
+OUT = HOME / ".local/share/hypr-hypr/icons"
 AURORA = HOME / ".config/hypr/aurora"
 PRESETS = {
   "aurora":    dict(bg="#262a30", surface="#30353d", hover="#3a414b", border="#424a55", text="#edf1f7", muted="#a6b0be",

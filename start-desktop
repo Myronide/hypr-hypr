@@ -13,5 +13,5 @@ else
 fi
 "$HOME/.config/hypr/aurora/background-restore" >> "$HOME/.cache/aurora/wallpaper.log" 2>&1 &
 # Sicherheitsnetz: Shell starten, falls der daemon-Aufruf oben sie nicht gestartet hat
-[ -x "$HOME/.local/bin/dx-shell-ensure" ] && "$HOME/.local/bin/dx-shell-ensure" >/dev/null 2>&1 &
+[ -x "$HOME/.local/bin/hyhy-shell-ensure" ] && "$HOME/.local/bin/hyhy-shell-ensure" >/dev/null 2>&1 &
 wait

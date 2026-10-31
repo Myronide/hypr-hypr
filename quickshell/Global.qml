@@ -274,7 +274,7 @@ Singleton {
         property string extra: ""
         property string roots: ""
         environment: ({ DX_CODE_ROOTS: roots })
-        command: [Theme.home + "/.local/bin/dx-code-list", dir, extra]
+        command: [Theme.home + "/.local/bin/hyhy-code-list", dir, extra]
         stdout: StdioCollector {
             onStreamFinished: {
                 root.projects = text.split("\n").filter(l => l !== "").map(l => {
@@ -306,7 +306,7 @@ Singleton {
     }
     // Handarbeit: einen Ordner als Workspace oder Projekt festhalten ("auto" = wieder automatisch)
     function codeMark(path, kind) {
-        Quickshell.execDetached([Theme.home + "/.local/bin/dx-code-list", "--mark", path, kind]);
+        Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-code-list", "--mark", path, kind]);
         codeListTimer.interval = 500; codeListTimer.restart();
     }
     function codeEnter(path) { codeStack = codeStack.concat([path]); projects = []; codeListTimer.restart(); }
@@ -359,12 +359,12 @@ Singleton {
         command: ["sh", "-c", "d=$(xdg-user-dir DESKTOP 2>/dev/null); if [ -n \"$d\" ] && [ \"$d\" != \"$HOME\" ] && [ -d \"$d\" ]; then echo \"$d\"; elif [ -d \"$HOME/Schreibtisch\" ]; then echo \"$HOME/Schreibtisch\"; else echo \"$HOME/Desktop\"; fi"]
         stdout: SplitParser { onRead: line => { if (line) root.desktopDirAuto = line; } }
     }
-    // Installierte Entwicklungsprogramme (dx-code-apps) und Claude: nur was wirklich da ist, wird angezeigt
+    // Installierte Entwicklungsprogramme (hyhy-code-apps) und Claude: nur was wirklich da ist, wird angezeigt
     property var codeDetected: []
     property bool claudeAvailable: false
     Process {
         id: codeAppsProbe
-        command: [Theme.home + "/.local/bin/dx-code-apps"]
+        command: [Theme.home + "/.local/bin/hyhy-code-apps"]
         stdout: StdioCollector {
             onStreamFinished: {
                 root.codeDetected = text.split("\n").filter(l => l !== "").map(l => {
@@ -416,16 +416,16 @@ Singleton {
     function appCommand(a, path) {
         const tmpl = a.cmd.indexOf("{path}") >= 0 ? a.cmd.replace(/\{path\}/g, "\"$1\"") : a.cmd + " \"$1\"";
         const sh = ["sh", "-c", tmpl, "dx", path];
-        return a.term ? [Theme.home + "/.local/bin/dx-terminal", "--dir", path, "--"].concat(sh) : sh;
+        return a.term ? [Theme.home + "/.local/bin/hyhy-terminal", "--dir", path, "--"].concat(sh) : sh;
     }
     function openProject(path, how) {
         closeAll();
         const list = [];
         if (how === "folder" || how === "all") list.push(["dolphin", path]);
-        if (how === "term")   list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path]);
+        if (how === "term")   list.push([Theme.home + "/.local/bin/hyhy-terminal", "--dir", path]);
         if (how.indexOf("app:") === 0) { const a = codeAppById(how.substring(4)); if (a) list.push(appCommand(a, path)); }
         if (how === "all") for (const a of codeAppsShown) list.push(appCommand(a, path));
-        if ((how === "claude" || how === "all") && claudeAvailable) list.push([Theme.home + "/.local/bin/dx-terminal", "--dir", path, "--", Theme.home + "/.local/bin/claude"]);
+        if ((how === "claude" || how === "all") && claudeAvailable) list.push([Theme.home + "/.local/bin/hyhy-terminal", "--dir", path, "--", Theme.home + "/.local/bin/claude"]);
         hypr("hl.dsp.focus({ workspace = 8 })");
         codePending = list;
         codeLaunchTimer.restart();
@@ -690,11 +690,11 @@ Singleton {
             return Quickshell.iconPath("steam_icon_" + id.substring(10), "steam");
         return Quickshell.iconPath((id || "").toLowerCase(), "application-x-executable");
     }
-    // Apps vollständig abgekoppelt starten (dx-launch): neue Sitzung, Ein-/Ausgabe nach /dev/null. Sonst können Apps wie Discord mit
+    // Apps vollständig abgekoppelt starten (hyhy-launch): neue Sitzung, Ein-/Ausgabe nach /dev/null. Sonst können Apps wie Discord mit
     // "write EPIPE" abstürzen, wenn die Pipe ihres Starters (z. B. die Shell nach einem Neustart) verschwindet.
     function launchEntry(e) {
         if (e && !e.runInTerminal && e.command && e.command.length > 0)
-            Quickshell.execDetached([Theme.home + "/.local/bin/dx-launch"].concat(e.command));
+            Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-launch"].concat(e.command));
         else if (e) e.execute();
     }
     function launch(id, entry) {
@@ -806,7 +806,7 @@ Singleton {
 
     // XWayland-Apps (z. B. Steam) minimieren über eine X-Nachricht, die Hyprland ignoriert: Wächter-Skript liest sie mit
     // Brücke für die Minimieren-Knöpfe des nativen Aurora-Plugins (aurora-ui.sock -> Shell); läuft nur mit der Shell
-    Process { running: true; command: [Theme.home + "/.local/bin/dx-ui-bridge"] }
+    Process { running: true; command: [Theme.home + "/.local/bin/hyhy-ui-bridge"] }
 
     property string lastIconify: ""
     property double lastIconifyAt: 0
@@ -816,7 +816,7 @@ Singleton {
         property double startedAt: Date.now()
         property int fast: 0                 // Neustarts in Folge, bei denen der Wächter sofort wieder endete (kein XWayland, Skript fehlt)
         running: true
-        command: [Theme.home + "/.local/bin/dx-x11-iconify"]
+        command: [Theme.home + "/.local/bin/hyhy-x11-iconify"]
         onRunningChanged: if (running) startedAt = Date.now()
         onExited: (code, status) => {
             fast = Date.now() - startedAt < 5000 ? fast + 1 : 0;
@@ -1072,18 +1072,18 @@ Singleton {
 
 
     // ---------- System-Update (Hypr Hypr selbst) ----------
-    // dx-update check holt beim Remote die neueste Versionsnummer; bei einer neuen Version kommt einmal pro Version eine Meldung
+    // hyhy-update check holt beim Remote die neueste Versionsnummer; bei einer neuen Version kommt einmal pro Version eine Meldung
     // mit Knopf "Aktualisieren" (öffnet ein Terminal: git pull + sudo ./install.sh).
     property var updateInfo: ({})
     property bool updateManual: false
     Process {
         id: updCheck
-        command: [Theme.home + "/.local/bin/dx-update", "check", "--quiet"]
+        command: [Theme.home + "/.local/bin/hyhy-update", "check", "--quiet"]
         onExited: updRead.reload()
     }
     FileView {
         id: updRead
-        path: Theme.home + "/.local/state/draconyx/update.json"
+        path: Theme.home + "/.local/state/hypr-hypr/update.json"
         printErrors: false
         onLoaded: {
             let u = null;
@@ -1116,20 +1116,20 @@ Singleton {
         }
     }
     function checkUpdate(manual) { updateManual = !!manual; updCheck.running = false; updCheck.running = true; }
-    function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/dx-update", "apply"]); }
+    function runUpdate() { Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-update", "apply"]); }
     Timer { interval: 60 * 1000; running: true; repeat: true; onTriggered: root.checkUpdate(false) }
     Timer { interval: 20000; running: true; onTriggered: root.checkUpdate(false) }      // 20 Sekunden nach dem Start
 
     // ---------- Einstellungen sichern ----------
-    // Alle 10 Minuten (und kurz nach dem Start) eine Kopie der gültigen settings.json: Notfall-Wiederherstellung (dx-settings-guard restore DATEI).
-    Process { id: settingsSnap; command: [Theme.home + "/.local/bin/dx-settings-guard", "snapshot", Theme.home + "/.local/share/draconyx-backups/settings-auto.json"] }
+    // Alle 10 Minuten (und kurz nach dem Start) eine Kopie der gültigen settings.json: Notfall-Wiederherstellung (hyhy-settings-guard restore DATEI).
+    Process { id: settingsSnap; command: [Theme.home + "/.local/bin/hyhy-settings-guard", "snapshot", Theme.home + "/.local/share/draconyx-backups/settings-auto.json"] }
     Timer { interval: 10 * 60 * 1000; running: true; repeat: true; onTriggered: { settingsSnap.running = false; settingsSnap.running = true; } }
     Timer { interval: 60000; running: true; onTriggered: { settingsSnap.running = false; settingsSnap.running = true; } }
 
     // ---------- Terminal-Wächter ----------
-    // Es soll immer mindestens ein Terminal installiert sein (auch wenn Ghostty/Kitty deinstalliert wurden). dx-terminal-ensure
+    // Es soll immer mindestens ein Terminal installiert sein (auch wenn Ghostty/Kitty deinstalliert wurden). hyhy-terminal-ensure
     // stellt die Einstellung auf ein vorhandenes um und installiert nur dann Ghostty, wenn gar keins mehr da ist.
-    Process { id: termEnsure; command: [Theme.home + "/.local/bin/dx-terminal-ensure", "--quiet"] }
+    Process { id: termEnsure; command: [Theme.home + "/.local/bin/hyhy-terminal-ensure", "--quiet"] }
     Timer { interval: 3 * 3600 * 1000; running: true; repeat: true; onTriggered: { termEnsure.running = false; termEnsure.running = true; } }
     Timer { interval: 45000; running: true; onTriggered: { termEnsure.running = false; termEnsure.running = true; } }
 
@@ -1142,7 +1142,7 @@ Singleton {
     function snip(mode) {
         if (snipOpen) { snipClose(0); return; }
         if (mode === "screen") {
-            Quickshell.execDetached([Theme.home + "/.local/bin/dx-snip-crop", "--screen", focusedScreenName(), "both"]);
+            Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-snip-crop", "--screen", focusedScreenName(), "both"]);
             return;
         }
         const dir = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp";
@@ -1167,7 +1167,7 @@ Singleton {
     }
     function snipEdit(file, x, y, w, h, mon) {
         popupScreen = mon;
-        editProc.command = [Theme.home + "/.local/bin/dx-snip-crop", file, String(x), String(y), String(w), String(h), "edit"];
+        editProc.command = [Theme.home + "/.local/bin/hyhy-snip-crop", file, String(x), String(y), String(w), String(h), "edit"];
         editProc.running = false; editProc.running = true;
     }
     function snipClose(delay) {
@@ -1201,7 +1201,7 @@ Singleton {
     Timer { id: weRemapStart; interval: 60; onTriggered: { root.weRemap = true; weRemapEnd.restart(); } }
     Timer { id: weRemapEnd; interval: 120; onTriggered: root.weRemap = false }
     function weApply() {
-        const args = [Theme.home + "/.local/bin/dx-we-apply"];
+        const args = [Theme.home + "/.local/bin/hyhy-we-apply"];
         for (const k of Object.keys(weWallpapers)) args.push(k + "=" + weWallpapers[k]);
         Quickshell.execDetached(args);
     }

@@ -49,7 +49,7 @@ PanelWindow {
         const out = (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/draconyx-snip-final.png";
         stage.grabToImage(function (res) {
             if (!res.saveToFile(out)) { ed.status = "Konnte das Bild nicht erzeugen"; return; }
-            Quickshell.execDetached([Theme.home + "/.local/bin/dx-snip-crop", "--deliver", out, mode]);
+            Quickshell.execDetached([Theme.home + "/.local/bin/hyhy-snip-crop", "--deliver", out, mode]);
             ed.status = mode === "copy" ? "Kopiert" : mode === "save" ? "Gespeichert" : "Kopiert und gespeichert";
             closeTimer.restart();
         }, Qt.size(imgW, imgH));

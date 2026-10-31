@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class DragTests(unittest.TestCase):
     def setUp(self):
-        self.module = runpy.run_path(str(ROOT / 'bin/dx-window-drag'))
+        self.module = runpy.run_path(str(ROOT / 'bin/hyhy-window-drag'))
         self.drag = self.module['drag']
         self.g = self.drag.__globals__
         self.commands = []

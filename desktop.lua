@@ -175,7 +175,7 @@ end
 -- Sicherheitsnetz: Shell zusätzlich zum Autostart über start-desktop prüfen und notfalls starten (mehrere Versuche, Protokoll in
 -- ~/.cache/draconyx/shell-start.log). Läuft sie schon, passiert nichts.
 hl.on('hyprland.start', function()
-    hl.exec_cmd("sh -c 'sleep 4; exec " .. os.getenv('HOME') .. "/.local/bin/dx-shell-ensure'")
+    hl.exec_cmd("sh -c 'sleep 4; exec " .. os.getenv('HOME') .. "/.local/bin/hyhy-shell-ensure'")
 end)
 
 DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App

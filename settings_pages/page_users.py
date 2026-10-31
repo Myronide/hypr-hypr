@@ -76,7 +76,7 @@ def parse_session_show(text):
 
 
 def password_command():
-    t = U.find_bin('dx-terminal')
+    t = U.find_bin('hyhy-terminal')
     return [t, '--', 'passwd'] if t else None
 
 
@@ -196,7 +196,7 @@ def build(app):
     def pw():
         cmd = password_command()
         if not cmd:
-            app.message('dx-terminal wurde nicht gefunden – im Terminal „passwd“ ausführen.')
+            app.message('hyhy-terminal wurde nicht gefunden – im Terminal „passwd“ ausführen.')
             return
         import subprocess
         try:

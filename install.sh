@@ -54,7 +54,7 @@ say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*"; }
 ask()  { [ "$ASSUME_YES" = 1 ] && return 0; read -r -p "$1 [j/N] " r; [[ "$r" =~ ^[jJyY] ]]; }
 # Eigene Einstellungen werden nie überschrieben. Zur Sicherheit wandert alles, was der Installer ersetzt, vorher hierhin:
-BACKUP="$HOME/.local/share/draconyx-backups/install-$(date +%Y%m%d-%H%M%S)"
+BACKUP="$HOME/.local/share/hypr-hypr-backups/install-$(date +%Y%m%d-%H%M%S)"
 backup_file() {   # backup_file DATEI  (Pfad bleibt unter dem Sicherungsordner erhalten)
   local f="$1"; [ -e "$f" ] || return 0
   local rel="${f#"$HOME"/}"; mkdir -p "$BACKUP/$(dirname "$rel")" && cp -a "$f" "$BACKUP/$rel" 2>/dev/null || true
@@ -68,8 +68,8 @@ put() {
 }
 
 # Nur ein Installer gleichzeitig (Update über die Shell + von Hand gestartet würden sich sonst gegenseitig überschreiben)
-mkdir -p "$CONF/draconyx"
-exec 8>"$CONF/draconyx/.install.lock"
+mkdir -p "$CONF/hypr-hypr"
+exec 8>"$CONF/hypr-hypr/.install.lock"
 if ! flock -n 8; then echo "Ein anderer Installer läuft gerade – bitte warten, bis er fertig ist." >&2; exit 1; fi
 
 # Lua-Dateien des Repos prüfen, BEVOR irgendetwas installiert wird: eine kaputte hyprland.lua bringt Hyprland beim Neuladen zum Absturz
@@ -81,39 +81,46 @@ if [ -n "$LUAC" ]; then
   done
 fi
 
+# ---------------------------------------------------------------- 0a. Ordner umbenennen (draconyx -> hypr-hypr) und 2.x-Sperre
+STEP="Ordner"
+# Vor allem anderen: 2.x erst ab 1.6.3 (sonst bricht der Wechsel). Alte Ordnernamen bleiben bis 1.x als Symlinks.
+NEW_VER="$(tr -d '[:space:]' < "$REPO/VERSION" 2>/dev/null || echo 0)"
+"$HERE/bin/hyhy-paths" gate "$NEW_VER" || { echo "Abgebrochen – nichts wurde verändert." >&2; exit 1; }
+"$HERE/bin/hyhy-paths" migrate
+
 # ---------------------------------------------------------------- 0b. Berechtigungen
 STEP="Berechtigungen"
 # Dateien, die früher durch ein "sudo" root gehören (oder nicht beschreibbar sind), werden dem Benutzer zurückgegeben,
 # damit der Installer und die Shell überall schreiben können.
-for d in "$CONF/hypr" "$CONF/quickshell" "$CONF/draconyx" "$HOME/.local/bin" "$HOME/.local/share/draconyx-hypr" \
-         "$HOME/.local/state/draconyx" "$HOME/.local/opt" "$HOME/.local/src" "$HOME/.cache/aurora" "$HOME/.cache/draconyx"; do
+for d in "$CONF/hypr" "$CONF/quickshell" "$CONF/hypr-hypr" "$HOME/.local/bin" "$HOME/.local/share/hypr-hypr" \
+         "$HOME/.local/state/hypr-hypr" "$HOME/.local/opt" "$HOME/.local/src" "$HOME/.cache/aurora" "$HOME/.cache/hypr-hypr"; do
   [ -e "$d" ] || continue
   if [ -n "$(find "$d" -maxdepth 5 \( -user root -o ! -writable \) -print -quit 2>/dev/null)" ]; then
     say "Berechtigungen reparieren: ${d/#$HOME/~}"
     sudo chown -R "$(id -un):$(id -gn)" "$d" && chmod -R u+rwX "$d" || warn "Konnte Berechtigungen für $d nicht setzen."
   fi
 done
-mkdir -p "$CONF/hypr" "$CONF/quickshell" "$CONF/draconyx" "$HOME/.local/bin" "$HOME/.local/state/draconyx" "$HOME/.local/share/draconyx-hypr" "$HOME/.cache/aurora"
+mkdir -p "$CONF/hypr" "$CONF/quickshell" "$CONF/hypr-hypr" "$HOME/.local/bin" "$HOME/.local/state/hypr-hypr" "$HOME/.local/share/hypr-hypr" "$HOME/.cache/aurora"
 for need in "$CONF/hypr" "$CONF/quickshell" "$HOME/.local/bin"; do
   [ -w "$need" ] || { echo "Kein Schreibzugriff auf $need – bitte prüfen." >&2; exit 1; }
 done
 
 # ---------------------------------------------------------------- 0c. Einstellungen sichern (nur kopieren, nichts wird verändert)
-for f in "$CONF/draconyx/terminal" "$CONF/draconyx/window-mode" "$CONF/draconyx/colors.json" "$CONF/draconyx/modifier" "$CONF/draconyx/binds.conf" \
-         "$HOME/.local/state/draconyx/settings.json" "$CONF/hypr/aurora/preferences.json" "$CONF/hypr/aurora/preferences.lua" \
+for f in "$CONF/hypr-hypr/terminal" "$CONF/hypr-hypr/window-mode" "$CONF/hypr-hypr/colors.json" "$CONF/hypr-hypr/modifier" "$CONF/hypr-hypr/binds.conf" \
+         "$HOME/.local/state/hypr-hypr/settings.json" "$CONF/hypr/aurora/preferences.json" "$CONF/hypr/aurora/preferences.lua" \
          "$CONF/hypr/aurora/palette.css" "$CONF/hypr/hyprland.lua" "$CONF/hypr/monitors_local.lua" "$HOME/.config/brave-flags.conf"; do
   backup_file "$f"
 done
 [ -d "$BACKUP" ] && say "Einstellungen gesichert in ${BACKUP/#$HOME/~}"
 # Ältere Installer-Sicherungen aufräumen: die letzten 15 bleiben (jeder Lauf legt sonst eine neue an)
-BK_ROOT="$HOME/.local/share/draconyx-backups"
+BK_ROOT="$HOME/.local/share/hypr-hypr-backups"
 if [ -d "$BK_ROOT" ]; then
   find "$BK_ROOT" -maxdepth 1 -type d -name 'install-*' -printf '%f\n' 2>/dev/null | sort -r | tail -n +16 | while IFS= read -r old; do
     rm -rf -- "${BK_ROOT:?}/$old"
   done
 fi
 # Zusätzlich die Shell-Einstellungen als Ganzes festhalten: nach dem Neustart der Shell wird alles Abweichende zurückgeschrieben
-python3 -I "$HERE/bin/dx-settings-guard" snapshot >/dev/null 2>&1 || true
+python3 -I "$HERE/bin/hyhy-settings-guard" snapshot >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 1. Pakete
 STEP="Pakete"
@@ -144,7 +151,7 @@ resolve_pkg() {
 ALL_PKGS=("${PKGS[@]}"); [ "$DO_WE" = 1 ] && ALL_PKGS+=("${WE_PKGS[@]}")
 if [ "$DO_PKGS" = 1 ]; then for p in "${ALL_PKGS[@]}"; do resolve_pkg "$p"; done; fi
 # Terminal: nur wenn KEIN einziges installiert ist, wird Ghostty erzwungen. Sonst bleibt dein Terminal, und du kannst Ghostty/Kitty
-# jederzeit deinstallieren (der Installer bringt sie nicht zurück). dx-terminal-ensure wacht danach, dass immer eins da ist.
+# jederzeit deinstallieren (der Installer bringt sie nicht zurück). hyhy-terminal-ensure wacht danach, dass immer eins da ist.
 have_term=0; for t in ghostty kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm; do command -v "$t" >/dev/null 2>&1 && have_term=1; done
 if [ "$have_term" = 0 ] && [ "$DO_PKGS" = 1 ]; then say "Kein Terminal gefunden – Ghostty wird installiert"; resolve_pkg ghostty; fi
 FAILED_PKGS=()
@@ -171,25 +178,26 @@ fi
 
 # ---------------------------------------------------------------- 2. Dateien
 STEP="Dateien kopieren"
-say "Shell (Quickshell) nach $CONF/quickshell/draconyx"
-mkdir -p "$CONF/quickshell/draconyx" "$HOME/.local/bin" "$HOME/.local/state/draconyx" "$CONF/draconyx" "$HOME/.local/share/draconyx-hypr"
+say "Shell (Quickshell) nach $CONF/quickshell/hypr-hypr"
+mkdir -p "$CONF/quickshell/hypr-hypr" "$HOME/.local/bin" "$HOME/.local/state/hypr-hypr" "$CONF/hypr-hypr" "$HOME/.local/share/hypr-hypr"
 # --delay-updates: alle Dateien erscheinen erst am Ende fast gleichzeitig (jede einzelne lädt die Shell sonst mit halbem Stand neu)
-rsync_out="$(rsync -ai --delay-updates --exclude 'icons-src' --exclude 'logo-*.png' "$HERE/quickshell/" "$CONF/quickshell/draconyx/")" \
+rsync_out="$(rsync -ai --delay-updates --exclude 'icons-src' --exclude 'logo-*.png' "$HERE/quickshell/" "$CONF/quickshell/hypr-hypr/")" \
   || { echo "Shell-Dateien konnten nicht kopiert werden (Platte voll oder keine Rechte?)." >&2; exit 1; }
 n=$(printf '%s\n' "$rsync_out" | grep -c '^>f' || true)
 [ "$n" -gt 0 ] && { echo "    $n Shell-Dateien aktualisiert"; CHANGED=$((CHANGED+n)); } || echo "    Shell ist aktuell"
-rsync -a --delete "$HERE/quickshell/icons-src/" "$HOME/.local/share/draconyx-hypr/qs-icons-src/"
-cp -n "$HERE"/quickshell/logo-*.png "$HOME/.local/share/draconyx-hypr/" 2>/dev/null || true
+rsync -a --delete "$HERE/quickshell/icons-src/" "$HOME/.local/share/hypr-hypr/qs-icons-src/"
+cp -n "$HERE"/quickshell/logo-*.png "$HOME/.local/share/hypr-hypr/" 2>/dev/null || true
 
 say "Hilfsskripte nach ~/.local/bin"
-for f in "$HERE"/bin/dx-*; do put "$f" "$HOME/.local/bin/$(basename "$f")" 755; done
+for f in "$HERE"/bin/hyhy-*; do put "$f" "$HOME/.local/bin/$(basename "$f")" 755; done
+"$HOME/.local/bin/hyhy-paths" links    # alte dx-Befehle bleiben bis 1.x als Verweise erhalten
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "~/.local/bin ist nicht im PATH.";; esac
 
 # Tastaturbelegung (QWERTZ = de, QWERTY = us): einmal wählen, gespeichert in ~/.config/draconyx/keymap, später in den Einstellungen änderbar
-KMF="$CONF/draconyx/keymap"
+KMF="$CONF/hypr-hypr/keymap"
 case "$KEYMAP_ARG" in qwertz|QWERTZ|de) KEYMAP_ARG=de;; qwerty|QWERTY|us) KEYMAP_ARG=us;; "") ;; *) warn "Unbekannte Belegung '$KEYMAP_ARG' (de oder us) – ignoriert"; KEYMAP_ARG="";; esac
 if [ -n "$KEYMAP_ARG" ]; then
-  mkdir -p "$CONF/draconyx"; [ "$(cat "$KMF" 2>/dev/null)" = "$KEYMAP_ARG" ] || { echo "$KEYMAP_ARG" > "$KMF"; CHANGED=$((CHANGED+1)); }
+  mkdir -p "$CONF/hypr-hypr"; [ "$(cat "$KMF" 2>/dev/null)" = "$KEYMAP_ARG" ] || { echo "$KEYMAP_ARG" > "$KMF"; CHANGED=$((CHANGED+1)); }
   say "Tastaturbelegung: $KEYMAP_ARG"
 elif [ ! -s "$KMF" ]; then
   # Vorschlag: die Belegung aus der bisherigen Hyprland-Konfiguration, sonst Deutsch
@@ -202,7 +210,7 @@ elif [ ! -s "$KMF" ]; then
     read -r -p "Nummer eingeben (Enter = Vorschlag): " ans || ans=""
     case "$ans" in 1) pick=de;; 2) pick=us;; esac
   fi
-  mkdir -p "$CONF/draconyx"; echo "$pick" > "$KMF"; CHANGED=$((CHANGED+1))
+  mkdir -p "$CONF/hypr-hypr"; echo "$pick" > "$KMF"; CHANGED=$((CHANGED+1))
   say "Tastaturbelegung: $pick (ändern: Aurora-Einstellungen → Tastaturbelegung oder ./install.sh --keymap=de|us)"
 fi
 
@@ -218,7 +226,7 @@ if [ ! -e "$CONF/hypr/csd-apps" ]; then
   cp "$HERE/hypr/csd-apps" "$CONF/hypr/csd-apps"; CHANGED=$((CHANGED+1))
 else
   # Nur NEUE Standard-Apps (seit dem letzten Lauf) an deine Liste anhängen; was du entfernt hast, bleibt entfernt
-  seen="$CONF/draconyx/csd-defaults-seen"; mkdir -p "$CONF/draconyx"; touch "$seen"
+  seen="$CONF/hypr-hypr/csd-defaults-seen"; mkdir -p "$CONF/hypr-hypr"; touch "$seen"
   added=0
   while IFS= read -r app; do
     [ -n "$app" ] || continue
@@ -227,12 +235,12 @@ else
   done < "$HERE/hypr/csd-apps"
   [ "$added" -gt 0 ] && { echo "    $added Apps mit eigener Titelleiste zur Liste hinzugefügt"; CHANGED=$((CHANGED+1)); }
 fi
-cp "$HERE/hypr/csd-apps" "$CONF/draconyx/csd-defaults-seen"
+cp "$HERE/hypr/csd-apps" "$CONF/hypr-hypr/csd-defaults-seen"
 # Monitore: die Vorlage ist nur ein neutrales Beispiel. Die echte monitors_local.lua entsteht aus den erkannten Bildschirmen (siehe unten); eine vorhandene bleibt unangetastet.
 put "$HERE/hypr/monitors_local.lua.example" "$CONF/hypr/monitors_local.lua.example" 644
 # hyprland.lua: nie eine Datei überschreiben, die du selbst geändert hast. Wir merken uns die Prüfsumme der zuletzt von uns installierten
 # Fassung: stimmt deine Datei damit überein, ist sie unverändert und darf aktualisiert werden; sonst bleibt sie, die neue liegt daneben.
-LUA="$CONF/hypr/hyprland.lua"; LUA_SUM="$CONF/draconyx/installed-hyprland.sha"; mkdir -p "$CONF/draconyx"
+LUA="$CONF/hypr/hyprland.lua"; LUA_SUM="$CONF/hypr-hypr/installed-hyprland.sha"; mkdir -p "$CONF/hypr-hypr"
 cur_sum="$([ -e "$LUA" ] && sha256sum "$LUA" | cut -d' ' -f1 || true)"; last_sum="$(cat "$LUA_SUM" 2>/dev/null || true)"
 if [ -e "$LUA" ] && cmp -s "$HERE/hypr/hyprland.lua" "$LUA"; then
   :   # schon unsere hyprland.lua
@@ -277,7 +285,7 @@ if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
 fi
 mkdir -p "$CONF/hypr/aurora"; put "$REPO/monitors.py" "$CONF/hypr/aurora/monitors.py" 644
 if [ ! -e "$CONF/hypr/monitors_local.lua" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-  r="$(python3 -I "$HERE/bin/dx-monitors" init 2>&1 || true)"; echo "    $r"
+  r="$(python3 -I "$HERE/bin/hyhy-monitors" init 2>&1 || true)"; echo "    $r"
 fi
 [ -e "$LUA" ] && cmp -s "$HERE/hypr/hyprland.lua" "$LUA" && sha256sum "$LUA" | cut -d' ' -f1 > "$LUA_SUM"
 FRESH_LOCK=0
@@ -296,8 +304,8 @@ if command -v gsettings >/dev/null && [ "$(gsettings get org.gnome.desktop.inter
   gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
 fi
 
-# Eigene Apps (dx-apps): bereits installierte auf den Stand dieses Repos bringen (nur Dateien, keine Paketinstallation)
-[ -x "$HOME/.local/bin/dx-apps" ] && "$HOME/.local/bin/dx-apps" update 2>&1 | sed 's/^/    /' || true
+# Eigene Apps (hyhy-apps): bereits installierte auf den Stand dieses Repos bringen (nur Dateien, keine Paketinstallation)
+[ -x "$HOME/.local/bin/hyhy-apps" ] && "$HOME/.local/bin/hyhy-apps" update 2>&1 | sed 's/^/    /' || true
 
 say "Aurora-Einstellungen: verknüpfe settings-app, preferences.py, settings.css"
 A="$CONF/hypr/aurora"; mkdir -p "$A"
@@ -318,10 +326,10 @@ for p in $(pgrep -x python3 || true); do
 done
 
 # ---------------------------------------------------------------- 3. Standardwerte
-[ -e "$CONF/draconyx/terminal" ] || { for t in ghostty kitty foot alacritty konsole; do command -v "$t" >/dev/null && { echo "$t" > "$CONF/draconyx/terminal"; break; }; done; }
-[ -e "$CONF/draconyx/window-mode" ] || echo floating > "$CONF/draconyx/window-mode"
+[ -e "$CONF/hypr-hypr/terminal" ] || { for t in ghostty kitty foot alacritty konsole; do command -v "$t" >/dev/null && { echo "$t" > "$CONF/hypr-hypr/terminal"; break; }; done; }
+[ -e "$CONF/hypr-hypr/window-mode" ] || echo floating > "$CONF/hypr-hypr/window-mode"
 # Farben: nur beim ersten Mal die Aurora-Voreinstellung setzen; vorhandene (auch angepasste) Farben bleiben
-if [ -e "$CONF/draconyx/colors.json" ]; then "$HOME/.local/bin/dx-colors" ensure; else "$HOME/.local/bin/dx-colors" preset aurora; fi
+if [ -e "$CONF/hypr-hypr/colors.json" ]; then "$HOME/.local/bin/hyhy-colors" ensure; else "$HOME/.local/bin/hyhy-colors" preset aurora; fi
 # Brave über XWayland starten, damit sein Minimieren-Symbol bei Hyprland ankommt – nur nötig OHNE das native Aurora-Plugin
 # (mit Plugin läuft Brave sauber als Wayland-Fenster, XWayland wäre bei gebrochener Skalierung unscharf)
 if hyprctl plugin list 2>/dev/null | grep -q aurora-native; then
@@ -332,7 +340,7 @@ fi
 
 # Electron-Apps (Discord, Vesktop …) über XWayland starten, damit ihr Minimieren-Symbol bei Hyprland ankommt (ohne natives Plugin)
 if ! hyprctl plugin list 2>/dev/null | grep -q aurora-native; then
-  "$HOME/.local/bin/dx-electron-x11" | sed 's/^/    /'
+  "$HOME/.local/bin/hyhy-electron-x11" | sed 's/^/    /'
 fi
 
 # ---------------------------------------------------------------- 4. Wallpaper Engine (repariert)
@@ -426,12 +434,12 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
     # Vor dem Neuladen: Bildschirme sichern, die nicht ausdrücklich in monitors_local.lua stehen (sonst springen von Hand angeordnete
     # Bildschirme nach jedem Update zurück). Danach prüfen, dass noch ein Bildschirm an ist – sonst die Sicherung zurückspielen.
     if [ -e "$CONF/hypr/monitors_local.lua" ]; then
-      r="$(python3 -I "$HERE/bin/dx-monitors" sync 2>&1 || true)"; echo "    $r"
+      r="$(python3 -I "$HERE/bin/hyhy-monitors" sync 2>&1 || true)"; echo "    $r"
     fi
     say "Hyprland-Konfiguration neu laden"
     hyprctl reload >/dev/null 2>&1 || warn "hyprctl reload fehlgeschlagen"
     sleep 1
-    if [ "$(python3 -I "$HERE/bin/dx-monitors" active 2>/dev/null || echo 1)" = "0" ]; then
+    if [ "$(python3 -I "$HERE/bin/hyhy-monitors" active 2>/dev/null || echo 1)" = "0" ]; then
       bak="$(ls -t "$CONF/hypr"/monitors_local.lua.vor-* 2>/dev/null | head -1)"
       if [ -n "$bak" ]; then
         warn "Nach dem Neuladen war kein Bildschirm an – stelle monitors_local.lua aus der Sicherung wieder her"
@@ -454,17 +462,17 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
       # übrig gebliebene Wächter der alten Shell beenden (die neue startet sie selbst)
       for p in $(pgrep -x python3 || true); do
         c="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)"
-        case "$c" in *dx-x11-iconify*|*dx-ui-bridge*|*desktop-ui\ daemon*|*settings-app*) kill "$p" 2>/dev/null || true;; esac
+        case "$c" in *hyhy-x11-iconify*|*hyhy-ui-bridge*|*desktop-ui\ daemon*|*settings-app*) kill "$p" 2>/dev/null || true;; esac
       done
       hyprctl dispatch "hl.dsp.exec_cmd(\"sh -c 'QS_ICON_THEME=Papirus-Dark exec qs -c draconyx'\")" >/dev/null 2>&1 || true
       for _ in $(seq 1 60); do qs -c draconyx ipc show >/dev/null 2>&1 && break; sleep 0.5; done      # bis zu 30 s: unter Last startet die Shell langsam
       if qs -c draconyx ipc show >/dev/null 2>&1 || pgrep -x qs >/dev/null 2>&1; then
         say "Shell läuft"
-        sleep 6; r="$(python3 -I "$HERE/bin/dx-settings-guard" restore 2>&1 || true)"; [ -n "$r" ] && [ "$r" != "nichts zurückzusetzen" ] && warn "$r"
+        sleep 6; r="$(python3 -I "$HERE/bin/hyhy-settings-guard" restore 2>&1 || true)"; [ -n "$r" ] && [ "$r" != "nichts zurückzusetzen" ] && warn "$r"
         sleep 3; qs -c draconyx ipc call shell weReapply >/dev/null 2>&1 || true    # Wallpaper Engine mit den gespeicherten Wallpapern neu starten
       else
-        warn "Die Shell ist nicht angesprungen – prüfe:  dx-doctor"
-        python3 -I "$HERE/bin/dx-settings-guard" restore >/dev/null 2>&1 || true
+        warn "Die Shell ist nicht angesprungen – prüfe:  hyhy-doctor"
+        python3 -I "$HERE/bin/hyhy-settings-guard" restore >/dev/null 2>&1 || true
       fi
     fi
   else
@@ -473,13 +481,13 @@ if [ "${DX_NO_START:-0}" != 1 ] && { [ "$CHANGED" -gt 0 ] || [ "$RESTART" = 1 ];
 fi
 
 # Es muss immer ein Terminal da sein; zeigt die Einstellung auf ein fehlendes, wird sie umgestellt
-[ -x "$HOME/.local/bin/dx-terminal-ensure" ] && "$HOME/.local/bin/dx-terminal-ensure" --quiet || true
+[ -x "$HOME/.local/bin/hyhy-terminal-ensure" ] && "$HOME/.local/bin/hyhy-terminal-ensure" --quiet || true
 
-# Installierte Version und Repo-Pfad merken (für die Update-Prüfung der Shell: dx-update)
+# Installierte Version und Repo-Pfad merken (für die Update-Prüfung der Shell: hyhy-update)
 STEP="Version speichern"
-mkdir -p "$CONF/draconyx"
+mkdir -p "$CONF/hypr-hypr"
 # per Python schreiben: Pfade mit Anführungszeichen/Backslash ergäben sonst ungültiges JSON; atomar ersetzen
-python3 -I - "$(tr -d '[:space:]' < "$REPO/VERSION" 2>/dev/null || echo 0)" "$REPO" "$CONF/draconyx/install.json" <<'PY'
+python3 -I - "$(tr -d '[:space:]' < "$REPO/VERSION" 2>/dev/null || echo 0)" "$REPO" "$CONF/hypr-hypr/install.json" <<'PY'
 import json, os, sys
 v, repo, out = sys.argv[1:4]
 tmp = out + ".tmp"
@@ -487,7 +495,7 @@ with open(tmp, "w", encoding="utf-8") as f:
     json.dump({"version": v, "repo": repo}, f, ensure_ascii=False); f.write("\n")
 os.replace(tmp, out)
 PY
-[ -x "$HOME/.local/bin/dx-update" ] && "$HOME/.local/bin/dx-update" check --quiet >/dev/null 2>&1 || true
+[ -x "$HOME/.local/bin/hyhy-update" ] && "$HOME/.local/bin/hyhy-update" check --quiet >/dev/null 2>&1 || true
 
 [ "$CHANGED" -eq 0 ] && say "Alles war schon auf dem neuesten Stand." || say "$CHANGED Teile aktualisiert."
-say "Version $(cat "$REPO/VERSION" 2>/dev/null)  –  Fertig. Einstellungen: Zahnrad in der Taskleiste. Bei Problemen:  dx-doctor"
+say "Version $(cat "$REPO/VERSION" 2>/dev/null)  –  Fertig. Einstellungen: Zahnrad in der Taskleiste. Bei Problemen:  hyhy-doctor"

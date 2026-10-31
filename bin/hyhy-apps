@@ -2,17 +2,17 @@
 """Hypr Hypr Apps: eigene Anwendungen, die zum System gehören. Der Katalog liegt im Repo (Ordner apps/<id>/app.json), installiert wird
 nach ~/.local/share/draconyx-apps/<id>/ mit einem Starter im Startmenü. Nur Apps aus dem eigenen Repo – kein fremder Code.
 
-  dx-apps list [--json]      Katalog mit Stand (installiert / Update / nicht installiert)
-  dx-apps install ID...      installieren (fehlende Pakete über pacman; Passwort per Dialog)
-  dx-apps remove ID...       entfernen (Daten der App, z. B. Notizen, bleiben)
-  dx-apps update             alle installierten Apps auf den Stand des Repos bringen
-  dx-apps run ID             starten
+  hyhy-apps list [--json]      Katalog mit Stand (installiert / Update / nicht installiert)
+  hyhy-apps install ID...      installieren (fehlende Pakete über pacman; Passwort per Dialog)
+  hyhy-apps remove ID...       entfernen (Daten der App, z. B. Notizen, bleiben)
+  hyhy-apps update             alle installierten Apps auf den Stand des Repos bringen
+  hyhy-apps run ID             starten
 """
 import json, os, re, shlex, shutil, subprocess, sys, time
 from pathlib import Path
 
 HOME = Path.home()
-INSTALL = HOME / ".config/draconyx/install.json"
+INSTALL = HOME / ".config/hypr-hypr/install.json"
 BASE = HOME / ".local/share/draconyx-apps"
 STATE = BASE / "installed.json"
 DESKTOP = HOME / ".local/share/applications"
@@ -78,7 +78,7 @@ def missing_deps(a):
 def install_deps(pkgs):
     if not pkgs:
         return True
-    env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"))
+    env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/hyhy-askpass"))
     cmd = (["sudo", "-A"] if env["SUDO_ASKPASS"] and Path(env["SUDO_ASKPASS"]).exists() and not sys.stdin.isatty() else ["sudo"])
     return subprocess.run(cmd + ["pacman", "-S", "--needed", "--noconfirm", *pkgs], env=env).returncode == 0
 

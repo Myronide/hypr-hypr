@@ -237,7 +237,7 @@ class Hyprland(Home):
 
 class Contrast(unittest.TestCase):
     def test_preset_has_all_colours_and_contrast(self):
-        src = (ROOT / 'bin/dx-colors').read_text()
+        src = (ROOT / 'bin/hyhy-colors').read_text()
         ns = {}
         start = src.index('PRESETS = {')
         end = src.index('HEX = ')

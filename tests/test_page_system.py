@@ -178,8 +178,8 @@ class Users(unittest.TestCase):
         self.assertTrue(i['login'] and i['home'])
 
     def test_password_command_uses_dx_terminal(self):
-        with mock.patch.object(US.U, 'find_bin', return_value='/x/dx-terminal'):
-            self.assertEqual(US.password_command(), ['/x/dx-terminal', '--', 'passwd'])
+        with mock.patch.object(US.U, 'find_bin', return_value='/x/hyhy-terminal'):
+            self.assertEqual(US.password_command(), ['/x/hyhy-terminal', '--', 'passwd'])
         with mock.patch.object(US.U, 'find_bin', return_value=None):
             self.assertIsNone(US.password_command())
 
@@ -332,9 +332,9 @@ class About(unittest.TestCase):
 
     def test_commands(self):
         self.assertEqual(AB.build_empty_trash(), ['gio', 'trash', '--empty'])
-        with mock.patch.object(AB.U, 'find_bin', return_value='/b/dx-terminal'):
+        with mock.patch.object(AB.U, 'find_bin', return_value='/b/hyhy-terminal'):
             c = AB.terminal_update_cmd()
-            self.assertEqual(c[:3], ['/b/dx-terminal', '--', 'sh'])
+            self.assertEqual(c[:3], ['/b/hyhy-terminal', '--', 'sh'])
         with mock.patch.object(AB.U, 'find_bin', return_value=None):
             self.assertIsNone(AB.terminal_update_cmd())
 

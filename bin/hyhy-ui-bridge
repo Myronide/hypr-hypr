@@ -26,7 +26,7 @@ def _single_instance(name):
         _ct.CDLL("libc.so.6").prctl(1, int(_signal.SIGTERM))      # PR_SET_PDEATHSIG
     except OSError:
         pass
-_single_instance("dx-ui-bridge")
+_single_instance("hyhy-ui-bridge")
 from pathlib import Path
 rt = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
 path = Path(rt) / "aurora-ui.sock"

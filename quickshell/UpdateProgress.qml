@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 
-// Fortschrittsanzeige für das Hypr Hypr-Update (oben rechts). dx-update schreibt den Stand nach ~/.cache/draconyx/update-progress.json:
+// Fortschrittsanzeige für das Hypr Hypr-Update (oben rechts). hyhy-update schreibt den Stand nach ~/.cache/hypr-hypr/update-progress.json:
 // { "state": "running" | "done" | "error", "percent": 0-100, "text": "...", "ts": Unixzeit }
 PanelWindow {
     id: win
@@ -25,7 +25,7 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
     FileView {
-        path: Theme.home + "/.cache/draconyx/update-progress.json"
+        path: Theme.home + "/.cache/hypr-hypr/update-progress.json"
         printErrors: false
         watchChanges: true
         onFileChanged: reload()

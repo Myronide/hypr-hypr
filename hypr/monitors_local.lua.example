@@ -1,9 +1,9 @@
 -- Vorlage für die Monitore dieses Rechners (Kopie nach ~/.config/hypr/monitors_local.lua).
 -- Du musst das NICHT von Hand machen: der Installer erkennt deine Bildschirme selbst, und in den Aurora-Einstellungen
--- unter „Bildschirme“ ordnest du sie wie unter Windows an. Namen anzeigen:  dx-monitors show   (oder  hyprctl monitors)
+-- unter „Bildschirme“ ordnest du sie wie unter Windows an. Namen anzeigen:  hyhy-monitors show   (oder  hyprctl monitors)
 
 hl.monitor({
-    output   = "DP-1",              -- Name aus `dx-monitors show`
+    output   = "DP-1",              -- Name aus `hyhy-monitors show`
     mode     = "1920x1080@60",
     position = "0x0",
     scale    = 1,

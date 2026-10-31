@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Hypr Hypr Schriften: 10 Voreinstellungen für die Oberfläche (Shell + Aurora) und für Code-Anzeigen (Git-Client, Diffs).
-  dx-fonts list [--json]        Voreinstellungen mit Stand (installiert?) und aktueller Wahl
-  dx-fonts set ui|code ID       Schrift wählen (Shell und Aurora übernehmen sie sofort bzw. beim nächsten Öffnen)
-  dx-fonts install ID           fehlende Schrift installieren (pacman, sonst AUR über paru/yay; Passwort per Dialog)
-Gespeichert in ~/.config/draconyx/font (Oberfläche) und ~/.config/draconyx/font-code (Code)."""
+  hyhy-fonts list [--json]        Voreinstellungen mit Stand (installiert?) und aktueller Wahl
+  hyhy-fonts set ui|code ID       Schrift wählen (Shell und Aurora übernehmen sie sofort bzw. beim nächsten Öffnen)
+  hyhy-fonts install ID           fehlende Schrift installieren (pacman, sonst AUR über paru/yay; Passwort per Dialog)
+Gespeichert in ~/.config/hypr-hypr/font (Oberfläche) und ~/.config/hypr-hypr/font-code (Code)."""
 import json, os, subprocess, sys
 from pathlib import Path
 
 HOME = Path.home()
-CFG = HOME / ".config/draconyx"
+CFG = HOME / ".config/hypr-hypr"
 # id, Name, Familie (fontconfig), Paketkandidaten (pacman), Art
 PRESETS = [
     ("inter", "Inter", "Inter", ["inter-font", "ttf-inter"], "sans"),
@@ -55,7 +55,7 @@ def do_install(pid):
     p = next((x for x in PRESETS if x[0] == pid), None)
     if not p:
         print("Unbekannte Schrift:", pid, file=sys.stderr); return 1
-    env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"))
+    env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/hyhy-askpass"))
     for pkg in p[3]:
         if subprocess.run(["pacman", "-Si", pkg], capture_output=True).returncode == 0:
             if subprocess.run(["sudo", "-A", "pacman", "-S", "--needed", "--noconfirm", pkg], env=env).returncode == 0:

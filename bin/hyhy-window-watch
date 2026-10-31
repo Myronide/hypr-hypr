@@ -6,7 +6,7 @@
 import json, os, select, signal, socket, sys, time
 
 if not os.environ.get("XDG_RUNTIME_DIR") or not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
-    sys.exit("dx-window-watch: keine Hyprland-Sitzung (HYPRLAND_INSTANCE_SIGNATURE fehlt)")
+    sys.exit("hyhy-window-watch: keine Hyprland-Sitzung (HYPRLAND_INSTANCE_SIGNATURE fehlt)")
 
 def call(cmd):
     s = socket.socket(socket.AF_UNIX)
@@ -38,7 +38,7 @@ ev = socket.socket(socket.AF_UNIX)
 try:
     ev.connect("%s/hypr/%s/.socket2.sock" % (os.environ["XDG_RUNTIME_DIR"], os.environ["HYPRLAND_INSTANCE_SIGNATURE"]))
 except OSError as e:
-    sys.exit("dx-window-watch: Hyprland-Ereignis-Socket nicht erreichbar (%s) – läuft Hyprland?" % e)
+    sys.exit("hyhy-window-watch: Hyprland-Ereignis-Socket nicht erreichbar (%s) – läuft Hyprland?" % e)
 ev.setblocking(False)
 
 last, n, cache, fast_until = "", 0, [], 0.0

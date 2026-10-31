@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # Hypr Hypr: Update-Prüfung und -Installation für das System selbst (das Git-Repo, aus dem installiert wurde).
-#   dx-update check [--quiet]   beim Remote nachsehen, ob es eine neuere Version gibt (schreibt ~/.local/state/draconyx/update.json)
-#   dx-update status            gespeicherten Stand zeigen
-#   dx-update apply             im Hintergrund aktualisieren (nur der sudo-Dialog erscheint); Meldungen als Benachrichtigung,
-#                               Protokoll: ~/.cache/draconyx/update.log     --fg: im Vordergrund    --terminal: sichtbar im Terminal
-# Die installierte Version und der Repo-Pfad stehen in ~/.config/draconyx/install.json (schreibt der Installer).
+#   hyhy-update check [--quiet]   beim Remote nachsehen, ob es eine neuere Version gibt (schreibt ~/.local/state/hypr-hypr/update.json)
+#   hyhy-update status            gespeicherten Stand zeigen
+#   hyhy-update apply             im Hintergrund aktualisieren (nur der sudo-Dialog erscheint); Meldungen als Benachrichtigung,
+#                               Protokoll: ~/.cache/hypr-hypr/update.log     --fg: im Vordergrund    --terminal: sichtbar im Terminal
+# Die installierte Version und der Repo-Pfad stehen in ~/.config/hypr-hypr/install.json (schreibt der Installer).
 import json, os, re, subprocess, sys, time
 from pathlib import Path
 
 HOME = Path.home()
-INSTALL = HOME / ".config/draconyx/install.json"
-STATE = HOME / ".local/state/draconyx/update.json"
+# Neue Ordner: hypr-hypr. Die alten draconyx-Pfade funktionieren bis 1.x weiter (Symlinks, siehe bin/hyhy-paths).
+INSTALL = next((p for p in (HOME / ".config/hypr-hypr/install.json", HOME / ".config/draconyx/install.json") if p.exists()),
+               HOME / ".config/hypr-hypr/install.json")
+STATE = HOME / ".local/state/hypr-hypr/update.json"
 
 def read_json(p, default):
     try: return json.loads(p.read_text())
@@ -84,8 +86,8 @@ def check():
     return out
 
 
-LOG = HOME / ".cache/draconyx/update.log"
-PROGRESS = HOME / ".cache/draconyx/update-progress.json"
+LOG = HOME / ".cache/hypr-hypr/update.log"
+PROGRESS = HOME / ".cache/hypr-hypr/update-progress.json"
 
 def progress(percent, text, state="running"):
     """Stand für die Anzeige oben rechts (UpdateProgress.qml in der Shell) schreiben."""
@@ -119,12 +121,12 @@ def sync_repo(repo, log):
     stamp = time.strftime("%Y%m%d-%H%M%S")
     if g("status", "--porcelain", check=False).stdout.strip():                    # lokale Änderungen im Repo: sichern, nicht löschen
         # Ohne user.name/user.email (frisches System) scheitert "git stash"; dann dürfte unten kein "reset --hard" folgen: lieber abbrechen
-        g("-c", "user.name=Draconyx", "-c", "user.email=draconyx@localhost", "stash", "push", "--include-untracked", "-m", "dx-update " + stamp)
+        g("-c", "user.name=Draconyx", "-c", "user.email=draconyx@localhost", "stash", "push", "--include-untracked", "-m", "hyhy-update " + stamp)
         log.write("(lokale Änderungen im Repo gesichert: git stash list)\n")
     if g("merge", "--ff-only", up, check=False).returncode != 0:               # Verlauf weicht ab (z. B. neu geschrieben): alten Stand merken
-        g("branch", "dx-vor-update-" + stamp, "HEAD", check=False)
+        g("branch", "hyhy-vor-update-" + stamp, "HEAD", check=False)
         g("reset", "--hard", up)
-        log.write("(Verlauf wich ab – alter Stand liegt als Branch dx-vor-update-%s)\n" % stamp)
+        log.write("(Verlauf wich ab – alter Stand liegt als Branch hyhy-vor-update-%s)\n" % stamp)
 
 def apply(foreground=False, terminal=False):
     info = read_json(INSTALL, {})
@@ -132,14 +134,14 @@ def apply(foreground=False, terminal=False):
     if not repo or not Path(repo).is_dir():
         notify("Hypr Hypr-Update nicht möglich", "Repo nicht gefunden – im Repo einmal sudo ./install.sh ausführen.", True); sys.exit(1)
     if terminal:                                                                    # sichtbar in einem Terminal (z. B. Ghostty)
-        os.execvp(str(HOME / ".local/bin/dx-terminal"), ["dx-terminal", "--", sys.executable, __file__, "apply", "--fg"])
+        os.execvp(str(HOME / ".local/bin/hyhy-terminal"), ["hyhy-terminal", "--", sys.executable, __file__, "apply", "--fg"])
     if not foreground and not os.environ.get("DX_UPDATE_CHILD"):                   # in den Hintergrund: eigener Prozess, ohne Terminal
         env = dict(os.environ, DX_UPDATE_CHILD="1")
         subprocess.Popen([sys.executable, __file__, "apply"], env=env, start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return
     import fcntl
-    rt = os.environ.get("XDG_RUNTIME_DIR") or str(HOME / ".cache/draconyx")     # nie ein vorhersagbarer Name in /tmp
+    rt = os.environ.get("XDG_RUNTIME_DIR") or str(HOME / ".cache/hypr-hypr")     # nie ein vorhersagbarer Name in /tmp
     os.makedirs(rt, exist_ok=True)
     lockf = open(os.path.join(rt, "draconyx-update.lock"), "w")
     try:
@@ -154,9 +156,17 @@ def apply(foreground=False, terminal=False):
         notify("Hypr Hypr wird aktualisiert …", "Alles läuft im Hintergrund. Gleich fragt ein kleines Fenster nach deinem sudo-Passwort.")
         try:
             sync_repo(repo, log)
-            env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"), DX_UPDATE_RUN="1")
-            if not (HOME / ".local/bin/dx-askpass").exists():
-                env["SUDO_ASKPASS"] = str(Path(repo) / "bin/dx-askpass")
+            # 2.x nur ab 1.6.3 installiert (bin/hyhy-paths gate); sonst bricht der Wechsel der Ordnernamen
+            newv = (Path(repo) / "VERSION").read_text().strip() if (Path(repo) / "VERSION").exists() else ""
+            gate_bin = Path(repo) / "bin/hyhy-paths"                     # ältere Repos ohne den Helfer: keine 2.x-Sperre nötig
+            if gate_bin.exists():
+                gate = subprocess.run([str(gate_bin), "gate", newv], capture_output=True, text=True)
+                if gate.returncode != 0:
+                    log.write(gate.stdout + gate.stderr)
+                    raise RuntimeError(gate.stdout.strip() or "Update auf %s blockiert" % newv)
+            env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/hyhy-askpass"), DX_UPDATE_RUN="1")
+            if not (HOME / ".local/bin/hyhy-askpass").exists():
+                env["SUDO_ASKPASS"] = str(Path(repo) / "bin/hyhy-askpass")
             # Der Installer sichert und überschreibt keine Einstellungen (siehe install.sh) und startet die Shell am Ende neu.
             # --keep-config: bei einem Update wird eine fremde hyprland.lua nie ersetzt (nur eine unveränderte eigene Fassung wird aktualisiert).
             progress(18, "Warte auf dein sudo-Passwort …")
@@ -179,7 +189,7 @@ def apply(foreground=False, terminal=False):
         progress(100, "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old), "done")
     else:
         progress(100, "Update fehlgeschlagen – deine Einstellungen sind unverändert (Protokoll: update.log)", "error")
-        notify("Hypr Hypr-Update fehlgeschlagen", "Deine Einstellungen sind unverändert (Sicherungen: ~/.local/share/draconyx-backups). Protokoll: %s" % LOG, True)
+        notify("Hypr Hypr-Update fehlgeschlagen", "Deine Einstellungen sind unverändert (Sicherungen: ~/.local/share/hypr-hypr-backups). Protokoll: %s" % LOG, True)
         sys.exit(rc)
 
 def main():

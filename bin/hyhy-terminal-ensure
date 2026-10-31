@@ -2,9 +2,9 @@
 # Hypr Hypr: sorgt dafür, dass IMMER mindestens ein Terminal installiert ist. Du kannst Ghostty, Kitty & Co. frei deinstallieren –
 # solange ein anderes Terminal da ist, passiert nichts. Fehlt das letzte, wird Ghostty installiert (Passwort per Dialog).
 # Außerdem: zeigt die Einstellung auf ein nicht (mehr) installiertes Terminal, wird sie auf ein vorhandenes umgestellt.
-#   dx-terminal-ensure [--quiet]
+#   hyhy-terminal-ensure [--quiet]
 TERMS=(ghostty kitty foot alacritty wezterm konsole gnome-terminal xfce4-terminal tilix xterm)
-CFG="$HOME/.config/draconyx/terminal"
+CFG="$HOME/.config/hypr-hypr/terminal"
 first=""; for t in "${TERMS[@]}"; do command -v "$t" >/dev/null 2>&1 && { first="$t"; break; }; done
 if [ -n "$first" ]; then
   cur="$(head -1 "$CFG" 2>/dev/null | tr -d '[:space:]')"
@@ -24,7 +24,7 @@ case "$last" in ''|*[!0-9]*) last=0;; esac
 echo "$now" > "$STAMP"
 command -v pacman >/dev/null 2>&1 || { echo "Kein Terminal installiert und kein pacman vorhanden – bitte von Hand eins installieren." >&2; exit 1; }
 notify-send -a "Hypr Hypr" -i utilities-terminal "Kein Terminal installiert" "Ghostty wird installiert – gleich fragt ein Fenster nach deinem sudo-Passwort." 2>/dev/null
-export SUDO_ASKPASS="$HOME/.local/bin/dx-askpass"
+export SUDO_ASKPASS="$HOME/.local/bin/hyhy-askpass"
 if [ -x "$SUDO_ASKPASS" ] && sudo -A pacman -S --needed --noconfirm ghostty; then
   echo ghostty > "$CFG"
   notify-send -a "Hypr Hypr" -i utilities-terminal "Ghostty installiert" "Es war kein Terminal mehr vorhanden." 2>/dev/null

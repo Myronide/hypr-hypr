@@ -489,7 +489,7 @@ class Settings(Gtk.Application):
  def apps(self):
   b=self.page('Apps','Eigene Anwendungen, die zu Hypr Hypr gehören. Sie kommen aus dem Repo (kein fremder Code), erscheinen nach dem Installieren im Startmenü und werden mit den System-Updates aktualisiert.')
   lst=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(lst,False,False,0)
-  dx=str(Path.home()/'.local/bin/dx-apps');busy={'v':False}
+  dx=str(Path.home()/'.local/bin/hyhy-apps');busy={'v':False}
   def load():
    try:return json.loads(subprocess.run([dx,'list','--json'],capture_output=True,text=True,timeout=20).stdout or '[]')
    except (OSError,ValueError,subprocess.SubprocessError):return []
@@ -524,7 +524,7 @@ class Settings(Gtk.Application):
  # ---------------------------------------------------------------- Schriften (10 Voreinstellungen: Oberfläche und Code)
  def fonts_section(self,b):
   self.section(b,'Schrift')
-  dxf=str(Path.home()/'.local/bin/dx-fonts')
+  dxf=str(Path.home()/'.local/bin/hyhy-fonts')
   def info():
    try:return json.loads(subprocess.run([dxf,'list','--json'],capture_output=True,text=True,timeout=20).stdout)
    except (OSError,ValueError,subprocess.SubprocessError):return {'presets':[],'ui':'inter','code':'krypton'}
@@ -566,7 +566,7 @@ class Settings(Gtk.Application):
   make('ui','Oberflächen-Schrift','Für Taskleiste, Menüs, Startmenü und Aurora. Die Shell übernimmt sie sofort. Nicht installierte Schriften holt „Installieren“ (Passwortfenster).')
   make('code','Code-Schrift','Für den Git-Client, Diffs und Protokolle. Am schönsten mit einer Programmierschrift wie Monaspace Krypton, JetBrains Mono oder Fira Code.')
  def apply_font(self):
-  try:fam=subprocess.run([str(Path.home()/'.local/bin/dx-fonts'),'family','ui'],capture_output=True,text=True,timeout=10).stdout.strip() or 'Inter'
+  try:fam=subprocess.run([str(Path.home()/'.local/bin/hyhy-fonts'),'family','ui'],capture_output=True,text=True,timeout=10).stdout.strip() or 'Inter'
   except (OSError,subprocess.SubprocessError):fam='Inter'
   css=Gtk.CssProvider();css.load_from_data(('* { font-family: "%s", "Inter", "Sans"; }'%fam.replace('"','')).encode())
   scr=Gdk.Screen.get_default()
@@ -576,7 +576,7 @@ class Settings(Gtk.Application):
  # ---------------------------------------------------------------- Autostart
  def autostart(self):
   b=self.page('Autostart','Programme, die beim Anmelden automatisch starten. Schon laufende Programme werden nicht doppelt gestartet. Die Einträge liegen als normale Autostart-Dateien in ~/.config/autostart.')
-  dxa=str(Path.home()/'.local/bin/dx-autostart');box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
+  dxa=str(Path.home()/'.local/bin/hyhy-autostart');box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
   def call(*args):
    try:return subprocess.run([dxa]+list(args),capture_output=True,text=True,timeout=20).stdout
    except (OSError,subprocess.SubprocessError):return ''
@@ -728,7 +728,7 @@ class Settings(Gtk.Application):
   b=self.page('Sicherung','Alle deine Einstellungen (Taskleiste, Farben, Schrift, Tastenkombinationen, Monitore, Fensterregeln, Autostart …) in einer Datei sichern und jederzeit zurückholen – auch auf einem anderen Rechner. Einmal pro Woche sichert Hypr Hypr automatisch.')
   self.button(b,'Einstellungen exportieren','Als Datei speichern …',self.export_dialog,'Aurora-Einstellungen, Taskleiste und Shell-Optionen, Tastenkombinationen, Haupttaste und Farben in eine JSON-Datei.')
   self.button(b,'Einstellungen importieren','Datei laden …',self.import_dialog,'Übernimmt nur, was in der Datei steht; Shell-Einstellungen werden schlüsselweise eingemischt, nichts anderes geht verloren.')
-  dxb=str(Path.home()/'.local/bin/dx-backup');box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
+  dxb=str(Path.home()/'.local/bin/hyhy-backup');box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
   def lst():
    try:return json.loads(subprocess.run([dxb,'list','--json'],capture_output=True,text=True,timeout=20).stdout or '[]')
    except (OSError,ValueError,subprocess.SubprocessError):return []
@@ -1164,7 +1164,7 @@ class Settings(Gtk.Application):
   apps_box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
   def detected():
    try:
-    out=subprocess.run([str(Path.home()/'.local/bin/dx-code-apps')],capture_output=True,text=True,timeout=20).stdout
+    out=subprocess.run([str(Path.home()/'.local/bin/hyhy-code-apps')],capture_output=True,text=True,timeout=20).stdout
     return [dict(zip(('id','name','cmd','desk','icon','term'),l.split('\t'))) for l in out.splitlines() if l]
    except (OSError,subprocess.SubprocessError):return []
   def apps_fill():
@@ -1304,18 +1304,18 @@ class Settings(Gtk.Application):
  def colors(self):
   b=self.page('Farben & Schrift','Gemeinsame Farbwelt und Schrift für Aurora und die Shell. Änderungen gelten sofort für die Shell; Aurora-Fenster übernehmen die Farben beim nächsten Öffnen.')
   import subprocess,json
-  tool=str(Path.home()/'.local/bin/dx-colors')
+  tool=str(Path.home()/'.local/bin/hyhy-colors')
   try:current=json.loads(subprocess.run([tool,'show'],capture_output=True,text=True,timeout=10).stdout)
   except Exception:current=None
   if not isinstance(current,dict):current={'preset':'aurora','accent':'#4d8fe0'}
   w=Choice();w.append('aurora','Aurora (Grau-Blau)');w.append('draconyx','Hypr Hypr (Violett)');w.set_active_id(current.get('preset') if current.get('preset') in ('aurora','draconyx') else None)
-  w.connect('changed',lambda w:w.get_active_id() and (self.message('Farbwelt gewechselt.') if run_quiet([tool,'preset',w.get_active_id()],20) else self.message('Farbwelt konnte nicht gewechselt werden (dx-colors fehlt?).')));self.row(b,'Voreinstellung',w)
+  w.connect('changed',lambda w:w.get_active_id() and (self.message('Farbwelt gewechselt.') if run_quiet([tool,'preset',w.get_active_id()],20) else self.message('Farbwelt konnte nicht gewechselt werden (hyhy-colors fehlt?).')));self.row(b,'Voreinstellung',w)
   c=Gtk.ColorButton();rgba=Gdk.RGBA()
   if not rgba.parse(str(current.get('accent','#4d8fe0'))):rgba.parse('#4d8fe0')   # kaputter Farbwert in colors.json
   c.set_rgba(rgba)
   def picked(btn):
    r=btn.get_rgba();hexv='#%02x%02x%02x'%tuple(max(0,min(255,round(v*255))) for v in (r.red,r.green,r.blue))
-   self.message('Akzentfarbe geändert.' if run_quiet([tool,'accent',hexv],20) else 'Akzentfarbe konnte nicht gesetzt werden (dx-colors fehlt?).')
+   self.message('Akzentfarbe geändert.' if run_quiet([tool,'accent',hexv],20) else 'Akzentfarbe konnte nicht gesetzt werden (hyhy-colors fehlt?).')
   c.connect('color-set',picked);self.row(b,'Akzentfarbe',c,'Hell- und Dunkelvarianten werden daraus abgeleitet.')
   self.fonts_section(b)
  def system(self):
@@ -1337,11 +1337,11 @@ class Settings(Gtk.Application):
    ub.set_visible(bool(i.get('available')) and not i.get('error'))
   def check_bg():
    def work():
-    run_quiet([str(Path.home()/'.local/bin/dx-update'),'check','--quiet'],120)
+    run_quiet([str(Path.home()/'.local/bin/hyhy-update'),'check','--quiet'],120)
     GLib.idle_add(show,upd_info())
    threading.Thread(target=work,daemon=True).start()
   def run_update(*_):
-   subprocess.Popen([str(Path.home()/'.local/bin/dx-update'),'apply'],start_new_session=True);ub.set_sensitive(False);vl.set_text('Update läuft im Hintergrund – Fortschritt oben rechts');GLib.timeout_add_seconds(30,lambda:(ub.set_sensitive(True),False)[1])
+   subprocess.Popen([str(Path.home()/'.local/bin/hyhy-update'),'apply'],start_new_session=True);ub.set_sensitive(False);vl.set_text('Update läuft im Hintergrund – Fortschritt oben rechts');GLib.timeout_add_seconds(30,lambda:(ub.set_sensitive(True),False)[1])
   ub.connect('clicked',run_update)
   cb=Gtk.Button(label='Jetzt prüfen');cb.connect('clicked',lambda *_:(vl.set_text('Prüfe …'),check_bg()))
   uw=Gtk.Box(spacing=10);uw.pack_start(vl,True,True,0);uw.pack_end(ub,False,False,0);uw.pack_end(cb,False,False,0);uw.show_all()

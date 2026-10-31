@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Hypr Hypr: sorgt dafür, dass die Shell läuft (Sicherheitsnetz zum Autostart). Mehrere Versuche, Protokoll:
-# ~/.cache/draconyx/shell-start.log. Kann beliebig oft aufgerufen werden – läuft die Shell schon, passiert nichts.
-LOG="$HOME/.cache/draconyx/shell-start.log"; mkdir -p "$(dirname "$LOG")"
+# ~/.cache/hypr-hypr/shell-start.log. Kann beliebig oft aufgerufen werden – läuft die Shell schon, passiert nichts.
+LOG="$HOME/.cache/hypr-hypr/shell-start.log"; mkdir -p "$(dirname "$LOG")"
 RT="${XDG_RUNTIME_DIR:-}"
 [ -n "$RT" ] && [ -d "$RT" ] || RT="$HOME/.cache/draconyx"        # nie ein vorhersagbarer Name in /tmp
 mkdir -p "$RT"
@@ -26,4 +26,4 @@ for i in 1 2 3 4 5 6; do
   QS_ICON_THEME=Papirus-Dark setsid "$QS" -c draconyx >>"$LOG" 2>&1 9>&- </dev/null &
   sleep 6
 done
-echo "$(date +%T) Shell nach 6 Versuchen nicht gestartet – prüfe:  dx-doctor" >> "$LOG"; exit 1
+echo "$(date +%T) Shell nach 6 Versuchen nicht gestartet – prüfe:  hyhy-doctor" >> "$LOG"; exit 1
