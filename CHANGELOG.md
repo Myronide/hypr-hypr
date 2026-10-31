@@ -3,6 +3,9 @@
 Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
 die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
 
+## 1.6.3
+- Folders and commands are now named hypr-hypr and hyhy-*; old names stay as links until 1.x; updating to 2.x requires 1.6.3
+
 ## 1.6.2
 - Name Hypr Hypr statt Draconyx in allen Anzeigen, Benachrichtigungen und der Doku; Pfade und Ordner bleiben, nichts muss migriert werden
 
