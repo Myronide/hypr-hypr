@@ -3,6 +3,9 @@
 The version number lives in the file `VERSION` (MAJOR.MINOR.PATCH). Raise the number and add an entry here for every visible change –
 the update notification in the shell compares this number with the installed one.
 
+## 1.6.4
+- Aurora-Laufzeitmodule liegen in aurora_runtime/; bin/, Tests und Laufzeitmodule sind auf GitHub als generiert markiert (eingeklappt, nicht in der Sprachstatistik)
+
 ## 1.6.3
 - Folders and commands are now named hypr-hypr and hyhy-*; old names stay as links until 1.x; updating to 2.x requires 1.6.3
 
