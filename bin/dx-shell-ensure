@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx: sorgt dafür, dass die Shell läuft (Sicherheitsnetz zum Autostart). Mehrere Versuche, Protokoll:
+# Hypr Hypr: sorgt dafür, dass die Shell läuft (Sicherheitsnetz zum Autostart). Mehrere Versuche, Protokoll:
 # ~/.cache/draconyx/shell-start.log. Kann beliebig oft aufgerufen werden – läuft die Shell schon, passiert nichts.
 LOG="$HOME/.cache/draconyx/shell-start.log"; mkdir -p "$(dirname "$LOG")"
 RT="${XDG_RUNTIME_DIR:-}"

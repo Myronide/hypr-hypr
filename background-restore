@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import sys
 from pathlib import Path
-if (Path.home()/'.config/quickshell/draconyx/shell.qml').exists():sys.exit(0)   # Wallpaper Engine kommt aus der Draconyx-Shell
+if (Path.home()/'.config/quickshell/draconyx/shell.qml').exists():sys.exit(0)   # Wallpaper Engine kommt aus der Hypr Hypr-Shell
 from preferences import load_preferences,apply_background
 p=load_preferences()
 if p.get('engine_active') and p.get('engine_path'):apply_background(p,engine=True)

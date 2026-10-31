@@ -1,6 +1,6 @@
-# Draconyx Desktop auf Hyprland – Übergabe (Stand 25.10.2026)
+# Hypr Hypr Desktop auf Hyprland – Übergabe (Stand 25.10.2026)
 
-Ziel des Nutzers: ein **Windows-11-artiger, aber modernerer und „geilerer" Desktop** auf Hyprland im **Draconyx-Look** (Draconyx = eigene Marke des Nutzers, Drachen-Logo). Viel Funktion, aufgeräumt, gaming-tauglich, HDR muss bleiben. Bitte das Konzept in diesem Sinne weiterentwickeln.
+Ziel des Nutzers: ein **Windows-11-artiger, aber modernerer und „geilerer" Desktop** auf Hyprland im **Hypr Hypr-Look** (Hypr Hypr = eigene Marke des Nutzers, Drachen-Logo). Viel Funktion, aufgeräumt, gaming-tauglich, HDR muss bleiben. Bitte das Konzept in diesem Sinne weiterentwickeln.
 
 ---
 
@@ -25,7 +25,7 @@ SDR-Helligkeit unter HDR = 80 nits × `sdrbrightness`. Die Acers stehen per DDC 
 
 ---
 
-## Design „Draconyx Dark"
+## Design „Hypr Hypr Dark"
 
 - **Hauptakzent Violett `#8b5cf6`** (hell `#a78bfa`, tief `#5b3fd0`)
 - **Zweitakzent Grün `#6ee05c`** nur sparsam (Drachenaugen): Fensterrand-Verlauf Violett→Grün, „heute" im Kalender, Passwort-OK am Sperrbildschirm
@@ -42,7 +42,7 @@ SDR-Helligkeit unter HDR = 80 nits × `sdrbrightness`. Die Acers stehen per DDC 
 
 | Funktion | Programm | Config |
 |---|---|---|
-| Taskleiste, Startmenü, Schnelleinstellungen, Kalender, Alt+Tab | **Quickshell „Draconyx Shell"** | `~/.config/quickshell/draconyx/` |
+| Taskleiste, Startmenü, Schnelleinstellungen, Kalender, Alt+Tab | **Quickshell „Hypr Hypr Shell"** | `~/.config/quickshell/draconyx/` |
 | Desktop-Icons + Wallpaper | `pcmanfm-qt --desktop` | `~/.config/pcmanfm-qt/default/settings.conf` |
 | Benachrichtigungen | swaync | `~/.config/swaync/style.css` |
 | Sperrbildschirm / Idle | hyprlock / hypridle | `~/.config/hypr/hyprlock.conf`, `hypridle.conf` |
@@ -52,11 +52,11 @@ SDR-Helligkeit unter HDR = 80 nits × `sdrbrightness`. Die Acers stehen per DDC 
 | Qt-/KDE-Apps-Theme | `QT_QPA_PLATFORMTHEME=kde` (liest KDE-Farbschema, dunkel) | – |
 | Fallback-Taskleiste / -Startmenü | Waybar / nwg-drawer | `~/.config/waybar/`, `~/.config/nwg-drawer/drawer.css`, `~/.config/hypr/scripts/start-menu.sh` |
 
-Autostart in `hyprland.lua` (`hl.on("hyprland.start", ...)`): polkit-agent, pcmanfm-qt --desktop, **Draconyx Shell** (`QS_ICON_THEME=Papirus-Dark qs -c draconyx`, Fallback Waybar), swaync, hypridle, nm-applet, blueman-applet, cliphist, EasyEffects, JamesDSP, JetBrains Toolbox.
+Autostart in `hyprland.lua` (`hl.on("hyprland.start", ...)`): polkit-agent, pcmanfm-qt --desktop, **Hypr Hypr Shell** (`QS_ICON_THEME=Papirus-Dark qs -c draconyx`, Fallback Waybar), swaync, hypridle, nm-applet, blueman-applet, cliphist, EasyEffects, JamesDSP, JetBrains Toolbox.
 
 ---
 
-## Draconyx Shell (Quickshell, ~1700 Zeilen QML)
+## Hypr Hypr Shell (Quickshell, ~1700 Zeilen QML)
 
 Dateien in `~/.config/quickshell/draconyx/`:
 
@@ -134,7 +134,7 @@ Steuern: `qs -c draconyx ipc call shell toggleStart|toggleControl|toggleCalendar
 - **Getestet:** Leiste, Icons, Auto-Hide-Ausblenden bei Vollbild, Alt+Tab-Anzeige (per IPC + Screenshot), Maximieren, Dolphin dunkel. **Nicht oder nur teils getestet:** Startmenü-Klicks nach Umstellung auf OnDemand, Schnelleinstellungen, Kalender, Fenster-Popups der Taskleiste, Alt+Tab-Mausklick, Desktop-anzeigen-Streifen, Notausgang-Tasten.
 - Desktop-Icons erscheinen auf **allen** Monitoren (pcmanfm-qt), der Nutzer wollte das eigentlich nicht; `~/Schreibtisch` ist sehr voll (Aufräumen angeboten, nicht gemacht). Doppelklick auf Ordner auf dem Desktop öffnet noch pcmanfm-qt statt Dolphin.
 - Workspaces haben teils komische Nummern pro Monitor (aufräumen möglich).
-- Eigenes **Draconyx-Farbschema für KDE/Qt-Apps** (aktuell blaues ChromeOS-Dark aus KDE). Achtung: würde auch die Plasma-Sitzung betreffen.
+- Eigenes **Hypr Hypr-Farbschema für KDE/Qt-Apps** (aktuell blaues ChromeOS-Dark aus KDE). Achtung: würde auch die Plasma-Sitzung betreffen.
 - Fensterpreviews im Alt+Tab bzw. beim Hover in der Taskleiste (Screencopy), Benachrichtigungen evtl. direkt in Quickshell statt swaync, Widgets, Wetter, Systemmonitor, Medien-Mini-Player in der Leiste, Titelleisten-Plugin (hyprbars) für Apps ohne eigene Titelleiste.
 - Hilfsskript `claude-sessions save|restore` (`~/.local/bin/claude-sessions`) öffnet Claude-Code-Sitzungen nach einem Sitzungswechsel neu (nutzt Ghostty).
 
@@ -160,7 +160,7 @@ Leertaste Startmenü · S Suche · A Schnelleinstellungen · N Benachrichtigunge
 - Shell **über Hyprland** starten (`hyprctl dispatch exec`), nicht aus einem Terminal: gestartete Apps erben dessen Umgebung (falsches `QT_QPA_PLATFORMTHEME` → weißes Dolphin).
 - `pkill -f` in einem Tool-Befehl tötet die eigene Shell. Python-Ersetzungen in `Global.qml` immer eng begrenzen und vorher sichern (`~/.local/share/draconyx-backups/`).
 - Qt/KDE-Apps haben unter Hyprland keine Fensterknöpfe (Alt+Leertaste-Menü als Ersatz; echte Lösung wäre das Plugin hyprbars über `hyprpm`, braucht `sudo pacman -S hyprpm`).
-- Noch offen: Control Center 2.0 (WLAN-Liste, Bluetooth-Geräte, Ausgabegeräte, App-Lautstärken, Performance-Profile), eigenes Notification Center, Draconyx-Einstellungs-App, Alt+Tab-Vorschaubilder, Gaming-Modus mit automatischer Erkennung, Desktop-Widgets.
+- Noch offen: Control Center 2.0 (WLAN-Liste, Bluetooth-Geräte, Ausgabegeräte, App-Lautstärken, Performance-Profile), eigenes Notification Center, Hypr Hypr-Einstellungs-App, Alt+Tab-Vorschaubilder, Gaming-Modus mit automatischer Erkennung, Desktop-Widgets.
 
 ## Nachtrag: Coding Space, Git-Client, Wallpaper Engine, Desktop-Symbole
 - **Coding Space** (`CodeSpace.qml`, Hilfsskript `~/.local/bin/dx-code-list`): Workspace = Ordner mit "Workspace" im Namen (Laufwerk-Wurzel + "Code Space"). Pro Projekt: IntelliJ, VS Code, Terminal, Claude (Logo, voller Pfad `~/.local/bin/claude`, weil Hyprlands PATH ~/.local/bin nicht enthält), Git. "+ Workspace" legt Ordner an, im Workspace "Klonen" (git clone, `owner/repo` = GitHub).

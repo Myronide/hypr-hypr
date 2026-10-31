@@ -192,7 +192,7 @@ Singleton {
             property var barLayouts: ({})           // { bar: { left: [...], center: [...], right: [...] }, dock: {...} } Anordnung der Taskleisten-Teile
             property bool barPartHide: false        // Dock mit Auto-Hide: nur die Kapsel unter der Maus fährt hoch
             property string barStyle: "bar"     // "bar" = durchgehende Leiste, "dock" = schwebendes Dock (wie Aurora)
-            property string startLogo: ""        // "" = Draconyx, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild
+            property string startLogo: ""        // "" = Hypr Hypr, "arch" = Arch-Logo, sonst Pfad zu einem eigenen Bild
             property var gitSessions: ({})        // { "Repo-Pfad": "Claude-Session-UUID" } je Repository eine fortlaufende Claude-Session
             property var iconPos: ({})            // { "Dateiname": { m: "DP-2", c: Spalte, r: Zeile } } Platz der Desktop-Symbole
             property var weMouse: []              // Monitore, auf denen die Maus ans Wallpaper (statt an die Desktop-Symbole) geht
@@ -1071,7 +1071,7 @@ Singleton {
     function popupRightMargin() { const g = dockGeom[popupScreen]; return (barStyle === "dock" && g) ? Math.max(8, g.screenW - (g.sx + g.sw)) : 14; }
 
 
-    // ---------- System-Update (Draconyx selbst) ----------
+    // ---------- System-Update (Hypr Hypr selbst) ----------
     // dx-update check holt beim Remote die neueste Versionsnummer; bei einer neuen Version kommt einmal pro Version eine Meldung
     // mit Knopf "Aktualisieren" (öffnet ein Terminal: git pull + sudo ./install.sh).
     property var updateInfo: ({})
@@ -1096,9 +1096,9 @@ Singleton {
             if (u.available && root.updateNotify && u.latest !== root.updateMuted && due) {
                 root.updateLastNotified = now;
                 updNotify.version = u.latest;
-                updNotify.command = ["notify-send", "-a", "Draconyx", "-i", "system-software-update", "-w",
+                updNotify.command = ["notify-send", "-a", "Hypr Hypr", "-i", "system-software-update", "-w",
                     "-A", "update=Aktualisieren", "-A", "later=Später", "-A", "mute=Nicht mehr erinnern",
-                    "Draconyx-Update " + u.latest + " verfügbar", "Installiert: " + u.installed + (Array.isArray(u.notes) && u.notes.length ? "\n• " + u.notes.slice(0, 4).join("\n• ") : "")];
+                    "Hypr Hypr-Update " + u.latest + " verfügbar", "Installiert: " + u.installed + (Array.isArray(u.notes) && u.notes.length ? "\n• " + u.notes.slice(0, 4).join("\n• ") : "")];
                 updNotify.running = false; updNotify.running = true;
             }
             root.updateManual = false;
@@ -1177,7 +1177,7 @@ Singleton {
     }
     Timer { id: snipCloseTimer; onTriggered: root.snipClose(0) }
 
-    // Symbol des Startknopfs: Draconyx (Standard), Arch oder eigenes Bild
+    // Symbol des Startknopfs: Hypr Hypr (Standard), Arch oder eigenes Bild
     readonly property string startLogoUrl: startLogo === "" ? Theme.logo
         : startLogo === "arch" ? "file:///usr/share/pixmaps/archlinux-logo.png"
         : "file://" + startLogo

@@ -4,7 +4,7 @@ import os, sys, json, socket, subprocess, time, re, fcntl, math
 import sqlite3, hashlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-# ---- Draconyx-Shell vorhanden: Aurora läuft komplett auf der Quickshell-Oberfläche (kein GTK-Dock, kein waybar) ----
+# ---- Hypr Hypr-Shell vorhanden: Aurora läuft komplett auf der Quickshell-Oberfläche (kein GTK-Dock, kein waybar) ----
 SHELL_QML=Path.home()/'.config/quickshell/draconyx/shell.qml'
 if SHELL_QML.exists() and os.environ.get('AURORA_LEGACY_UI')!='1':
     def _sh(args,timeout=10):

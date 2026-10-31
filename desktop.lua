@@ -158,7 +158,7 @@ hl.layer_rule({name='aurora-dock-icons-order',match={namespace='^aurora-apps$'},
 hl.layer_rule({name='aurora-dock-menus-order',match={namespace='^(aurora-window-previews|aurora-control-center)$'},order=40})
 hl.layer_rule({name='aurora-popup-order',match={namespace='^aurora-popup$'},order=50})
 
--- Kachel-Modus der Draconyx-Shell: ersetzt das Layout des alten Aurora-Daemons (Modus-Knopf, Raster, Zonen).
+-- Kachel-Modus der Hypr Hypr-Shell: ersetzt das Layout des alten Aurora-Daemons (Modus-Knopf, Raster, Zonen).
 -- DXTiling/DXZones sind global, damit die Shell sie per `hyprctl eval` ansprechen kann (Fenstermodus-Knopf in der Taskleiste).
 local okTiling, tilingModule = pcall(require, 'dx_tiling')
 if okTiling and tilingModule then

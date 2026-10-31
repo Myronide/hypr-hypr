@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Draconyx Modern: zentrales Designsystem. Alle Farben, Maße und Bewegungen kommen von hier.
+// Hypr Hypr Modern: zentrales Designsystem. Alle Farben, Maße und Bewegungen kommen von hier.
 Singleton {
     id: root
     // Erst nach dem ersten Lesen von colors.json gelten Symbolpfade (sonst "Cannot open" für den Standard-Schlüssel beim Start)

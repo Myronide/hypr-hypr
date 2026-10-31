@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 
-// Fortschrittsanzeige für das Draconyx-Update (oben rechts). dx-update schreibt den Stand nach ~/.cache/draconyx/update-progress.json:
+// Fortschrittsanzeige für das Hypr Hypr-Update (oben rechts). dx-update schreibt den Stand nach ~/.cache/draconyx/update-progress.json:
 // { "state": "running" | "done" | "error", "percent": 0-100, "text": "...", "ts": Unixzeit }
 PanelWindow {
     id: win
@@ -58,7 +58,7 @@ PanelWindow {
                 Rectangle { width: 10; height: 10; radius: 5; anchors.verticalCenter: parent.verticalCenter
                             color: win.prog.state === "error" ? "#ff6b6b" : win.prog.state === "done" ? "#6ee05c" : Theme.accentBright }
                 Text {
-                    text: win.prog.state === "error" ? "Update fehlgeschlagen" : win.prog.state === "done" ? "Draconyx ist aktuell" : "Draconyx wird aktualisiert"
+                    text: win.prog.state === "error" ? "Update fehlgeschlagen" : win.prog.state === "done" ? "Hypr Hypr ist aktuell" : "Hypr Hypr wird aktualisiert"
                     color: Theme.text; font.family: Theme.font; font.pixelSize: Theme.fsM; font.weight: Font.DemiBold
                 }
             }

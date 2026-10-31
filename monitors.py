@@ -1,4 +1,4 @@
-"""Draconyx/Aurora: Bildschirme erkennen, anordnen und in ~/.config/hypr/monitors_local.lua speichern.
+"""Hypr Hypr/Aurora: Bildschirme erkennen, anordnen und in ~/.config/hypr/monitors_local.lua speichern.
 
 Gemeinsam genutzt von der Einstellungs-App (Seite „Bildschirme“) und dem Installer (dx-monitors init).
 Reine Logik ohne GTK, damit sie sich ohne Anzeige testen lässt.

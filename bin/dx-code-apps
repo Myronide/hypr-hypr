@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx Coding Space: erkennt installierte Entwicklungsprogramme (IDEs/Editoren), die ein Projekt öffnen können.
+# Hypr Hypr Coding Space: erkennt installierte Entwicklungsprogramme (IDEs/Editoren), die ein Projekt öffnen können.
 # Ausgabe (TSV): id <TAB> Name <TAB> Befehl <TAB> Desktop-Kennungen (Komma) <TAB> Symbolname <TAB> im Terminal (0/1)
 # Neue Programme: Zeile in CANDIDATES ergänzen (id|Name|Programme (Komma)|Desktop-Kennungen|Symbol|Terminal).
 TB="$HOME/.local/share/JetBrains/Toolbox/scripts"

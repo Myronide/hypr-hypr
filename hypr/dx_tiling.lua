@@ -1,4 +1,4 @@
--- Draconyx Tiling: eigener Kachel-Modus für freischwebende Fenster (statt Hyprlands Dwindle).
+-- Hypr Hypr Tiling: eigener Kachel-Modus für freischwebende Fenster (statt Hyprlands Dwindle).
 -- Fenster bleiben standardmäßig floating. Mit Tastenkürzel wandern einzelne Fenster (oder ein ganzer
 -- Desktop) in ein automatisch angeordnetes Raster. Nicht gekachelte Fenster bleiben unberührt.
 local M = {}
@@ -168,7 +168,7 @@ function M.retile(wsId)
                 if o ~= nil then place(w, fit(o, w)) end
             end
             if #overflow > 0 then
-                hl.exec_cmd("notify-send -a 'Draconyx' -t 2500 'Raster voll' '" .. #zones .. " Zonen belegt – weitere Fenster bleiben frei. Raster bearbeiten: Strg+Alt+Z'")
+                hl.exec_cmd("notify-send -a 'Hypr Hypr' -t 2500 'Raster voll' '" .. #zones .. " Zonen belegt – weitere Fenster bleiben frei. Raster bearbeiten: Strg+Alt+Z'")
             end
         else
             local ax, ay, aw, ah = usable(m)
@@ -197,7 +197,7 @@ function M.retileAll()
 end
 
 local function notify(text)
-    hl.exec_cmd("notify-send -a 'Draconyx' -t 1800 'Tiling' '" .. text .. "'")
+    hl.exec_cmd("notify-send -a 'Hypr Hypr' -t 1800 'Tiling' '" .. text .. "'")
 end
 
 local function unmaximize(w)

@@ -233,7 +233,7 @@ def info_text(info):
     lines += ['Bildschirm %s' % m for m in info['monitors']]
     lines.append('Hyprland: %s' % (info['hyprland'] or '–'))
     lines.append('Quickshell: %s' % (info['quickshell'] or '–'))
-    lines.append('Draconyx/Aurora: %s%s' % (info['aurora'] or '–', ' (%s)' % info['install'] if info['install'] else ''))
+    lines.append('Hypr Hypr/Aurora: %s%s' % (info['aurora'] or '–', ' (%s)' % info['install'] if info['install'] else ''))
     return '\n'.join(lines)
 
 # ---------- Seite ----------
@@ -243,7 +243,7 @@ def build(app):
     box = app.page(TITLE, 'Hardware, Versionen, Software-Updates und Speicherbelegung dieses Computers.')
     labels = {}
     for key, title in (('distro', 'Distribution'), ('kernel', 'Kernel'), ('host', 'Rechnername'), ('uptime', 'Laufzeit'), ('cpu', 'Prozessor'), ('gpu', 'Grafik'),
-                       ('ram', 'Arbeitsspeicher'), ('mon', 'Bildschirme'), ('hypr', 'Hyprland'), ('qs', 'Quickshell'), ('aurora', 'Draconyx / Aurora')):
+                       ('ram', 'Arbeitsspeicher'), ('mon', 'Bildschirme'), ('hypr', 'Hyprland'), ('qs', 'Quickshell'), ('aurora', 'Hypr Hypr / Aurora')):
         labels[key] = U.info_label('…')
         app.row(box, title, labels[key], '')
     store = {'info': None}

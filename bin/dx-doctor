@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx/Aurora: Zustandsbericht für die Fehlersuche (alles in eine Datei: ~/dx-doctor.txt) und optional Aufräumen.
+# Hypr Hypr/Aurora: Zustandsbericht für die Fehlersuche (alles in eine Datei: ~/dx-doctor.txt) und optional Aufräumen.
 #   dx-doctor          Bericht schreiben und anzeigen (oben steht eine Zusammenfassung der gefundenen Probleme)
 #   dx-doctor --fix    zusätzlich Doppelstarts beenden (waybar, altes Aurora-Dock, doppelte Wächter/Shell) und tote Reste entfernen
 # Liest nur; ändert ohne --fix nichts. Jeder Aufruf an Hyprland/Quickshell hat ein Zeitlimit, damit der Bericht nie hängt.

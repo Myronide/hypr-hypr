@@ -81,7 +81,7 @@ Singleton {
         if (on && !dndByUs && !Global.dnd) { Quickshell.execDetached(["swaync-client", "-dn", "-sw"]); dndByUs = true; }
         else if (!on && dndByUs) { Quickshell.execDetached(["swaync-client", "-df", "-sw"]); dndByUs = false; }
     }
-    function _notify(title, body) { Quickshell.execDetached(["notify-send", "-a", "Draconyx", "-i", "alarm-symbolic", "-u", "normal", title, body]); }
+    function _notify(title, body) { Quickshell.execDetached(["notify-send", "-a", "Hypr Hypr", "-i", "alarm-symbolic", "-u", "normal", title, body]); }
 
     function _tick() {
         if (!running) return;

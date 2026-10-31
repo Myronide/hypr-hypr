@@ -1,4 +1,4 @@
--- Draconyx: merkt sich die Größe eines Fensters, wenn man es schließt, und stellt sie beim nächsten Öffnen derselben App wieder her.
+-- Hypr Hypr: merkt sich die Größe eines Fensters, wenn man es schließt, und stellt sie beim nächsten Öffnen derselben App wieder her.
 --   Liste: ~/.config/draconyx/window-sizes.tsv   (Klasse <TAB> Breite <TAB> Höhe)
 --   Aus:   Datei ~/.config/draconyx/window-size-memory mit dem Inhalt "off" (Aurora → Fenster → „Fenstergröße merken“)
 --   Nie anfassen: ~/.config/draconyx/window-size-exclude (eine Klasse pro Zeile, * = beliebig)

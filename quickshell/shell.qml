@@ -1,4 +1,4 @@
-// Draconyx Shell: Taskleiste, Startmenü, Schnelleinstellungen, Kalender
+// Hypr Hypr Shell: Taskleiste, Startmenü, Schnelleinstellungen, Kalender
 // Start: qs -c draconyx      Steuern: qs -c draconyx ipc call shell <funktion>
 import QtQuick
 import Quickshell

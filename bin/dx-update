@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Draconyx: Update-Prüfung und -Installation für das System selbst (das Git-Repo, aus dem installiert wurde).
+# Hypr Hypr: Update-Prüfung und -Installation für das System selbst (das Git-Repo, aus dem installiert wurde).
 #   dx-update check [--quiet]   beim Remote nachsehen, ob es eine neuere Version gibt (schreibt ~/.local/state/draconyx/update.json)
 #   dx-update status            gespeicherten Stand zeigen
 #   dx-update apply             im Hintergrund aktualisieren (nur der sudo-Dialog erscheint); Meldungen als Benachrichtigung,
@@ -99,7 +99,7 @@ def progress(percent, text, state="running"):
 
 def notify(title, body="", urgent=False):
     try:
-        subprocess.run(["notify-send", "-a", "Draconyx", "-i", "system-software-update"] + (["-u", "critical"] if urgent else []) + [title, body],
+        subprocess.run(["notify-send", "-a", "Hypr Hypr", "-i", "system-software-update"] + (["-u", "critical"] if urgent else []) + [title, body],
                        capture_output=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         pass                                                             # ohne notify-send/Benachrichtigungsdienst läuft das Update trotzdem
@@ -130,7 +130,7 @@ def apply(foreground=False, terminal=False):
     info = read_json(INSTALL, {})
     repo = info.get("repo", "")
     if not repo or not Path(repo).is_dir():
-        notify("Draconyx-Update nicht möglich", "Repo nicht gefunden – im Repo einmal sudo ./install.sh ausführen.", True); sys.exit(1)
+        notify("Hypr Hypr-Update nicht möglich", "Repo nicht gefunden – im Repo einmal sudo ./install.sh ausführen.", True); sys.exit(1)
     if terminal:                                                                    # sichtbar in einem Terminal (z. B. Ghostty)
         os.execvp(str(HOME / ".local/bin/dx-terminal"), ["dx-terminal", "--", sys.executable, __file__, "apply", "--fg"])
     if not foreground and not os.environ.get("DX_UPDATE_CHILD"):                   # in den Hintergrund: eigener Prozess, ohne Terminal
@@ -145,13 +145,13 @@ def apply(foreground=False, terminal=False):
     try:
         fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        notify("Draconyx-Update läuft schon"); return
+        notify("Hypr Hypr-Update läuft schon"); return
     LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(LOG, "w") as log:
-        log.write("Draconyx-Update %s\n" % time.strftime("%F %T"))
+        log.write("Hypr Hypr-Update %s\n" % time.strftime("%F %T"))
         old = info.get("version", "?")
         progress(3, "Starte …")
-        notify("Draconyx wird aktualisiert …", "Alles läuft im Hintergrund. Gleich fragt ein kleines Fenster nach deinem sudo-Passwort.")
+        notify("Hypr Hypr wird aktualisiert …", "Alles läuft im Hintergrund. Gleich fragt ein kleines Fenster nach deinem sudo-Passwort.")
         try:
             sync_repo(repo, log)
             env = dict(os.environ, SUDO_ASKPASS=str(HOME / ".local/bin/dx-askpass"), DX_UPDATE_RUN="1")
@@ -174,12 +174,12 @@ def apply(foreground=False, terminal=False):
             log.write("FEHLER: %s\n" % e); rc = 1
     new = read_json(INSTALL, {}).get("version", old)
     if rc == 0:
-        notify("Draconyx aktualisiert", "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old))
+        notify("Hypr Hypr aktualisiert", "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old))
         check()
         progress(100, "Version %s%s" % (new, "" if new == old else " (vorher %s)" % old), "done")
     else:
         progress(100, "Update fehlgeschlagen – deine Einstellungen sind unverändert (Protokoll: update.log)", "error")
-        notify("Draconyx-Update fehlgeschlagen", "Deine Einstellungen sind unverändert (Sicherungen: ~/.local/share/draconyx-backups). Protokoll: %s" % LOG, True)
+        notify("Hypr Hypr-Update fehlgeschlagen", "Deine Einstellungen sind unverändert (Sicherungen: ~/.local/share/draconyx-backups). Protokoll: %s" % LOG, True)
         sys.exit(rc)
 
 def main():

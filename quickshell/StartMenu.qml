@@ -113,7 +113,7 @@ PanelWindow {
         { name: "Bildschirme & HDR",    kw: "bildschirm monitor display auflösung hdr refresh", icon: "desktop", cmd: ["nwg-displays"] },
         { name: "Aussehen (GTK)",       kw: "aussehen theme design gtk schrift",     icon: "settings", cmd: ["nwg-look"] },
         { name: "Hyprland-Konfiguration", kw: "hyprland config tastenkürzel autostart fenster", icon: "window", cmd: ["xdg-open", Theme.home + "/.config/hypr/hyprland.lua"] },
-        { name: "Draconyx Shell Einstellungen", kw: "draconyx leiste taskleiste startmenü einstellungen shell", icon: "taskbar", cmd: ["xdg-open", Theme.home + "/.local/state/draconyx/settings.json"] }
+        { name: "Hypr Hypr Shell Einstellungen", kw: "draconyx leiste taskleiste startmenü einstellungen shell", icon: "taskbar", cmd: ["xdg-open", Theme.home + "/.local/state/draconyx/settings.json"] }
     ]
 
     // Rechner: einfache Ausdrücke

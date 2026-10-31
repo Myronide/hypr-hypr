@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx: sorgt dafür, dass IMMER mindestens ein Terminal installiert ist. Du kannst Ghostty, Kitty & Co. frei deinstallieren –
+# Hypr Hypr: sorgt dafür, dass IMMER mindestens ein Terminal installiert ist. Du kannst Ghostty, Kitty & Co. frei deinstallieren –
 # solange ein anderes Terminal da ist, passiert nichts. Fehlt das letzte, wird Ghostty installiert (Passwort per Dialog).
 # Außerdem: zeigt die Einstellung auf ein nicht (mehr) installiertes Terminal, wird sie auf ein vorhandenes umgestellt.
 #   dx-terminal-ensure [--quiet]
@@ -23,12 +23,12 @@ case "$last" in ''|*[!0-9]*) last=0;; esac
 [ $((now - last)) -lt 3600 ] && exit 0
 echo "$now" > "$STAMP"
 command -v pacman >/dev/null 2>&1 || { echo "Kein Terminal installiert und kein pacman vorhanden – bitte von Hand eins installieren." >&2; exit 1; }
-notify-send -a Draconyx -i utilities-terminal "Kein Terminal installiert" "Ghostty wird installiert – gleich fragt ein Fenster nach deinem sudo-Passwort." 2>/dev/null
+notify-send -a "Hypr Hypr" -i utilities-terminal "Kein Terminal installiert" "Ghostty wird installiert – gleich fragt ein Fenster nach deinem sudo-Passwort." 2>/dev/null
 export SUDO_ASKPASS="$HOME/.local/bin/dx-askpass"
 if [ -x "$SUDO_ASKPASS" ] && sudo -A pacman -S --needed --noconfirm ghostty; then
   echo ghostty > "$CFG"
-  notify-send -a Draconyx -i utilities-terminal "Ghostty installiert" "Es war kein Terminal mehr vorhanden." 2>/dev/null
+  notify-send -a "Hypr Hypr" -i utilities-terminal "Ghostty installiert" "Es war kein Terminal mehr vorhanden." 2>/dev/null
 else
-  notify-send -a Draconyx -u critical -i utilities-terminal "Terminal konnte nicht installiert werden" "Bitte von Hand:  sudo pacman -S ghostty" 2>/dev/null
+  notify-send -a "Hypr Hypr" -u critical -i utilities-terminal "Terminal konnte nicht installiert werden" "Bitte von Hand:  sudo pacman -S ghostty" 2>/dev/null
   exit 1
 fi

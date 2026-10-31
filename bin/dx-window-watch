@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Draconyx: meldet der Shell die Fenster und Bildschirme von Hyprland – jede Änderung als eine JSON-Zeile {"c": [...], "m": [...]}.
+# Hypr Hypr: meldet der Shell die Fenster und Bildschirme von Hyprland – jede Änderung als eine JSON-Zeile {"c": [...], "m": [...]}.
 # Sparsam: im Ruhezustand wird nur etwa 5 Mal pro Sekunde geprüft (bei Vollbild/Spielen 2 Mal), und sobald sich etwas bewegt
 # (oder ein Hyprland-Ereignis kommt) kurz mit ~100 Prüfungen pro Sekunde, damit die Titelleisten der Shell fest am Fenster
 # kleben. Läuft nur, solange die Shell es braucht (stirbt mit ihr).

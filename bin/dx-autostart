@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draconyx: Autostart verwalten und beim Anmelden ausführen.
+"""Hypr Hypr: Autostart verwalten und beim Anmelden ausführen.
   dx-autostart list [--json]           Programme in ~/.config/autostart (an/aus) + eigene Einträge
   dx-autostart enable|disable ID       einschalten / ausschalten (Datei bleibt erhalten)
   dx-autostart add NAME BEFEHL         eigenen Eintrag anlegen

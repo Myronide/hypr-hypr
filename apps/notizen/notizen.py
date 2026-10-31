@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Draconyx Notizen: Liste links, Editor rechts, speichert selbst. Jede Notiz ist eine Textdatei in ~/Documents/Draconyx-Notizen."""
+"""Hypr Hypr Notizen: Liste links, Editor rechts, speichert selbst. Jede Notiz ist eine Textdatei in ~/Documents/Draconyx-Notizen."""
 import os, re, tempfile, time
 from pathlib import Path
 import gi

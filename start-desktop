@@ -1,5 +1,5 @@
 #!/bin/sh
-# Aurora-Reste: startet bei vorhandener Draconyx-Shell nur noch das Nötigste (Shell-Start, Zwischenablage, Wallpaper-Wiederherstellung).
+# Aurora-Reste: startet bei vorhandener Hypr Hypr-Shell nur noch das Nötigste (Shell-Start, Zwischenablage, Wallpaper-Wiederherstellung).
 : "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR fehlt – start-desktop gehört in eine Anmeldesitzung}"
 mkdir -p "$HOME/.cache/aurora"
 "$HOME/.config/hypr/aurora/start-dock" &

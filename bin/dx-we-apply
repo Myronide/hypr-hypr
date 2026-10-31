@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx: (neu) starten der Wallpaper Engine. Aufruf: dx-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
+# Hypr Hypr: (neu) starten der Wallpaper Engine. Aufruf: dx-we-apply MONITOR=ID [MONITOR=ID ...]   (ohne Argumente: beenden)
 RT="${XDG_RUNTIME_DIR:-}"; [ -n "$RT" ] && [ -d "$RT" ] || RT="$HOME/.cache/draconyx"; mkdir -p "$RT"
 PIDF="$RT/draconyx-we.pid"
 PREFS="$HOME/.config/hypr/aurora/preferences.json"

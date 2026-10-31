@@ -101,7 +101,7 @@ def build(app):
     b = Gtk.Button(label='Orca starten' if orca else 'Nicht installiert')
     b.set_sensitive(bool(orca))
     b.connect('clicked', start_orca)
-    app.row(box, 'Screenreader', b, 'Orca liest Programme laut vor, die Barrierefreiheit unterstützen (GTK, Qt, Firefox).' if orca else 'Orca ist nicht installiert (Arch: pacman -S orca). Die Draconyx-Shell selbst bietet keine Screenreader-Unterstützung.')
+    app.row(box, 'Screenreader', b, 'Orca liest Programme laut vor, die Barrierefreiheit unterstützen (GTK, Qt, Firefox).' if orca else 'Orca ist nicht installiert (Arch: pacman -S orca). Die Hypr Hypr-Shell selbst bietet keine Screenreader-Unterstützung.')
 
     app.section(box, 'Textgröße')
     ui.note(app, box, 'Eine globale Textskalierung gibt es in der Shell nicht. Schrift und Größen der Oberfläche wählst du unter „Farben & Schrift“.')

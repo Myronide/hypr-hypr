@@ -311,7 +311,7 @@ class Settings(Gtk.Application):
   def mem_set(w,_):
    try:atomic_write(flag,'on\n' if w.get_active() else 'off\n')
    except OSError as e:self.message('Nicht gespeichert: '+str(e))
-  msw.connect('notify::active',mem_set);self.row(b,'Fenstergröße merken',msw,'Beim Schließen merkt sich Draconyx die Größe eines schwebenden Fensters und stellt sie beim nächsten Öffnen derselben App wieder her (Dialoge, Vollbild und Spiele bleiben unberührt).')
+  msw.connect('notify::active',mem_set);self.row(b,'Fenstergröße merken',msw,'Beim Schließen merkt sich Hypr Hypr die Größe eines schwebenden Fensters und stellt sie beim nächsten Öffnen derselben App wieder her (Dialoge, Vollbild und Spiele bleiben unberührt).')
   def mem_reset(*_):
    (Path.home()/'.config/draconyx/window-sizes.tsv').unlink(missing_ok=True);self.message('Gemerkte Fenstergrößen gelöscht.')
   self.button(b,'Gemerkte Größen','Alle vergessen',mem_reset)
@@ -485,9 +485,9 @@ class Settings(Gtk.Application):
   else:
    MON.apply_live(prev);self.mons=copy.deepcopy(prev);self.mon_panel();self.marea.queue_draw();self.message('Zurückgesetzt.')
 
- # ---------------------------------------------------------------- Apps (eigene Anwendungen aus dem Draconyx-Repo installieren)
+ # ---------------------------------------------------------------- Apps (eigene Anwendungen aus dem Hypr Hypr-Repo installieren)
  def apps(self):
-  b=self.page('Apps','Eigene Anwendungen, die zu Draconyx gehören. Sie kommen aus dem Repo (kein fremder Code), erscheinen nach dem Installieren im Startmenü und werden mit den System-Updates aktualisiert.')
+  b=self.page('Apps','Eigene Anwendungen, die zu Hypr Hypr gehören. Sie kommen aus dem Repo (kein fremder Code), erscheinen nach dem Installieren im Startmenü und werden mit den System-Updates aktualisiert.')
   lst=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(lst,False,False,0)
   dx=str(Path.home()/'.local/bin/dx-apps');busy={'v':False}
   def load():
@@ -725,7 +725,7 @@ class Settings(Gtk.Application):
   m.format_secondary_text('Die Einstellungen werden jetzt geschlossen. Öffne sie erneut, um die neuen Werte zu sehen.');m.run();m.destroy();self.quit()
  def _touch_id_pending(self):return bool(getattr(self,'_touch_id',0))
  def backup(self):
-  b=self.page('Sicherung','Alle deine Einstellungen (Taskleiste, Farben, Schrift, Tastenkombinationen, Monitore, Fensterregeln, Autostart …) in einer Datei sichern und jederzeit zurückholen – auch auf einem anderen Rechner. Einmal pro Woche sichert Draconyx automatisch.')
+  b=self.page('Sicherung','Alle deine Einstellungen (Taskleiste, Farben, Schrift, Tastenkombinationen, Monitore, Fensterregeln, Autostart …) in einer Datei sichern und jederzeit zurückholen – auch auf einem anderen Rechner. Einmal pro Woche sichert Hypr Hypr automatisch.')
   self.button(b,'Einstellungen exportieren','Als Datei speichern …',self.export_dialog,'Aurora-Einstellungen, Taskleiste und Shell-Optionen, Tastenkombinationen, Haupttaste und Farben in eine JSON-Datei.')
   self.button(b,'Einstellungen importieren','Datei laden …',self.import_dialog,'Übernimmt nur, was in der Datei steht; Shell-Einstellungen werden schlüsselweise eingemischt, nichts anderes geht verloren.')
   dxb=str(Path.home()/'.local/bin/dx-backup');box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8);b.pack_start(box,False,False,0)
@@ -743,7 +743,7 @@ class Settings(Gtk.Application):
    im=Gtk.Button(label='Sicherung importieren …')
    def imp(*_):
     d=Gtk.FileChooserDialog(title='Sicherung wählen',parent=self.window,action=Gtk.FileChooserAction.OPEN);d.add_buttons('Abbrechen',Gtk.ResponseType.CANCEL,'Importieren',Gtk.ResponseType.OK)
-    f=Gtk.FileFilter();f.set_name('Draconyx-Sicherungen');f.add_pattern('*.tar.gz');d.add_filter(f)
+    f=Gtk.FileFilter();f.set_name('Hypr Hypr-Sicherungen');f.add_pattern('*.tar.gz');d.add_filter(f)
     if d.run()==Gtk.ResponseType.OK:
      src=Path(d.get_filename());dst=Path.home()/'Documents/Draconyx-Backups';dst.mkdir(parents=True,exist_ok=True);_sh.copy2(src,dst/src.name);self.message('Importiert: '+src.name)
     d.destroy();refill()
@@ -972,7 +972,7 @@ class Settings(Gtk.Application):
    q=search.get_text().lower().strip()
    for text,row in widgets:row.set_visible(q in text)
   search.connect('search-changed',filt)
- # ---- Draconyx-Shell: Taskleiste und Fenstermodus (wirkt sofort, ohne "Übernehmen") ----
+ # ---- Hypr Hypr-Shell: Taskleiste und Fenstermodus (wirkt sofort, ohne "Übernehmen") ----
  def sw(self,box,title,key,default,description='',items=False):
   w=Gtk.Switch(active=bool((shell_get('barItems',{}) or {}).get(key,default)) if items else bool(shell_get(key,default)));w.set_valign(Gtk.Align.CENTER)
   def changed(w,_):
@@ -1308,7 +1308,7 @@ class Settings(Gtk.Application):
   try:current=json.loads(subprocess.run([tool,'show'],capture_output=True,text=True,timeout=10).stdout)
   except Exception:current=None
   if not isinstance(current,dict):current={'preset':'aurora','accent':'#4d8fe0'}
-  w=Choice();w.append('aurora','Aurora (Grau-Blau)');w.append('draconyx','Draconyx (Violett)');w.set_active_id(current.get('preset') if current.get('preset') in ('aurora','draconyx') else None)
+  w=Choice();w.append('aurora','Aurora (Grau-Blau)');w.append('draconyx','Hypr Hypr (Violett)');w.set_active_id(current.get('preset') if current.get('preset') in ('aurora','draconyx') else None)
   w.connect('changed',lambda w:w.get_active_id() and (self.message('Farbwelt gewechselt.') if run_quiet([tool,'preset',w.get_active_id()],20) else self.message('Farbwelt konnte nicht gewechselt werden (dx-colors fehlt?).')));self.row(b,'Voreinstellung',w)
   c=Gtk.ColorButton();rgba=Gdk.RGBA()
   if not rgba.parse(str(current.get('accent','#4d8fe0'))):rgba.parse('#4d8fe0')   # kaputter Farbwert in colors.json
@@ -1319,8 +1319,8 @@ class Settings(Gtk.Application):
   c.connect('color-set',picked);self.row(b,'Akzentfarbe',c,'Hell- und Dunkelvarianten werden daraus abgeleitet.')
   self.fonts_section(b)
  def system(self):
-  b=self.page('System','Aktualisierung von Draconyx und weitere Helfer.')
-  # ---- Draconyx-Update: alles in EINER Zeile (Version, Stand, Knopf – der Knopf erscheint nur, wenn es ein Update gibt) ----
+  b=self.page('System','Aktualisierung von Hypr Hypr und weitere Helfer.')
+  # ---- Hypr Hypr-Update: alles in EINER Zeile (Version, Stand, Knopf – der Knopf erscheint nur, wenn es ein Update gibt) ----
   upd=Path.home()/'.local/state/draconyx/update.json'
   def upd_info():
    try:return json.loads(upd.read_text())
@@ -1350,7 +1350,7 @@ class Settings(Gtk.Application):
   import time as _t
   if not info or _t.time()-info.get('checked',0)>600:check_bg()
   GLib.timeout_add_seconds(60,lambda:(show(upd_info()),True)[1])
-  self.row(b,'Draconyx-Version',uw,'Wird automatisch im Hintergrund geprüft (jede Minute, die Meldung höchstens einmal pro Tag), „Jetzt prüfen“ sofort. Bei einem Update erscheint hier der Knopf; die Aktualisierung läuft ohne Terminal (nur ein Fenster für das sudo-Passwort), deine Einstellungen bleiben unangetastet.')
+  self.row(b,'Hypr Hypr-Version',uw,'Wird automatisch im Hintergrund geprüft (jede Minute, die Meldung höchstens einmal pro Tag), „Jetzt prüfen“ sofort. Bei einem Update erscheint hier der Knopf; die Aktualisierung läuft ohne Terminal (nur ein Fenster für das sudo-Passwort), deine Einstellungen bleiben unangetastet.')
   self.sw(b,'Update-Benachrichtigungen','updateNotify',True,'Höchstens eine Meldung pro Tag, solange ein Update bereitsteht („Nicht mehr erinnern“ in der Meldung gilt nur für diese Version). Aus: gar keine Meldungen mehr – die Zeile oben zeigt ein Update trotzdem an.')
   for title,args in [('Steam Workshop',['steam','steam://url/SteamWorkshopPage/431960'])]:self.button(b,title,'Öffnen',lambda args=args:subprocess.Popen(args))
 Settings().run(None)

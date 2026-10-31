@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draconyx Apps: eigene Anwendungen, die zum System gehören. Der Katalog liegt im Repo (Ordner apps/<id>/app.json), installiert wird
+"""Hypr Hypr Apps: eigene Anwendungen, die zum System gehören. Der Katalog liegt im Repo (Ordner apps/<id>/app.json), installiert wird
 nach ~/.local/share/draconyx-apps/<id>/ mit einem Starter im Startmenü. Nur Apps aus dem eigenen Repo – kein fremder Code.
 
   dx-apps list [--json]      Katalog mit Stand (installiert / Update / nicht installiert)

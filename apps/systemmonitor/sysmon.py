@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Draconyx Systemmonitor: Übersicht, Programme (zusammengefasst), Prozesse, Leistung, Datenträger, Netzwerk, Sensoren, System."""
+"""Hypr Hypr Systemmonitor: Übersicht, Programme (zusammengefasst), Prozesse, Leistung, Datenträger, Netzwerk, Sensoren, System."""
 import math, os, platform, re, shutil, signal, socket, subprocess, sys, time
 from collections import deque, defaultdict
 from pathlib import Path

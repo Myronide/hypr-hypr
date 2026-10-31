@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draconyx Snip: schneidet einen Bereich aus einem Bildschirmfoto aus und kopiert/speichert ihn.
+"""Hypr Hypr Snip: schneidet einen Bereich aus einem Bildschirmfoto aus und kopiert/speichert ihn.
   dx-snip-crop BILD X Y B H copy|save|both     (Pixel des Bildes)
   dx-snip-crop BILD X Y B H edit               (Ausschnitt als Datei für den Editor: gibt den Pfad aus)
   dx-snip-crop BILD X Y B H ocr                (Text im Ausschnitt erkennen und kopieren; tesseract + Sprachpakete deu/eng)
@@ -23,7 +23,7 @@ def rundir():
 
 def tell(*args):
     try:
-        return subprocess.Popen(["notify-send", "-a", "Draconyx", *args], stderr=subprocess.DEVNULL)
+        return subprocess.Popen(["notify-send", "-a", "Hypr Hypr", *args], stderr=subprocess.DEVNULL)
     except OSError:
         return None                                       # ohne notify-send trotzdem weiterarbeiten
 

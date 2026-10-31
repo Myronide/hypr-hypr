@@ -1,4 +1,4 @@
--- Draconyx Binds: alle Tastenkombinationen an einer Stelle, vom Nutzer umbindbar (Aurora-Einstellungen → Tastenkombinationen).
+-- Hypr Hypr Binds: alle Tastenkombinationen an einer Stelle, vom Nutzer umbindbar (Aurora-Einstellungen → Tastenkombinationen).
 --   B(id, beschriftung, standard, aktion [, optionen])   wie hl.bind, nur mit Kennung, Beschriftung und Standardkombination
 -- Überschreibungen: ~/.config/draconyx/binds.conf, Zeilen "kennung=KOMBINATION" (leer = Kombination aus).
 -- Die Liste aller Aktionen schreibt flush() nach ~/.config/draconyx/binds-registry.tsv (für die Einstellungs-App).

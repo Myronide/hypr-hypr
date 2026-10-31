@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx Coding Space: listet Unterordner als Projekt oder Workspace.
+# Hypr Hypr Coding Space: listet Unterordner als Projekt oder Workspace.
 #   dx-code-list <ordner> [<ordner-mit-weiteren-*Workspace*-Ordnern>]
 # Ausgabe (TSV): geändert<TAB>art<TAB>git<TAB>name<TAB>pfad     (art = project | workspace)
 # dx-code-list --mark <pfad> workspace|project|auto : Handarbeit festhalten (auto = wieder automatisch erkennen)

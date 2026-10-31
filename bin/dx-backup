@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draconyx: Einstellungen sichern und wiederherstellen (ein Archiv mit allem, was zu deinem Setup gehört).
+"""Hypr Hypr: Einstellungen sichern und wiederherstellen (ein Archiv mit allem, was zu deinem Setup gehört).
   dx-backup create [NAME]        Sicherung anlegen (Standard-Ordner: ~/Documents/Draconyx-Backups)
   dx-backup list [--json]        vorhandene Sicherungen
   dx-backup restore DATEI        wiederherstellen (vorher wird der jetzige Stand automatisch gesichert)
@@ -103,7 +103,7 @@ def restore(path):
         with tarfile.open(path) as tar:
             members = list(safe_members(tar))
             if not members:
-                print("Das Archiv enthält keine Draconyx-Dateien – nichts wiederhergestellt.", file=sys.stderr); return 1
+                print("Das Archiv enthält keine Hypr Hypr-Dateien – nichts wiederhergestellt.", file=sys.stderr); return 1
             for m in members:                                            # ganzes Archiv einmal durchlesen: ein beschädigtes bricht hier ab
                 if m.isfile():
                     f = tar.extractfile(m)

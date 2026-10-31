@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx/Aurora: startet das gewählte Terminal.  dx-terminal [--dir ORDNER] [--class KLASSE] [-- BEFEHL ...]
+# Hypr Hypr/Aurora: startet das gewählte Terminal.  dx-terminal [--dir ORDNER] [--class KLASSE] [-- BEFEHL ...]
 # Auswahl: $DX_TERMINAL, sonst ~/.config/draconyx/terminal (eine Zeile), sonst Aurora-Einstellung, sonst erstes installiertes.
 dir=""; cls=""; cmd=()
 while [ $# -gt 0 ]; do

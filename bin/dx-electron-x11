@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx: Electron-Apps (Discord & Co.) über XWayland starten. Hyprland ignoriert das Minimieren-Symbol nativer Wayland-Apps;
+# Hypr Hypr: Electron-Apps (Discord & Co.) über XWayland starten. Hyprland ignoriert das Minimieren-Symbol nativer Wayland-Apps;
 # bei XWayland-Fenstern fängt die Shell es ab (dx-x11-iconify). Es werden eigene Starter in ~/.local/share/applications angelegt,
 # die den Start mit --ozone-platform=x11 erzwingen. Bestehende eigene Starter bleiben unangetastet.
 #   dx-electron-x11          anlegen / erneuern

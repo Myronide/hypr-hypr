@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Startmenü: Windows-Taste öffnet/schließt nwg-drawer, mittig über der Taskleiste.
-# Größe wird je nach Monitor des Fokus berechnet. (Altlast: mit der Draconyx-Shell öffnet das Startmenü die Shell selbst.)
-command -v nwg-drawer >/dev/null 2>&1 || { notify-send -a Draconyx "Startmenü" "nwg-drawer ist nicht installiert." 2>/dev/null; echo "nwg-drawer fehlt" >&2; exit 1; }
+# Größe wird je nach Monitor des Fokus berechnet. (Altlast: mit der Hypr Hypr-Shell öffnet das Startmenü die Shell selbst.)
+command -v nwg-drawer >/dev/null 2>&1 || { notify-send -a "Hypr Hypr" "Startmenü" "nwg-drawer ist nicht installiert." 2>/dev/null; echo "nwg-drawer fehlt" >&2; exit 1; }
 if pgrep -x nwg-drawer >/dev/null; then
     pkill -x nwg-drawer
     exit 0

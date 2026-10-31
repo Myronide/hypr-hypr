@@ -1,6 +1,6 @@
 # AGENTS.md – Arbeitsanleitung für KI-Agenten (Codex, Claude Code, …)
 
-Repo: Hyprland-Desktop von **SyntaxJason (Draconyx)** und **Myronide (Aurora)**, zusammengeführt. Sprache in Doku, Commits und Meldungen: Deutsch, Commit-Titel dürfen Deutsch oder Englisch sein. **Keine KI-Zusätze in Commits oder PRs** (kein „Co-Authored-By", keine „Generated with"-Zeilen).
+Repo: Hyprland-Desktop von **SyntaxJason (Hypr Hypr)** und **Myronide (Aurora)**, zusammengeführt. Sprache in Doku, Commits und Meldungen: Deutsch, Commit-Titel dürfen Deutsch oder Englisch sein. **Keine KI-Zusätze in Commits oder PRs** (kein „Co-Authored-By", keine „Generated with"-Zeilen).
 
 ## Stack und Orte
 | Teil | Ort im Repo | Läuft als / installiert nach |

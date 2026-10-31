@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Draconyx / Aurora – Einrichtung auf einem Arch-System mit Hyprland 0.56.x
+# Hypr Hypr / Aurora – Einrichtung auf einem Arch-System mit Hyprland 0.56.x
 #   ./install.sh            alles einrichten (fragt vor Paketen und überschreibt nichts Eigenes)
 #   ./install.sh --no-we    ohne Wallpaper Engine bauen
 #   ./install.sh --ask      vor Paketinstallationen nachfragen (Standard: alles automatisch)
@@ -208,7 +208,7 @@ fi
 
 hv="$(hyprland --version 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+' | head -1 | tr -d v)"
 if [ -n "$hv" ] && [ "$(printf '%s\n0.55\n' "$hv" | sort -V | head -1)" != "0.55" ]; then
-  warn "Deine Hyprland-Version ($hv) kennt noch keine Lua-Konfiguration (ab 0.55) – Draconyx braucht ein Update von Hyprland."
+  warn "Deine Hyprland-Version ($hv) kennt noch keine Lua-Konfiguration (ab 0.55) – Hypr Hypr braucht ein Update von Hyprland."
 fi
 say "Hyprland-Module nach $CONF/hypr (bestehende Dateien bleiben)"
 mkdir -p "$CONF/hypr"
@@ -240,9 +240,9 @@ elif [ -e "$LUA" ] && [ -n "$last_sum" ] && [ "$cur_sum" = "$last_sum" ]; then
   say "hyprland.lua war unverändert – wird auf die neue Fassung aktualisiert (Sicherung: $BACKUP)"
   backup_file "$LUA"; cp "$HERE/hypr/hyprland.lua" "$LUA"; CHANGED=$((CHANGED+1))
 elif [ -e "$LUA" ] && [ "$KEEP_CONFIG" != 1 ] && [ -z "$last_sum" ]; then
-  # Die Draconyx-hyprland.lua wird IMMER eingesetzt (sonst bliebe die Installation halb wirkungslos). Die alte Datei wird vorher
+  # Die Hypr Hypr-hyprland.lua wird IMMER eingesetzt (sonst bliebe die Installation halb wirkungslos). Die alte Datei wird vorher
   # gesichert, ihre Monitor-Einstellungen und die Tastaturbelegung übernehmen wir. Wer das nicht will: --keep-config
-  say "Bestehende hyprland.lua wird durch die Draconyx-Konfiguration ersetzt (Sicherung der alten: $BACKUP)"
+  say "Bestehende hyprland.lua wird durch die Hypr Hypr-Konfiguration ersetzt (Sicherung der alten: $BACKUP)"
   backup_file "$CONF/hypr/hyprland.lua"
   if [ ! -e "$CONF/hypr/monitors_local.lua" ]; then
     python3 -I - "$CONF/hypr/hyprland.lua" "$CONF/hypr/monitors_local.lua" <<'PY' || true

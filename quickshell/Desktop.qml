@@ -4,7 +4,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
 
-// Draconyx Desktop: Wallpaper auf jedem Monitor, Icons nur auf den gewählten Monitoren.
+// Hypr Hypr Desktop: Wallpaper auf jedem Monitor, Icons nur auf den gewählten Monitoren.
 // Nimmt nie Tastaturfokus (Tippen im Browser landet nie auf dem Desktop).
 PanelWindow {
     id: desk

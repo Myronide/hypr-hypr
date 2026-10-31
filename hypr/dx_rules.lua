@@ -1,4 +1,4 @@
--- Draconyx: Fensterregeln. Beim Öffnen eines Fensters werden passende Regeln angewendet (Bildschirm, Desktop, Modus, Größe, Mitte).
+-- Hypr Hypr: Fensterregeln. Beim Öffnen eines Fensters werden passende Regeln angewendet (Bildschirm, Desktop, Modus, Größe, Mitte).
 --   Datei: ~/.config/draconyx/window-rules.tsv   (bearbeiten: Aurora → Fensterregeln)
 --   Spalten: an(1/0) <TAB> Klasse <TAB> Titel <TAB> Bildschirm <TAB> Desktop <TAB> Modus <TAB> Größe <TAB> Mitte(1/0)
 --   Klasse/Titel: * = beliebig viele Zeichen, Groß/Klein egal; leer = jedes.  Modus: leer | float | tile | maximize | fullscreen

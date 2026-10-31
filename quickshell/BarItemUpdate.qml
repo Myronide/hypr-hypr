@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 
-// Update-Anzeige: erscheint nur, wenn ein neues Draconyx-Update bereitsteht. Klick: was ist neu + Aktualisieren.
+// Update-Anzeige: erscheint nur, wenn ein neues Hypr Hypr-Update bereitsteht. Klick: was ist neu + Aktualisieren.
 BarButton {
     id: ub
     property var bar: null

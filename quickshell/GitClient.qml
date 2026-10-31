@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 
-// Draconyx Git: einfacher Git-Client. Änderungen stagen/unstagen (Klick, Pfeil oder Ziehen), committen,
+// Hypr Hypr Git: einfacher Git-Client. Änderungen stagen/unstagen (Klick, Pfeil oder Ziehen), committen,
 // Verlauf mit Cherry-Pick, Branches, Pull (Rebase), Push, Fetch, Stash, Konflikt-Leiste und Erkennung
 // von gelöschten/umbenannten Remote-Branches. Läuft als Layer-Fenster (Alt+F4 trifft die Shell nicht).
 PanelWindow {
@@ -263,7 +263,7 @@ PanelWindow {
         const cmd = [Theme.home + "/.local/bin/claude", "-p", prompt, fresh ? "--session-id" : "--resume", sid,
                      "--model", "sonnet", "--allowedTools"].concat(tools)
                     .concat(["--disallowedTools"]).concat(claudeDeny)
-                    .concat(["--append-system-prompt", "Du arbeitest im Git-Client des Nutzers (Draconyx). Kein force-push, kein hard reset, keine Löschungen ohne ausdrückliche Bitte. " +
+                    .concat(["--append-system-prompt", "Du arbeitest im Git-Client des Nutzers (Hypr Hypr). Kein force-push, kein hard reset, keine Löschungen ohne ausdrückliche Bitte. " +
                               (mode === "msg" ? "Commit-Nachrichten schreibst du IMMER auf Englisch."
                                               : "Deine Erklärungen an den Nutzer sind kurz und auf Deutsch; Commit-Nachrichten, die du selbst erzeugst, sind IMMER auf Englisch.")]);
         claudeProc.command = cmd;

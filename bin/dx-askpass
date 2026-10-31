@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Draconyx: Passwortabfrage für sudo als kleines Fenster (SUDO_ASKPASS). Gibt das Passwort auf stdout aus.
+# Hypr Hypr: Passwortabfrage für sudo als kleines Fenster (SUDO_ASKPASS). Gibt das Passwort auf stdout aus.
 # Reihenfolge: zenity, kdialog, sonst ein Terminal-Fenster (dx-terminal) mit Eingabe ohne Anzeige.
-title="Draconyx-Update"; text="${1:-Passwort für sudo (Draconyx aktualisieren):}"
+title="Hypr Hypr-Update"; text="${1:-Passwort für sudo (Hypr Hypr aktualisieren):}"
 if command -v zenity >/dev/null 2>&1; then
   exec zenity --password --title="$title"
 elif command -v kdialog >/dev/null 2>&1; then

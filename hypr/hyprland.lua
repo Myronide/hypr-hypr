@@ -1,4 +1,4 @@
--- Hyprland: "Draconyx Dark" im Windows-11-Stil
+-- Hyprland: "Hypr Hypr Dark" im Windows-11-Stil
 -- Schwebende Taskleiste unten (Waybar), Startmenü (nwg-drawer), Desktop mit Icons (pcmanfm-qt), schwebende Fenster.
 -- Farben: Schwarz-Grün, Aurora-Farbwelt: Akzent Blau #4d8fe0, Zweitakzent #6ba9ff
 
@@ -21,7 +21,7 @@ local terminal    = os.getenv("HOME") .. "/.local/bin/dx-terminal"
 local fileManager = "dolphin"
 local browser     = "gtk-launch \"$(xdg-settings get default-web-browser)\""
 local runMenu     = "fuzzel"
--- Draconyx Shell (Quickshell) mit Waybar/nwg-drawer als Fallback, falls Quickshell fehlt
+-- Hypr Hypr Shell (Quickshell) mit Waybar/nwg-drawer als Fallback, falls Quickshell fehlt
 local shellBar    = "sh -c 'command -v qs >/dev/null && QS_ICON_THEME=Papirus-Dark exec qs -c draconyx || exec waybar'"
 local startMenu   = "sh -c 'qs -c draconyx ipc call shell toggleStart 2>/dev/null || " .. os.getenv("HOME") .. "/.config/hypr/scripts/start-menu.sh'"
 local quickPanel  = "sh -c 'qs -c draconyx ipc call shell toggleControl 2>/dev/null || pavucontrol'"
@@ -61,8 +61,8 @@ end
 hl.on("hyprland.start", function()
     -- Polkit-Agent (Passwortabfragen): der erste vorhandene
     hl.exec_cmd("sh -c 'for p in /usr/lib/hyprpolkitagent/hyprpolkitagent /usr/lib/polkit-kde-authentication-agent-1 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 /usr/lib/mate-polkit/polkit-mate-authentication-agent-1; do [ -x \"$p\" ] && exec \"$p\"; done'")
-    hl.exec_cmd("sh -c 'command -v qs >/dev/null || exec pcmanfm-qt --desktop'")  -- Desktop: Draconyx Shell, Fallback pcmanfm-qt
-    hl.exec_cmd(shellBar)                              -- Taskleiste (Draconyx Shell)
+    hl.exec_cmd("sh -c 'command -v qs >/dev/null || exec pcmanfm-qt --desktop'")  -- Desktop: Hypr Hypr Shell, Fallback pcmanfm-qt
+    hl.exec_cmd(shellBar)                              -- Taskleiste (Hypr Hypr Shell)
     hl.exec_cmd(ifInstalled("swaync"))                 -- Benachrichtigungen
     hl.exec_cmd(ifInstalled("hypridle"))
     hl.exec_cmd(ifInstalled("nm-applet", "nm-applet --indicator"))
@@ -267,12 +267,12 @@ end
 local function restoreWindow()
     if DXSnap ~= nil then DXSnap.restoreLast() end
 end
--- Der Minimieren-Knopf von Apps (z. B. Ghostty, Brave) wird von der Draconyx Shell abgefangen
+-- Der Minimieren-Knopf von Apps (z. B. Ghostty, Brave) wird von der Hypr Hypr Shell abgefangen
 -- (Hyprland meldet "minimized>>adresse,1" auf dem Event-Socket; Lua kennt in 0.56 kein window.minimize).
 
 B("window_minimize", "Fenster minimieren", mainMod .. " + M",         function() minimizeWindow(hl.get_active_window()) end)
 B("window_restore", "Minimiertes Fenster zurückholen", mainMod .. " + SHIFT + M", function() restoreWindow() end)
--- Draconyx Tiling (eigener Kachel-Modus) + Snap (Andocken an Ränder/Ecken, Windows-Ketten)
+-- Hypr Hypr Tiling (eigener Kachel-Modus) + Snap (Andocken an Ränder/Ecken, Windows-Ketten)
 DXZones = require("dx_zones")
 DXTiling = require("dx_tiling")
 DXSnap = require("dx_snap")
@@ -325,7 +325,7 @@ B("free_mouse", "Maus aus Spielen/Fenstern befreien", mainMod .. " + Escape", fr
 
 -- dont_inhibit: Spiele (auch X11-Tastatur-Fang unter XWayland/Proton) dürfen diese Kombinationen nicht schlucken; sonst ginge Alt+Tab
 -- nur, wenn die Fensterregel no_shortcuts_inhibit greift.
--- Alt+Tab wie Windows: Umschalter der Draconyx Shell mit allen Fenstern (zuletzt benutzt zuerst).
+-- Alt+Tab wie Windows: Umschalter der Hypr Hypr Shell mit allen Fenstern (zuletzt benutzt zuerst).
 -- Alt halten + Tab = weiter, Shift+Tab = zurück, Alt loslassen = wechseln.
 -- Ersatz, falls die Shell nicht läuft: direkt zum letzten Fenster.
 local function switcher(action)
@@ -422,7 +422,7 @@ hl.layer_rule({ match = { namespace = "swaync-notification-window" },   blur = t
 DXB.flush()   -- Liste aller Aktionen für die Einstellungs-App schreiben
 
 -- Einstellungen aus der Aurora-Einstellungs-App (Rahmen, Unschärfe, Tastaturbelegung, Fokus …): ohne diese Zeilen hätten sie
--- bei einer reinen Draconyx-Installation keine Wirkung.
+-- bei einer reinen Hypr Hypr-Installation keine Wirkung.
 aurora_bindings = aurora_bindings or {}
 do
     local f = io.open((os.getenv("HOME") or "") .. "/.config/hypr/aurora/preferences.lua", "r")

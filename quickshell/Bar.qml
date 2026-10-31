@@ -109,7 +109,7 @@ PanelWindow {
     }
     onDockGeomChanged: Global.setDockGeom(mon, dockGeom)
 
-    // Rechtsklick auf den Startknopf: Symbol wählen (Draconyx / Arch / eigenes Bild)
+    // Rechtsklick auf den Startknopf: Symbol wählen (Hypr Hypr / Arch / eigenes Bild)
     PopupWindow {
         id: logoMenu
         anchor.item: bar.startItem ? bar.startItem : null
@@ -130,7 +130,7 @@ PanelWindow {
                 id: logoCol
                 anchors.fill: parent; anchors.margins: 8; spacing: 2
                 Text { text: "Symbol des Startknopfs"; color: Theme.textDim; font.family: Theme.font; font.pixelSize: Theme.fsXs; leftPadding: 6; bottomPadding: 4 }
-                MenuRow { width: logoCol.width; label: "Draconyx-Logo" + (Global.startLogo === "" ? "  ✓" : ""); iconName: "apps"
+                MenuRow { width: logoCol.width; label: "Hypr Hypr-Logo" + (Global.startLogo === "" ? "  ✓" : ""); iconName: "apps"
                           onTriggered: { Global.startLogo = ""; logoMenu.visible = false; } }
                 MenuRow { width: logoCol.width; label: "Arch-Logo" + (Global.startLogo === "arch" ? "  ✓" : ""); iconName: "apps"
                           onTriggered: { Global.startLogo = "arch"; logoMenu.visible = false; } }

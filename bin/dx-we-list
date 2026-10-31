@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Draconyx: listet alle Steam-Workshop-Wallpaper der Wallpaper Engine als TSV: id, titel, typ, vorschau-pfad, geändert
+# Hypr Hypr: listet alle Steam-Workshop-Wallpaper der Wallpaper Engine als TSV: id, titel, typ, vorschau-pfad, geändert
 #   dx-we-list            Liste
 #   dx-we-list --roots    Diagnose: durchsuchte Ordner mit Anzahl gefundener Wallpaper
 # Suchorte (alle zusammen): ~/.config/draconyx/workshop, Aurora-Einstellung "workshop" (auch der Ordner darüber/darunter),

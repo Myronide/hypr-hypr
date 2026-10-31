@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draconyx Schriften: 10 Voreinstellungen für die Oberfläche (Shell + Aurora) und für Code-Anzeigen (Git-Client, Diffs).
+"""Hypr Hypr Schriften: 10 Voreinstellungen für die Oberfläche (Shell + Aurora) und für Code-Anzeigen (Git-Client, Diffs).
   dx-fonts list [--json]        Voreinstellungen mit Stand (installiert?) und aktueller Wahl
   dx-fonts set ui|code ID       Schrift wählen (Shell und Aurora übernehmen sie sofort bzw. beim nächsten Öffnen)
   dx-fonts install ID           fehlende Schrift installieren (pacman, sonst AUR über paru/yay; Passwort per Dialog)

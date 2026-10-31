@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Draconyx: Wächter für XWayland-Apps (z. B. Steam, Brave, VS Code, Discord, Aurora). Hyprland ignoriert zwei Anfragen dieser Apps:
+# Hypr Hypr: Wächter für XWayland-Apps (z. B. Steam, Brave, VS Code, Discord, Aurora). Hyprland ignoriert zwei Anfragen dieser Apps:
 #  * WM_CHANGE_STATE (Minimieren): der Wächter gibt pro Ereignis eine Zeile "iconify 0x<hyprland-adresse>" aus.
 #  * _NET_WM_MOVERESIZE (Ziehen an der eigenen Titelleiste): der Wächter verschiebt das Fenster selbst, solange die linke Maustaste
 #    gehalten wird (ohne Alt/Strg+Alt). Das Andocken (dx_snap) bemerkt die Bewegung wie bei jedem anderen Ziehen.

@@ -1,5 +1,5 @@
--- Draconyx Zonen: selbst eingestellte Raster (wie FancyZones).
--- Die Zonen werden in der Draconyx Shell bearbeitet; die Shell schreibt sie als Zeilen
+-- Hypr Hypr Zonen: selbst eingestellte Raster (wie FancyZones).
+-- Die Zonen werden in der Hypr Hypr Shell bearbeitet; die Shell schreibt sie als Zeilen
 --   MONITOR index x y breite hoehe        (globale Pixel-Koordinaten)
 -- nach $XDG_RUNTIME_DIR/draconyx-zones.txt. Dieses Modul liest sie und setzt Fenster hinein.
 local M = {}

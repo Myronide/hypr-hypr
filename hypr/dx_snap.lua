@@ -1,4 +1,4 @@
--- Draconyx Snap: Fenster andocken wie unter KDE/Windows.
+-- Hypr Hypr Snap: Fenster andocken wie unter KDE/Windows.
 --  * Ziehen an Bildschirmrand = Hälfte, Ecke = Viertel, oberer Rand = maximieren (mit Vorschau in der Shell)
 --  * Win+Pfeile in Ketten: links -> hoch = oben links, usw.
 --  * Gekachelte Fenster (dx_tiling) tauschen beim Loslassen den Platz mit dem Fenster unter dem Zeiger

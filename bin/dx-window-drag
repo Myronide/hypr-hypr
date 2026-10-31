@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Draconyx: verschiebt ein Fenster mit dem Mauszeiger (für die Titelleisten der Shell). dx-window-drag 0x<adresse>
+# Hypr Hypr: verschiebt ein Fenster mit dem Mauszeiger (für die Titelleisten der Shell). dx-window-drag 0x<adresse>
 # Läuft, bis die Shell den Prozess beendet (Maustaste losgelassen). Gibt bei jeder Bewegung "x y" (neue Fensterposition) aus.
 #  * Ein maximiertes Fenster wird dabei erst auf seine alte Größe zurückgesetzt (Zeiger bleibt im gleichen Verhältnis auf der Leiste).
 #  * Zieht man auf einen anderen Bildschirm, wird das Fenster diesem Bildschirm zugeordnet (sonst maximiert das Andocken danach

@@ -1,6 +1,6 @@
-# Draconyx — unsere Änderungen
+# Hypr Hypr — unsere Änderungen
 
-Ordner für den Stand von SyntaxJason ("Draconyx"), zusammengeführt mit Myronides "Aurora" (Rest des Repos).
+Ordner für den Stand von SyntaxJason ("Hypr Hypr"), zusammengeführt mit Myronides "Aurora" (Rest des Repos).
 
 ## Einrichten
 ```sh
@@ -23,7 +23,7 @@ Die Monitore erkennt der Installer selbst (`~/.config/hypr/monitors_local.lua`, 
 
 ## Zusammengeführt (Cherry-Pick)
 - **Von Aurora:** Farbwelt (Grau-Blau), Aussehen der Taskleiste, Einstellungs-App (umgestylt und erweitert), Terminal-Auswahl.
-- **Von Draconyx:** Zonen-Raster, Snap/Maximieren, Coding Space, Git-Client, Wallpaper Engine in der Taskleiste, frei ziehbare Desktop-Symbole.
+- **Von Hypr Hypr:** Zonen-Raster, Snap/Maximieren, Coding Space, Git-Client, Wallpaper Engine in der Taskleiste, frei ziehbare Desktop-Symbole.
 - **Gemeinsam steuerbar:** Farben (`~/.config/draconyx/colors.json`), Terminal (`~/.config/draconyx/terminal`), Fenstermodus (`~/.config/draconyx/window-mode`), Taskleiste (`~/.local/state/draconyx/settings.json`).
 
 ## Aurora läuft auf der Shell

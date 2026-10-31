@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draconyx: schützt die Shell-Einstellungen (~/.local/state/draconyx/settings.json: Taskleiste, angeheftete Apps, Desktop-Symbole …)
+"""Hypr Hypr: schützt die Shell-Einstellungen (~/.local/state/draconyx/settings.json: Taskleiste, angeheftete Apps, Desktop-Symbole …)
 vor Zurücksetzen. Eine Aktualisierung darf diese Werte nie ändern.
   dx-settings-guard snapshot [DATEI]   aktuellen Stand sichern (Standard: ~/.local/share/draconyx-backups/settings-vor-update.json)
   dx-settings-guard restore  [DATEI]   Werte aus der Sicherung zurückschreiben: jeder Schlüssel der Sicherung gewinnt, neue Schlüssel

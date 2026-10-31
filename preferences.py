@@ -1,7 +1,7 @@
 import json,subprocess,os,re,shutil,time,tempfile
 from pathlib import Path
 BASE=Path.home()/'.config/hypr/aurora'
-SHELL=(Path.home()/'.config/quickshell/draconyx/shell.qml').exists()   # Draconyx-Shell vorhanden -> eigene Taskleiste statt waybar
+SHELL=(Path.home()/'.config/quickshell/draconyx/shell.qml').exists()   # Hypr Hypr-Shell vorhanden -> eigene Taskleiste statt waybar
 DEFAULTS={'scroll_speed':1.0,'dock_visibility':'always','dock_monitor':'DP-2','dock_icon_size':32,'dock_opacity':0.95,'desktop_icon_size':44,'desktop_font_size':11,'grid_snap':True,'grid_visible':False,'grid_width':122,'grid_height':112,'titlebar_height':28,'titlebar_font':10,'tile_gap':12,'rounding':12,'border_size':0,'blur':True,'blur_size':6,'blur_passes':3,'wallpaper':'','wallpaper_monitor':'','wallpaper_fit':'cover','workshop':'/mnt/Games/Steam/steamapps/workshop/content/431960','engine_assets':'/mnt/Games/Steam/steamapps/common/wallpaper_engine/assets','engine_fps':30,'engine_volume':0,'engine_path':'','engine_monitor':'DP-2','engine_mouse':True,'engine_parallax':True,'engine_fullscreen_pause':True,'engine_active':False}
 
 def atomic_write(path,text):
@@ -49,7 +49,7 @@ def send_ui(*args):
   with socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM) as s:s.sendto(json.dumps(args).encode(),str(Path(os.environ.get('XDG_RUNTIME_DIR','/nonexistent'))/'aurora-ui.sock'))
  except (OSError,KeyError):pass
 def modifier_mode():
- """Haupttaste (Aurora-Einstellungen): super | both | ctrl-alt | caps – gemeinsame Datei mit der Draconyx-Shell."""
+ """Haupttaste (Aurora-Einstellungen): super | both | ctrl-alt | caps – gemeinsame Datei mit der Hypr Hypr-Shell."""
  try:m=(Path.home()/'.config/draconyx/modifier').read_text().strip()
  except (OSError,ValueError):return 'super'
  return m if m in MODIFIERS else 'super'
@@ -109,7 +109,7 @@ def save_preferences(p):
  home=Path.home();shared=home/'.config/draconyx'
  term=p.get('terminal')
  if isinstance(term,str) and term.strip() and re.fullmatch(r'[A-Za-z0-9_.+\-/ ]+',term.strip()):
-  atomic_write(shared/'terminal',term.strip()+'\n')   # gemeinsam mit dem Draconyx-Teil (dx-terminal)
+  atomic_write(shared/'terminal',term.strip()+'\n')   # gemeinsam mit dem Hypr Hypr-Teil (dx-terminal)
  n=lambda key,lo,hi:number(p,key,lo,hi)
  source='hl.config({general={border_size=%d,resize_on_border=true,extend_border_grab_area=8},decoration={rounding=%d,blur={enabled=%s,size=%d,passes=%d}}})\n'%(n('border_size',0,6),n('rounding',0,40),'true' if p.get('blur',True) else 'false',n('blur_size',1,15),n('blur_passes',1,5))
  source+='if hl.plugin.hyprbars then hl.config({plugin={hyprbars={bar_height=%d,bar_text_size=%d}}}) end\n'%(n('titlebar_height',22,48),n('titlebar_font',8,16))
@@ -145,7 +145,7 @@ def save_preferences(p):
  try:op=max(.2,min(1,float(p.get('dock_opacity',.95))))
  except (TypeError,ValueError):op=.95
  atomic_write(BASE/'preferences.css','.desktop-label {font-size: %dpx;} .app-dock {background: transparent;} window#waybar {background: rgba(38,42,48,%.2f);}\n'%(n('desktop_font_size',8,20),op))
- if SHELL:return   # mit der Draconyx-Shell gibt es keine waybar/Aurora-Dock-Neustarts
+ if SHELL:return   # mit der Hypr Hypr-Shell gibt es keine waybar/Aurora-Dock-Neustarts
  config=home/'.config/waybar/config.jsonc'
  try:c=json.loads(config.read_text())
  except (OSError,ValueError):return   # keine (oder kaputte) waybar-Konfiguration: nichts anfassen
@@ -183,7 +183,7 @@ def shell_settings_update(changes,path=None):
  atomic_write(path,json.dumps(data,indent=4))
  return True
 def _shell_we(assign):
- """Mit der Draconyx-Shell: Wallpaper Engine der Shell steuern (settings.json + Neustart über die Shell)."""
+ """Mit der Hypr Hypr-Shell: Wallpaper Engine der Shell steuern (settings.json + Neustart über die Shell)."""
  shell_settings_update({'weWallpapers':assign})
  try:subprocess.Popen(['qs','-c','draconyx','ipc','call','shell','weReapply'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
  except OSError:pass
@@ -204,7 +204,7 @@ def apply_background(p,engine=False,preview=False):
   monitors=[p['engine_monitor']] if p.get('engine_monitor') else _monitor_names()
   if not monitors:raise ValueError('Keine Bildschirme gefunden – läuft Hyprland?')
   _shell_we({m:folder.name for m in monitors});p['engine_active']=True;return
- if engine:raise ValueError('Animierte Hintergründe laufen über die Draconyx-Shell (Wallpaper Engine) – bitte die Shell starten.')
+ if engine:raise ValueError('Animierte Hintergründe laufen über die Hypr Hypr-Shell (Wallpaper Engine) – bitte die Shell starten.')
  else:
   raw=str(p.get('wallpaper') or '')
   path=Path(raw).expanduser()
