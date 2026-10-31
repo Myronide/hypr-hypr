@@ -1,64 +1,64 @@
-# Hypr Hypr — unsere Änderungen
+# Hypr Hypr — our changes
 
-Ordner für den Stand von SyntaxJason ("Hypr Hypr"), zusammengeführt mit Myronides "Aurora" (Rest des Repos).
+Folder for the state of SyntaxJason ("Hypr Hypr"), merged with Myronide's "Aurora" (the rest of the repo).
 
-## Einrichten
+## Setup
 ```sh
-sudo ./install.sh         # nur mit sudo-Freigabe; richtet alles ein, lädt Hyprland neu und startet die Shell neu
-sudo ./install.sh --keymap=us   # Tastaturbelegung vorgeben: de = QWERTZ, us = QWERTY (sonst fragt der Installer einmal)
-sudo ./install.sh --no-we # ohne Wallpaper Engine
+sudo ./install.sh         # needs sudo; sets everything up, reloads Hyprland and restarts the shell
+sudo ./install.sh --keymap=us   # preset the keyboard layout: de = QWERTZ, us = QWERTY (otherwise the installer asks once)
+sudo ./install.sh --no-we # without Wallpaper Engine
 ```
-Danach in Hyprland neu anmelden oder `qs -c draconyx` starten. Einstellungen: Zahnrad in der Taskleiste (öffnet die Aurora-Einstellungen).
-Die Monitore erkennt der Installer selbst (`~/.config/hypr/monitors_local.lua`, nur wenn es sie noch nicht gibt). Anordnen wie unter Windows: Aurora-Einstellungen → Bildschirme (mit 15-Sekunden-Rückfrage, damit nie ein schwarzer Bildschirm übrig bleibt). Anzeigen: `hyhy-monitors show`.
+Then log in to Hyprland again or start the shell with `qs -c draconyx`. Settings: the gear icon in the taskbar (opens the Aurora settings).
+The installer detects the monitors itself (`~/.config/hypr/monitors_local.lua`, only if it does not exist yet). Arrange them like on Windows: Aurora settings → Displays (with a 15-second confirmation, so the screen never stays black). Show them: `hyhy-monitors show`.
 
-## Inhalt
-| Ordner | Was |
+## Contents
+| Folder | What |
 |---|---|
-| `quickshell/` | Shell in QML: Taskleiste (Teile einzeln an/aus), Startmenü (Symbol wählbar), Alt+Tab, Task View, Desktop (Symbole frei ziehbar, mehrere Monitore), Coding Space + Git-Client, Wallpaper-Auswahl, Zonen-Editor |
-| `hypr/` | `hyprland.lua` + `dx_snap` (Snap/Maximieren), `dx_tiling` (Kacheln, Standardmodus floating/tiling), `dx_zones`; Monitore in `monitors_local.lua` |
-| `bin/` | `hyhy-*` Hilfsskripte: `hyhy-colors` (gemeinsame Farbwelt), `hyhy-terminal` (Terminal-Auswahl), Wallpaper Engine, Code-Liste |
-| `patches/`, `wallpaper-engine/` | Fixes für linux-wallpaperengine (Web-Wallpaper, Mausposition) – `install.sh` baut es |
-| `docs/` | Übergabe mit allen Entscheidungen und Fallstricken |
-| Repo-Wurzel | `settings-app`, `preferences.py`, `settings.css`: Aurora-Einstellungen, neu gestylt, mit Seiten für Taskleiste, Coding Space, Fenstermodus, Farben, Terminal |
+| `quickshell/` | Shell in QML: taskbar (each part can be toggled), start menu (selectable icon), Alt+Tab, Task View, desktop (icons can be dragged freely, multiple monitors), Coding Space + Git client, wallpaper picker, zone editor |
+| `hypr/` | `hyprland.lua` + `dx_snap` (snap/maximize), `dx_tiling` (tiling, default mode floating/tiling), `dx_zones`; monitors in `monitors_local.lua` |
+| `bin/` | `hyhy-*` helper scripts: `hyhy-colors` (shared colour scheme), `hyhy-terminal` (terminal choice), Wallpaper Engine, code list |
+| `patches/`, `wallpaper-engine/` | Fixes for linux-wallpaperengine (web wallpapers, mouse position) – `install.sh` builds it |
+| `docs/` | Handover with all decisions and pitfalls |
+| Repo root | `settings-app`, `preferences.py`, `settings.css`: Aurora settings, restyled, with pages for taskbar, Coding Space, window mode, colours, terminal |
 
-## Zusammengeführt (Cherry-Pick)
-- **Von Aurora:** Farbwelt (Grau-Blau), Aussehen der Taskleiste, Einstellungs-App (umgestylt und erweitert), Terminal-Auswahl.
-- **Von Hypr Hypr:** Zonen-Raster, Snap/Maximieren, Coding Space, Git-Client, Wallpaper Engine in der Taskleiste, frei ziehbare Desktop-Symbole.
-- **Gemeinsam steuerbar:** Farben (`~/.config/draconyx/colors.json`), Terminal (`~/.config/draconyx/terminal`), Fenstermodus (`~/.config/draconyx/window-mode`), Taskleiste (`~/.local/state/draconyx/settings.json`).
+## Merged (cherry-pick)
+- **From Aurora:** colour scheme (grey-blue), taskbar look, settings app (restyled and extended), terminal choice.
+- **From Hypr Hypr:** zone grid, snap/maximize, Coding Space, Git client, Wallpaper Engine in the taskbar, freely movable desktop icons.
+- **Shared settings:** colours (`~/.config/draconyx/colors.json`), terminal (`~/.config/draconyx/terminal`), window mode (`~/.config/draconyx/window-mode`), taskbar (`~/.local/state/draconyx/settings.json`).
 
-## Aurora läuft auf der Shell
-Ist die Shell installiert, reichen `desktop-ui`, `start-desktop`, `start-dock` und `background-restore` nur noch an Quickshell weiter: kein waybar, kein GTK-Dock. Launcher, Alt+Tab, Fenstermodus und Minimieren-Knöpfe (über `hyhy-ui-bridge`) landen in der Shell. Altes Verhalten: `AURORA_LEGACY_UI=1`.
-
-
-## Haupttaste (Super-Taste defekt oder fehlt)
-Aurora-Einstellungen → Tastenkombinationen → **Haupttaste** (Datei `~/.config/draconyx/modifier`):
-`super` (Standard) · `both` (Super und Strg+Alt) · `ctrl-alt` (Super aus, Strg+Alt ersetzt sie) · `caps` (Feststelltaste wird Super).
-Strg+Leertaste öffnet die Suche nur auf dem leeren Desktop, in Apps bleibt die Taste unberührt.
+## Aurora runs on the shell
+When the shell is installed, `desktop-ui`, `start-desktop`, `start-dock` and `background-restore` only hand over to Quickshell: no waybar, no GTK dock. The launcher, Alt+Tab, the window mode and the minimize buttons (via `hyhy-ui-bridge`) go to the shell. Old behaviour: `AURORA_LEGACY_UI=1`.
 
 
-## Neu: Schnellsuche, frei bindbare Tasten, Diagnose
-- **Strg+Leertaste** öffnet auf dem leeren Desktop ein eigenes Suchfeld mittig mit Ergebnissen darunter (Apps, Rechner, Einstellungen, Dateien, Web); Rechtsklick auf ein Ergebnis: an Taskleiste/Start anheften, Datei öffnen, Ordner zeigen, Pfad kopieren. In Apps bleibt die Taste unberührt.
-- **Alle Tastenkombinationen** sind in den Aurora-Einstellungen → Tastenkombinationen umbindbar (inkl. Maus wie Alt+Linksklick), gespeichert in `~/.config/draconyx/binds.conf`. Die Liste entsteht aus der geladenen Hyprland-Config (`dx_binds.lua`).
-- **`hyhy-doctor`** schreibt einen Zustandsbericht nach `~/hyhy-doctor.txt` (laufende Prozesse, Config-Fehler, Dateien, Shell-Log); `hyhy-doctor --fix` beendet Doppelstarts (waybar, altes Aurora-Dock).
+## Modifier key (when Super is broken or missing)
+Aurora settings → Key combinations → **Modifier key** (file `~/.config/draconyx/modifier`):
+`super` (default) · `both` (Super and Ctrl+Alt) · `ctrl-alt` (Super off, Ctrl+Alt replaces it) · `caps` (Caps Lock becomes Super).
+Ctrl+Space opens the search only on the empty desktop; inside apps the key is left alone.
 
 
-## Taskleiste: Anordnung
-Jeder Teil der Taskleiste (Start, Suche, Apps, Tray, Uhr …) lässt sich in den Aurora-Einstellungen → Taskleiste → **Anordnung** auf *Links*, *Mitte* oder *Rechts* setzen, Reihenfolge mit den Pfeilen. Im Dock-Stil wird jeder Bereich zu einer eigenen schwebenden Insel (leere Bereiche verschwinden), im Leistenstil sind es drei Bereiche einer durchgehenden Leiste.
+## New: quick search, rebindable keys, diagnostics
+- **Ctrl+Space** opens a search field in the centre of the empty desktop with results below (apps, calculator, settings, files, web); right-click a result: pin to taskbar/start, open the file, show the folder, copy the path. Inside apps the key is left alone.
+- **All key combinations** can be rebound in Aurora settings → Key combinations (including mouse combinations such as Alt+left click), saved in `~/.config/draconyx/binds.conf`. The list is built from the loaded Hyprland config (`dx_binds.lua`).
+- **`hyhy-doctor`** writes a status report to `~/hyhy-doctor.txt` (running processes, config errors, files, shell log); `hyhy-doctor --fix` stops duplicate starts (waybar, old Aurora dock).
+
+
+## Taskbar: arrangement
+Each part of the taskbar (start, search, apps, tray, clock …) can be placed in Aurora settings → Taskbar → **Arrangement** on *Left*, *Centre* or *Right*; the order is changed with the arrows. In dock style each area becomes its own floating island (empty areas disappear); in bar style there are three areas of one continuous bar.
 
 ## Installer
-`sudo ./install.sh` (oder ohne sudo: er verlangt dann zuerst die sudo-Freigabe). Er repariert Besitzer und Rechte, wendet nur Neues an und lädt anschließend Hyprland neu und startet die Shell neu. `--ask` fragt vor Paketen, `--restart` lädt auch ohne Änderung neu.
+`sudo ./install.sh` (or without sudo: it then asks for the sudo approval first). It repairs owners and permissions, applies only what is new, then reloads Hyprland and restarts the shell. `--ask` asks before packages, `--restart` reloads even without changes.
 
 
-## Snip-Werkzeug und Foto-Editor
-**Druck** (oder Strg+Alt+Umschalt+S) friert alle Bildschirme ein, dann Bereich aufziehen. **Übernehmen** (Enter) öffnet den Foto-Editor: Stift, Marker, Pfeil, Rechteck, Ellipse, Text, Verpixeln, Rückgängig (Strg+Z), dann Kopieren (Strg+C), Speichern (Strg+S) oder Beides. Strg+C / Strg+S direkt in der Auswahl kopieren/speichern ohne Editor. **Umschalt+Druck** kopiert und speichert den ganzen Bildschirm. Gespeichert wird in `~/Bilder/Screenshots/`.
+## Snip tool and photo editor
+**Print** (or Ctrl+Alt+Shift+S) freezes all screens, then drag a region. **Accept** (Enter) opens the photo editor: pen, marker, arrow, rectangle, ellipse, text, pixelate, undo (Ctrl+Z), then copy (Ctrl+C), save (Ctrl+S) or both. Ctrl+C / Ctrl+S directly on the selection copy/save without the editor. **Shift+Print** copies and saves the whole screen. Files are saved to `~/Bilder/Screenshots/`.
 
-## Kleine Helfer (1.5)
-- **Zwischenablage** (Strg+Alt+V): Verlauf mit Suche und Bildvorschau. **Tastenkürzel** (Strg+Alt+I): alle wirksamen Kombinationen, durchsuchbar.
-- **Fokus-Zeit** (Kalender → Fokus, Strg+Alt+P): Pomodoro, Timer, Stoppuhr; die Uhr zeigt die Restzeit, Pomodoro schaltet „Nicht stören“ ein.
-- **Schnellsuche**: rechnet (auch Prozent, sqrt, sin …), rechnet Einheiten um („5 km in mi“), findet offene Fenster und Systemaktionen (sperren, Standby …).
-- **Anzeigen**: Lautstärke-/Mikrofon-OSD, Datenschutz-Punkt in der Leiste (Mikrofon, Bildschirmfreigabe), optional Prozessor/Speicher in der Leiste.
-- **Drop-down-Terminal** (Strg+Alt+Ö), **Mikrofon stumm** (Strg+Alt+U), **Text aus Screenshot** (Snip → „Text“, Strg+T).
-- **Aurora**: „Energie & Sperre“ (hypridle), „Bewegung & Licht“ (Animationen, Nachtlicht mit Zeitplan).
+## Small helpers (1.5)
+- **Clipboard** (Ctrl+Alt+V): history with search and image previews. **Keyboard shortcuts** (Ctrl+Alt+I): all active combinations, searchable.
+- **Focus time** (Calendar → Focus, Ctrl+Alt+P): Pomodoro, timer, stopwatch; the clock shows the remaining time, Pomodoro switches on "Do not disturb".
+- **Quick search**: calculates (including percent, sqrt, sin …), converts units ("5 km in mi"), finds open windows and system actions (lock, standby …).
+- **Indicators**: volume/microphone OSD, privacy dot in the bar (microphone, screen sharing), optional CPU/memory in the bar.
+- **Drop-down terminal** (Ctrl+Alt+Ö), **mute microphone** (Ctrl+Alt+U), **text from screenshot** (Snip → "Text", Ctrl+T).
+- **Aurora**: "Power & lock" (hypridle), "Motion & light" (animations, night light with a schedule).
 
-## Bewusst NICHT drin
-- Auroras Plugins (hyprbars, `aurora-native`): Sie lagen in einem Test im Weg und haben beim Laden in eine laufende Sitzung Hyprland zum Absturz gebracht. Nicht per Live-Reload laden. Wer sie nutzt, lädt sie nur beim Login.
+## Deliberately NOT included
+- Aurora's plugins (hyprbars, `aurora-native`): they got in the way in a test and crashed Hyprland when loaded into a running session. Do not load them via live reload. Anyone who uses them loads them only at login.

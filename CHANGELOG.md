@@ -1,90 +1,90 @@
-# Änderungsverlauf
+# Changelog
 
-Versionsnummer in der Datei `VERSION` (MAJOR.MINOR.PATCH). Bei jeder sichtbaren Änderung die Nummer erhöhen und hier eintragen –
-die Update-Benachrichtigung in der Shell vergleicht diese Nummer mit der installierten.
+The version number lives in the file `VERSION` (MAJOR.MINOR.PATCH). Raise the number and add an entry here for every visible change –
+the update notification in the shell compares this number with the installed one.
 
 ## 1.6.3
 - Folders and commands are now named hypr-hypr and hyhy-*; old names stay as links until 1.x; updating to 2.x requires 1.6.3
 
 ## 1.6.2
-- Name Hypr Hypr statt Draconyx in allen Anzeigen, Benachrichtigungen und der Doku; Pfade und Ordner bleiben, nichts muss migriert werden
+- Name changed from Draconyx to Hypr Hypr in all displays, notifications and docs; paths and folders stay, nothing needs migrating
 
 ## 1.6.1
-- Coding Space: Workspaces brauchen kein „Workspace“ im Namen – Erkennung nach Inhalt (Ordner mit Projekten), hinzugefügte Ordner und neu angelegte Workspaces behalten ihren Namen, Rechtsklick: als Workspace/Projekt behandeln
+- Coding Space: workspaces no longer need "Workspace" in their name – detection by content (folders with projects), added folders and newly created workspaces keep their name, right-click: treat as workspace/project
 
 ## 1.6.0
-- Aurora = alle Systemeinstellungen: neue Seiten Ton, Bluetooth, Netzwerk, Tastatur, Maus & Touchpad, Eingabehilfen, Datum & Zeit, Region & Sprache, Benutzer, Standard-Apps, Über dieses System (Updates, Speicher), Drucker & Scanner, Benachrichtigungen, Design (Zeiger, Symbole, Themen), Geräte & Anschlüsse; Seiten als Module (settings_pages/); Cursor-Auswahl gilt beim Login; hoher Kontrast als Farbvoreinstellung
+- Aurora = all system settings: new pages Sound, Bluetooth, Network, Keyboard, Mouse & Touchpad, Accessibility, Date & Time, Region & Language, Users, Default Apps, About This System (updates, storage), Printers & Scanners, Notifications, Design (cursor, icons, themes), Devices & Ports; pages as modules (settings_pages/); cursor choice applies at login; high contrast as a colour preset
 
 ## 1.5.4
-- Spiele: Alt+Tab aus Vollbild-Spielen (Fokus/Stapelreihenfolge, fremde Fenster nicht auf dem Spiele-Desktop, Maus wird beim Verlassen freigegeben); Titelleiste hebt Fenster nach oben; Härtung: Lua-Module (Skalierung, Zustandslecks, Timer), Shell (Start-Warnungen, kaputte settings.json), Skripte/Installer (Sperren, atomares Schreiben, Timeouts), Aurora-Einstellungen (Suche, Export/Import, Prüfung der Eingaben); dx-doctor erweitert
+- Games: Alt+Tab from fullscreen games (focus/stacking order, foreign windows kept off the game desktop, pointer released when leaving); title bar raises windows; hardening: Lua modules (scaling, state leaks, timers), shell (start warnings, broken settings.json), scripts/installer (locks, atomic writes, timeouts), Aurora settings (search, export/import, input checks); dx-doctor extended
 
 ## 1.5.3
-- Titelleisten: Verschieben ohne Animationsreste und Release-Rennen (ein gemeinsamer Helfer), Ereignisse wecken den Fensterwächter sofort, Tests
+- Title bars: moving without animation remnants and release races (one shared helper), events wake the window watcher immediately, tests
 
 ## 1.5.2
-- Fix: Maus-Hover in allen Fenstern (Aurora setzte follow_mouse=0, Installer räumt auf); Titelleisten-Helfer sparsamer und das Andocken beim Ziehen zwischen Bildschirmen wird nicht mehr überschrieben
+- Fix: mouse hover in all windows (Aurora set follow_mouse=0, installer cleans up); title bar helpers more economical and snapping while dragging between screens is no longer overridden
 
 ## 1.5.1
-- Titelleisten (Minimieren/Maximieren/Schließen, Ziehen, Doppelklick) für Apps ohne eigene Leiste wie Dolphin; Fenster von XWayland-Apps (Brave, VS Code, Discord, Aurora) lassen sich an ihrer Titelleiste ziehen, ohne Alt oder Strg+Alt; Andocken lässt oben Platz für die Leisten
+- Title bars (minimize/maximize/close, dragging, double-click) for apps without their own bar such as Dolphin; windows of XWayland apps (Brave, VS Code, Discord, Aurora) can be dragged by their title bar without Alt or Ctrl+Alt; snapping leaves room for the bars
 
 ## 1.5.0
-- Neu: Zwischenablage-Verlauf mit Bildvorschau, Fokus-Zeit (Pomodoro/Timer/Stoppuhr), Lautstärke-OSD, Tastenkürzel-Übersicht (Strg+Alt+I), Datenschutz- und Leistungsanzeige in der Leiste, Schnellsuche mit Rechner/Einheiten/Fenstern/Systemaktionen, Drop-down-Terminal, Text aus Screenshots (OCR), Mikrofon-Taste, Aurora: Energie & Sperre, Bewegung & Licht (Animationen, Nachtlicht-Zeitplan), sanfte Popup-Animationen
+- New: clipboard history with image previews, focus time (Pomodoro/timer/stopwatch), volume OSD, keyboard shortcut overview (Ctrl+Alt+I), privacy and performance display in the bar, quick search with calculator/units/windows/system actions, drop-down terminal, text from screenshots (OCR), microphone key, Aurora: power & lock, motion & light (animations, night light schedule), smooth popup animations
 
 ## 1.4.0
-- Neu: Autostart-Verwaltung, Fensterregeln, Sicherung/Wiederherstellung (Aurora), Verbindungen-Fenster für WLAN/Bluetooth/Audio, Systemmonitor mit Programm-Zusammenfassung; VS Code & Co. lassen sich minimieren (XWayland); Desktop-Klick + Strg+Leertaste
+- New: autostart management, window rules, backup/restore (Aurora), connections window for Wi-Fi/Bluetooth/audio, system monitor with program summary; VS Code & co. can be minimized (XWayland); desktop click + Ctrl+Space
 
 ## 1.3.9
-- Snip-Werkzeug (Druck) schließt Code Space, Startmenü, Suche und andere Fenster der Shell nicht mehr
+- Snip tool (Print) no longer closes Code Space, the start menu, search and other shell windows
 
 ## 1.3.8
-- Taskleisten-Anordnung per Ziehen (Bereiche links/Mitte/rechts, beim Dock als Inseln, Ausgeblendet-Ablage, Rechtsklick-Menü); Aurora ohne Übernehmen-Knopf, Änderungen wirken live; Mausrad-Geschwindigkeit wirkt auch in den Listen der Shell
+- Taskbar arrangement by dragging (areas left/centre/right, islands for the dock, hidden tray, right-click menu); Aurora without an Apply button, changes take effect live; mouse wheel speed also applies to lists in the shell
 
 ## 1.3.7
-- Mausrad-Geschwindigkeit einstellbar (Aurora → Übersicht); Einstellungen werden bei Updates nicht mehr zurückgesetzt (seit 1.3.6)
+- Mouse wheel speed configurable (Aurora → Overview); settings are no longer reset on updates (since 1.3.6)
 
 ## 1.3.6
-- Hotfix zu 1.3.5: die Shell konnte mit der Schutz-Änderung nicht laden (Timer am falschen Ort) – 1.3.5 nicht installieren, direkt 1.3.6
+- Hotfix for 1.3.5: the shell could not load with the protection change (timer in the wrong place) – do not install 1.3.5, go straight to 1.3.6
 
 ## 1.3.5
-- Wichtig: Einstellungen (Taskleiste, Desktop-Symbole, Wallpaper) werden bei Updates nicht mehr zurückgesetzt – Schutz in Shell und Installer, automatische Sicherung, Wiederherstellung per dx-settings-guard
+- Important: settings (taskbar, desktop icons, wallpaper) are no longer reset on updates – protection in shell and installer, automatic backup, restore via dx-settings-guard
 
 ## 1.3.4
-- Hotfix: Update-Prüfung zeigte nach git pull/push einen veralteten Stand („aktuell“, obwohl es Neueres gibt); „Jetzt prüfen“ wirkt jetzt
+- Hotfix: the update check showed a stale state after git pull/push ("up to date" although something newer existed); "Check now" works now
 
 ## 1.3.3
-- Hotfix: Apps aus Startmenü und Taskleiste starten abgekoppelt (dx-launch) – verhindert den Discord-Fehler „write EPIPE“
+- Hotfix: apps started from the start menu and taskbar are detached (dx-launch) – prevents the Discord error "write EPIPE"
 
 ## 1.3.2
-- Update-Prüfung jede Minute im Hintergrund (billige Vorprüfung), Meldungen weiter höchstens einmal pro Tag
+- Update check every minute in the background (cheap pre-check), notices still at most once a day
 
 ## 1.3.1
-- Update-Prüfung alle 30 Minuten statt alle 6 Stunden; Knopf „Jetzt prüfen“ in Aurora → System
+- Update check every 30 minutes instead of every 6 hours; "Check now" button in Aurora → System
 
 ## 1.3.0
-- **Aurora im neuen Design:** Seitenleiste mit Symbolen und Gruppen, Karten-Zeilen, breite Bedienelemente unter dem Text, saubere Abschnittstitel.
-- **Bildschirme wie unter Windows:** anordnen per Ziehen, Auflösung, Wiederholrate, Skalierung, Drehung, 15-Sekunden-Rückfrage. Bildschirme bleiben nach Updates erhalten (dx-monitors sync, Sicherheitsprüfung nach dem Neuladen).
-- **Steam Workshop im Wallpaper-Fenster:** neuer Tab zum Stöbern (Beliebt, Neu, Top, Suche); Abonnieren öffnet die Seite in Steam, danach erscheint das Wallpaper unter „Meine Wallpaper“.
-- **App-Installer (Aurora → Apps):** eigene Apps aus dem Repo, erste App „Notizen“; werden mit System-Updates aktualisiert.
-- **Updates:** Hintergrund-Update mit Fortschrittsbalken und sudo-Dialog, Update-Anzeige in der Taskleiste mit Neuigkeiten, höchstens eine Meldung pro Tag, „Nicht mehr erinnern“, Aurora-Schalter. Eigene Einstellungen werden nie überschrieben.
-- **Coding Space:** mehrere Ordner, frei wählbare Programme (IntelliJ, VS Code, Cursor, Zed, Sublime, PyCharm, WebStorm, Kate, Neovim …) und eigene; Claude nur wenn installiert.
-- **Schriften:** 10 Voreinstellungen (Inter, Noto Sans, IBM Plex Sans, Roboto, Monaspace Krypton/Neon/Argon, JetBrains Mono, Fira Code, Cascadia Code) für Oberfläche und Code, in Aurora einstellbar und installierbar.
-- **Alt+Tab:** Antippen springt sofort, Halten + Tab schaltet durch, Maus abschaltbar. **Fenstergröße merken** beim Schließen. **Tray-Menü** per Rechtsklick. **Quickinfos** an den Taskleistenknöpfen.
-- **Terminal:** das eingestellte Terminal gilt überall, Ghostty nur wenn keins installiert ist; `dx-terminal-ensure` sorgt dafür, dass immer eins da ist.
-- **Minimieren:** Electron-Apps (Discord & Co.) laufen über XWayland, damit das Minimieren-Symbol überall geht. Größere Liste der Apps mit eigener Titelleiste.
-- **Installer:** Paketnamen-Alternativen, Tastaturwahl QWERTZ/QWERTY, portable hyprland.lua, Desktop-Ordner automatisch, keine persönlichen Monitordaten mehr im Repo.
+- **Aurora in the new design:** sidebar with icons and groups, card rows, wide controls below the text, clean section titles.
+- **Displays like on Windows:** arrange by dragging, resolution, refresh rate, scaling, rotation, 15-second confirmation. Displays survive updates (dx-monitors sync, safety check after reload).
+- **Steam Workshop in the wallpaper window:** new tab for browsing (Popular, New, Top, Search); subscribing opens the page in Steam, afterwards the wallpaper appears under "My wallpapers".
+- **App installer (Aurora → Apps):** own apps from the repo, first app "Notes"; updated with system updates.
+- **Updates:** background update with a progress bar and sudo dialog, update indicator in the taskbar with release notes, at most one notice per day, "Don't remind me", Aurora switch. Own settings are never overwritten.
+- **Coding Space:** several folders, freely selectable programs (IntelliJ, VS Code, Cursor, Zed, Sublime, PyCharm, WebStorm, Kate, Neovim …) and custom ones; Claude only if installed.
+- **Fonts:** 10 presets (Inter, Noto Sans, IBM Plex Sans, Roboto, Monaspace Krypton/Neon/Argon, JetBrains Mono, Fira Code, Cascadia Code) for the UI and code, selectable and installable in Aurora.
+- **Alt+Tab:** a tap jumps immediately, holding Alt + Tab cycles, mouse can be turned off. **Remember window size** on close. **Tray menu** via right-click. **Quick info** on the taskbar buttons.
+- **Terminal:** the chosen terminal applies everywhere; Ghostty only if none is installed; `dx-terminal-ensure` makes sure one is always present.
+- **Minimizing:** Electron apps (Discord & co.) run via XWayland so the minimize icon works everywhere. Longer list of apps with their own title bar.
+- **Installer:** package name alternatives, keyboard choice QWERTZ/QWERTY, portable hyprland.lua, desktop folder detected automatically, no personal monitor data in the repo.
 
 ## 1.2.2
-- Update in den Einstellungen: Version, Stand und Aktualisieren-Knopf in einer Zeile (Knopf nur bei neuer Version), automatische Prüfung im Hintergrund
+- Update in the settings: version, date and update button in one row (button only for a new version), automatic background check
 
 ## 1.2.1
-- Fortschrittsanzeige beim Update (oben rechts); Alt+Tab: Antippen springt sofort, Halten + Tab schaltet durch, Maus abschaltbar
+- Progress indicator during updates (top right); Alt+Tab: a tap jumps immediately, holding Alt + Tab cycles, mouse can be turned off
 
 ## 1.2.0
-- Update im Hintergrund (sudo-Dialog statt Terminal, Benachrichtigungen, Protokoll), sichert lokale Repo-Änderungen; Installer überschreibt keine Nutzereinstellungen (hyprland.lua nur wenn unverändert)
+- Background update (sudo dialog instead of a terminal, notifications, log), keeps local repo changes; installer never overwrites user settings (hyprland.lua only if unchanged)
 
 ## 1.1.0
-- Bildschirme wie unter Windows anordnen (Auflösung, Skalierung, Drehung, 15-s-Rückfrage), Monitor-Erkennung im Installer, Coding Space mit mehreren Ordnern, funktionierende Aufklapplisten und Ordnerwahl, Quickinfos, Update-Prüfung, Electron-Apps über XWayland, portable hyprland.lua, keine persönlichen Monitordaten mehr
+- Arrange displays like on Windows (resolution, scaling, rotation, 15-second confirmation), monitor detection in the installer, Coding Space with several folders, working dropdown popovers and folder selection, quick info, update check, Electron apps via XWayland, portable hyprland.lua, no personal monitor data anymore
 
 ## 1.0.0
-- Erste versionierte Fassung: Draconyx-Shell (Taskleiste, Startmenü, Suche, Coding Space), Aurora als Einstellungs-App,
-  Snip-Werkzeug mit Foto-Editor, Wallpaper Engine, rebindbare Tastenkombinationen, Installer mit Tastaturwahl, Update-Prüfung.
+- First versioned release: Draconyx shell (taskbar, start menu, search, Coding Space), Aurora as the settings app,
+  snip tool with photo editor, Wallpaper Engine, rebindable key combinations, installer with keyboard choice, update check.
